@@ -1,0 +1,19 @@
+[package]
+name = "paloma-manifest"
+description = "Declarative, K8s-style YAML manifests (export / diff / apply) for paloma"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[dependencies]
+paloma-core.workspace = true
+paloma-config.workspace = true
+paloma-graph.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+serde_norway.workspace = true
+
+[lints]
+workspace = true
