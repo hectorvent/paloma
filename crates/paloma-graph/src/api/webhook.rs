@@ -1,0 +1,167 @@
+//! Webhook callbacks: the per-WABA override (`subscribed_apps`) and the app-level field
+//! subscriptions (`/{app-id}/subscriptions`, app-token authorized).
+
+use serde_json::{Value, json};
+
+use crate::Request;
+
+/// Every `whatsapp_business_account` webhook field an app can subscribe to.
+pub const AVAILABLE_FIELDS: [&str; 17] = [
+    "messages",
+    "calls",
+    "message_template_status_update",
+    "message_template_quality_update",
+    "template_category_update",
+    "account_update",
+    "account_alerts",
+    "account_review_update",
+    "business_capability_update",
+    "phone_number_name_update",
+    "phone_number_quality_update",
+    "security",
+    "messaging_handovers",
+    "user_preferences",
+    "history",
+    "smb_message_echoes",
+    "flows",
+];
+
+pub fn subscribed_apps(waba_id: &str) -> Request {
+    Request::get(format!("{waba_id}/subscribed_apps"))
+}
+
+/// Subscribe this app to the WABA, overriding its callback URL.
+pub fn subscribe(waba_id: &str, callback_url: &str, verify_token: &str) -> Request {
+    Request::post(format!("{waba_id}/subscribed_apps"))
+        .json(json!({ "override_callback_uri": callback_url, "verify_token": verify_token }))
+}
+
+pub fn unsubscribe(waba_id: &str) -> Request {
+    Request::delete(format!("{waba_id}/subscribed_apps"))
+}
+
+/// The phone number's effective webhook configuration.
+pub fn configuration(phone_number_id: &str) -> Request {
+    Request::get(phone_number_id).query("fields", "webhook_configuration")
+}
+
+/// The app id of the first app subscribed to the WABA, from a `subscribed_apps` response.
+pub fn subscribed_app_id(subscribed: &Value) -> Option<String> {
+    subscribed
+        .pointer("/data/0/whatsapp_business_api_data/id")
+        .and_then(|v| {
+            v.as_str()
+                .map(str::to_owned)
+                .or_else(|| v.as_i64().map(|n| n.to_string()))
+        })
+}
+
+pub fn app_subscriptions(app_id: &str) -> Request {
+    Request::get(format!("{app_id}/subscriptions")).app_auth(app_id)
+}
+
+/// Replace the app's `whatsapp_business_account` field subscription. Graph takes these as
+/// query parameters.
+pub fn set_app_subscriptions(
+    app_id: &str,
+    fields: &[String],
+    callback_url: Option<&str>,
+    verify_token: Option<&str>,
+) -> Request {
+    Request::post(format!("{app_id}/subscriptions"))
+        .app_auth(app_id)
+        .query("object", "whatsapp_business_account")
+        .query("fields", fields.join(","))
+        .query_opt("callback_url", callback_url)
+        .query_opt("verify_token", verify_token)
+}
+
+/// The subscribed fields for `whatsapp_business_account` from a subscriptions response.
+pub fn subscribed_fields(subscriptions: &Value) -> Vec<String> {
+    subscriptions
+        .get("data")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter(|s| s.get("object").and_then(Value::as_str) == Some("whatsapp_business_account"))
+        .flat_map(|s| {
+            s.get("fields")
+                .and_then(Value::as_array)
+                .cloned()
+                .unwrap_or_default()
+        })
+        .filter_map(|f| {
+            f.get("name")
+                .and_then(Value::as_str)
+                .or_else(|| f.as_str())
+                .map(str::to_owned)
+        })
+        .collect()
+}
+
+/// The app id to manage field subscriptions for: the explicit one, else the first app
+/// subscribed to the WABA.
+pub async fn resolve_app_id(
+    client: &crate::Client,
+    explicit: Option<&str>,
+    waba_id: &str,
+) -> paloma_core::Result<String> {
+    if let Some(id) = explicit.filter(|s| !s.trim().is_empty()) {
+        return Ok(id.to_owned());
+    }
+    let subscribed = client.execute(&subscribed_apps(waba_id)).await?.json()?;
+    subscribed_app_id(&subscribed).ok_or_else(|| {
+        paloma_core::Error::validation(
+            "no app id: pass --app-id, set PALOMA_APP_ID, or subscribe an app to the WABA first",
+        )
+    })
+}
+
+/// The callback URL Meta will actually call: the WABA override if set, else the phone
+/// number's app-level configuration.
+pub async fn current_callback_url(
+    client: &crate::Client,
+    waba_id: &str,
+    phone_number_id: Option<&str>,
+) -> paloma_core::Result<Option<String>> {
+    let subscribed = client.execute(&subscribed_apps(waba_id)).await?.json()?;
+    if let Some(url) = override_callback(&subscribed) {
+        return Ok(Some(url));
+    }
+    if let Some(phone) = phone_number_id {
+        let cfg = client.execute(&configuration(phone)).await?.json()?;
+        return Ok(application_callback(&cfg));
+    }
+    Ok(None)
+}
+
+/// `data[0].override_callback_uri` of a `subscribed_apps` response.
+pub fn override_callback(subscribed: &Value) -> Option<String> {
+    subscribed
+        .pointer("/data/0/override_callback_uri")
+        .and_then(Value::as_str)
+        .filter(|s| !s.is_empty())
+        .map(str::to_owned)
+}
+
+/// `webhook_configuration.application` of a phone-number response.
+pub fn application_callback(config: &Value) -> Option<String> {
+    config
+        .pointer("/webhook_configuration/application")
+        .and_then(Value::as_str)
+        .filter(|s| !s.is_empty())
+        .map(str::to_owned)
+}
+
+/// The app-level callback URL for `whatsapp_business_account`, from a subscriptions response.
+pub fn app_callback_url(subscriptions: &Value) -> Option<String> {
+    subscriptions
+        .get("data")?
+        .as_array()?
+        .iter()
+        .find(|s| s.get("object").and_then(Value::as_str) == Some("whatsapp_business_account"))?
+        .get("callback_url")?
+        .as_str()
+        .filter(|s| !s.is_empty())
+        .map(str::to_owned)
+}

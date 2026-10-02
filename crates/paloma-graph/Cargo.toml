@@ -1,0 +1,28 @@
+[package]
+name = "paloma-graph"
+description = "Typed WhatsApp Cloud API (Meta Graph API) client used by paloma"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[dependencies]
+paloma-core.workspace = true
+futures-util.workspace = true
+mime_guess.workspace = true
+reqwest.workspace = true
+rustls.workspace = true
+secrecy.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
+tokio = { workspace = true, features = ["rt", "macros"] }
+wiremock.workspace = true
+
+[lints]
+workspace = true
