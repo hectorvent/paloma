@@ -1,0 +1,15 @@
+[package]
+name = "paloma-core"
+description = "Domain primitives for paloma: errors, exit codes, pre-flight validation, compliance rules"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[dependencies]
+secrecy.workspace = true
+thiserror.workspace = true
+
+[lints]
+workspace = true

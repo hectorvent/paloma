@@ -1,0 +1,24 @@
+# Build output (includes target/dist-assets from `cargo xtask dist-assets`)
+/target
+*.snap.new
+
+# Coverage and mutation testing
+*.profraw
+lcov.info
+/coverage
+mutants.out*/
+
+# Local secrets: tokens belong in the keyring or PALOMA_TOKEN, never in files
+.env
+.env.*
+
+# Editors and OS
+.DS_Store
+.idea/
+.vscode/
+*.swp
+*~
+
+# Internal notes (roadmap, scratch)
+local/
+
