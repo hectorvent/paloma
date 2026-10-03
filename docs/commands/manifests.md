@@ -1,0 +1,171 @@
+# Your WhatsApp setup, as code
+
+Declarative, K8s-style config with `export` / `apply` / `diff`.
+
+Manage a number's configuration the way you manage Kubernetes: describe the desired
+state in a versionable YAML manifest, and apply it idempotently. One manifest
+replaces the several imperative commands it would otherwise take (calling setup
+alone is 3-7 commands).
+
+## Manifest format
+
+K8s-style envelope with a camelCase `spec`. `metadata.phoneNumberId` is optional;
+targeting falls back to `--phone-number-id` or the active profile.
+
+```yaml
+apiVersion: paloma/v1
+kind: Calling
+metadata:
+  phoneNumberId: "1556677889900"
+spec:
+  status: ENABLED
+  callIconVisibility: DEFAULT
+  callbackPermissionStatus: ENABLED
+  sip:
+    status: ENABLED
+    servers:
+      - hostname: pbx.acme.com
+        port: 5061
+  audio:
+    additionalCodecs: [PCMA, PCMU]
+```
+
+Supported `kind`s: **Calling**, **Profile**, **Number**, **Commerce**,
+**ConversationalAutomation**, **Template**, **Webhook**. A file may hold several
+manifests separated by `---`.
+
+## Variables & secrets
+
+`apply` and `diff` expand `${...}` placeholders in the string values of a manifest
+before applying it, so you can keep environment-specific values and secrets out of the
+file. (`export` writes literal values and never emits placeholders.)
+
+| Form | Resolves to |
+|------|-------------|
+| `${NAME}` / `${env:NAME}` | the `NAME` environment variable |
+| `${keyring:ACCOUNT}` | a secret from the OS keyring (the same `keyring:` store as `token_ref`/`app_secret_ref`) |
+| `${...:-default}` | the value, or `default` when it is unset/blank |
+| `$${...}` | a literal `${...}` (escape) |
+
+Placeholders may appear anywhere in a value, including partially
+(`https://${HOST}/webhook`) and more than once. A reference that resolves to nothing
+**and** has no default fails the command with a validation error naming the field, e.g.
+`manifest field 'spec.verifyToken' references unset ${keyring:acme-verify}`.
+
+```yaml
+apiVersion: paloma/v1
+kind: Webhook
+spec:
+  callbackUrl: ${WEBHOOK_URL}
+  verifyToken: ${keyring:acme-verify}
+  apiVersion: ${PALOMA_API_VERSION:-v26.0}
+```
+
+```bash
+WEBHOOK_URL=https://tunnel.hectorvent.dev/whatsapp/webhook paloma diff -f webhook.yaml
+```
+
+## `paloma export <kind>`
+
+Render the live config as a manifest (YAML by default, `-o json` for JSON).
+`--template` emits the field skeleton with no API call.
+
+Fields a kind supports but that are **not set** are emitted as commented-out stubs, so
+the manifest documents what else you can configure:
+
+```yaml
+spec:
+  status: ENABLED
+  # callIconVisibility:
+  # sip:
+  #   status:
+  #   servers: []
+```
+
+The comments are ignored by `apply`, so the file still round-trips. Pass `--minimal`
+to emit only the fields that are set (the previous behaviour). Annotation is YAML-only;
+`-o json` is unaffected. The annotation covers Profile, Calling, Commerce, Webhook,
+ConversationalAutomation, and Number; Template (a per-resource collection) is unchanged.
+
+```bash
+paloma export calling > calling.yaml
+paloma export profile                 # set fields + commented unset fields
+paloma export profile --minimal       # only the fields that are set
+paloma export calling --template      # full commented skeleton for authoring
+```
+
+## `paloma apply -f <file>`
+
+Apply one or more manifests. For each kind it reads the current config, compares,
+and **only sends a request when something differs** (idempotent). Re-applying an
+unchanged manifest does nothing.
+
+```bash
+paloma apply -f calling.yaml
+paloma apply -f all.yaml --dry-run     # print the POST bodies, change nothing
+```
+
+Output (to stderr) is one line per kind: `Calling/<id> unchanged` or
+`Calling/<id> configured:` followed by the changed fields.
+
+## `paloma diff -f <file>`
+
+Show drift between manifests and live config without writing. Exits `0` when
+everything is in sync and `1` when there is drift, so CI can gate on config drift.
+
+```bash
+paloma diff -f calling.yaml
+```
+
+## How idempotency works
+
+`apply`/`diff` GET the current config, then check whether the spec is already
+satisfied (objects compared field by field; arrays like SIP servers and codecs
+compared whole, since Meta replaces them wholesale). Read-only, Meta-managed fields
+(`app_id`, the SIP password) are excluded, so an exported manifest re-applies as
+`unchanged`.
+
+## Per-kind notes
+
+- **Calling** maps to the `/settings` `calling` object. Remember that enabling SIP
+  routes calls as SIP INVITEs and stops the `calls` webhook.
+- **Profile** maps to the business profile. The profile photo is read-only here and
+  is not exported or applied.
+- **Number** is mostly read-only: `export` emits a snapshot (display name, quality,
+  tier, statuses) for versioning, but the only applyable field is the two-step
+  verification `pin`. A PIN is a secret, so `export` never includes it and you should
+  not commit one; read-only fields are ignored on apply.
+- **Commerce** maps to `whatsapp_commerce_settings`: `isCartEnabled`, `isCatalogVisible`.
+- **ConversationalAutomation** maps to `conversational_automation`: `prompts` (ice
+  breakers) and `commands`. Arrays are full-replace; send the complete desired set.
+- **Template** is a managed *set* (WABA-scoped), one manifest per template keyed by
+  `name` + `language`. `export template` snapshots every template as a multi-document
+  file. `apply` creates a missing template or edits a changed one (an **edit
+  resubmits it for approval**); unchanged templates are skipped. Drift is compared on
+  `category` and the BODY text only, so header/button-only changes are not
+  auto-detected (use `paloma template edit`), and templates absent from a manifest are
+  never deleted (use `paloma template delete`). A `spec` may give full `components` or
+  the `body`/`example` shorthand.
+- <a name="webhook"></a>**Webhook** is the webhook configuration (WABA-scoped), with two
+  aspects in one spec: `callbackUrl` (mapped to the per-WABA `override_callback_uri`) and
+  an optional `fields` list (the app-level subscribed event types). `apply` reconciles
+  each independently and writes only what changed. `verifyToken` is a write-only secret:
+  never exported, required **only when the callback URL changes** (so export -> apply is a
+  tokenless no-op). Do not commit a verify token; pull it from the keyring or an env
+  var with a [placeholder](#variables--secrets) (`${keyring:...}` / `${WHATSAPP_VERIFY_TOKEN}`),
+  supply it at change time, or use `paloma webhook subscribe`. `fields` are app-level, so reading/diffing them needs an app
+  access token: configure `PALOMA_APP_SECRET` (or `app_secret_ref`) and `--app-id` /
+  `PALOMA_APP_ID` (or rely on auto-discovery). `export` omits `fields` when no app secret
+  is configured. There is no deletion semantics; remove a webhook with
+  `paloma webhook unsubscribe`.
+
+  ```yaml
+  apiVersion: paloma/v1
+  kind: Webhook
+  spec:
+    callbackUrl: https://example.com/webhooks/whatsapp
+    verifyToken: ${keyring:acme-verify}   # only needed when changing the URL; never commit a secret
+    fields:                                  # app-level event subscriptions (needs app creds)
+      - messages
+      - calls
+  ```
