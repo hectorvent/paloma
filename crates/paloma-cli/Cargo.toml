@@ -1,0 +1,52 @@
+[package]
+name = "paloma-cli"
+description = "paloma: an unofficial, single-binary CLI for the WhatsApp Cloud API"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+authors.workspace = true
+readme = "../../README.md"
+keywords = ["whatsapp", "cli", "cloud-api", "meta", "graph-api"]
+categories = ["command-line-utilities"]
+
+[lib]
+path = "src/lib.rs"
+
+[[bin]]
+name = "paloma"
+path = "src/main.rs"
+
+[dependencies]
+paloma-core.workspace = true
+paloma-config.workspace = true
+paloma-graph.workspace = true
+paloma-manifest.workspace = true
+anstream.workspace = true
+anstyle.workspace = true
+clap.workspace = true
+clap_complete.workspace = true
+comfy-table.workspace = true
+dialoguer.workspace = true
+humantime.workspace = true
+indicatif.workspace = true
+percent-encoding.workspace = true
+secrecy.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+serde_norway.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+
+[dev-dependencies]
+assert_cmd.workspace = true
+insta.workspace = true
+predicates.workspace = true
+serde_json.workspace = true
+tempfile.workspace = true
+tokio = { workspace = true, features = ["rt-multi-thread", "macros"] }
+wiremock.workspace = true
+
+[lints]
+workspace = true
