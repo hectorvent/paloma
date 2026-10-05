@@ -14,9 +14,9 @@ equivalent).
 | `--waba-id <id>` | | Override the active WABA ID |
 | `--app-id <id>` | | Meta App ID (for app-level webhook field subscriptions) |
 | `--api-version <v>` | | Override Graph API version (e.g. `v26.0`) |
-| `--dry-run` | | Print the exact request without sending |
+| `--dry-run` | | Print the request with sensitive fields redacted, without sending |
 | `--quiet` | `-q` | Only essential output (IDs, errors) — script-friendly |
-| `--verbose` | `-v` | Log each request to stderr; `-vv` adds request/response bodies (`PALOMA_LOG` takes a full tracing filter) |
+| `--verbose` | `-v` | Log each request to stderr; `-vv` adds redacted request/response bodies (`PALOMA_LOG` takes a full tracing filter) |
 | `--timeout <dur>` | | Request timeout, e.g. `30s`, `2m` (default `60s`) |
 | `--no-color` | | Disable ANSI colors (`NO_COLOR` is honored too) |
 | `--config <path>` | | Config file path (default: `~/.config/paloma/config.toml`) |
@@ -40,6 +40,12 @@ request still read it: `apply --dry-run` compares against live config, and
 `webhook fields set --dry-run` looks up the app id. Everything else prints the request
 without any network call. Multi-step commands (`send image --file`, `flow update`
 with metadata and Flow JSON) print every request as a JSON array.
+
+Dry-run output in every format, including `raw`, masks PINs, authorization values,
+and fields ending in `token`, `secret`, or `password` (including camelCase names).
+Verbose diagnostics use the same policy for JSON bodies and URL query parameters;
+non-JSON response bodies are omitted from logs. The actual request retains its values,
+and normal response stdout is unchanged.
 
 ## Output formats (`--output` / `-o`)
 

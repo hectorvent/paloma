@@ -140,15 +140,17 @@ impl Kind {
 pub(crate) fn singleton_plan(
     desired: &Value,
     current: &Value,
-    preview: Value,
+    mut preview: Value,
     request: Request,
 ) -> KindPlan {
     let empty = desired.as_object().is_some_and(serde_json::Map::is_empty);
     if empty || crate::diff::in_sync(desired, Some(current)) {
         return KindPlan::synced();
     }
+    let changes = crate::diff::changes(desired, Some(current));
+    preview = paloma_graph::request::redact_json(&preview);
     KindPlan {
-        changes: crate::diff::changes(desired, Some(current)),
+        changes,
         preview: Some(preview),
         requests: vec![request],
     }

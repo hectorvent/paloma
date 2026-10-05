@@ -200,7 +200,7 @@ impl Request {
     pub fn describe(&self, base: &str, version: &str) -> Value {
         let mut out = Map::new();
         out.insert("method".into(), self.method.as_str().into());
-        out.insert("url".into(), self.url(base, version).into());
+        out.insert("url".into(), redact_url(&self.url(base, version)).into());
         if let Auth::App { app_id } = &self.auth {
             out.insert(
                 "auth".into(),
@@ -210,13 +210,19 @@ impl Request {
         match &self.body {
             Body::Empty => {}
             Body::Json(v) => {
-                out.insert("body".into(), v.clone());
+                out.insert("body".into(), redact_json(v));
             }
             Body::Multipart(parts) => {
                 let mut form = Map::new();
                 for p in parts {
                     let v = match &p.value {
-                        PartValue::Text(t) => Value::String(t.clone()),
+                        PartValue::Text(t) => {
+                            if sensitive_key(&p.name) {
+                                Value::String("<redacted>".into())
+                            } else {
+                                redact_json(&Value::String(t.clone()))
+                            }
+                        }
                         PartValue::File {
                             path,
                             file_name,
@@ -241,6 +247,94 @@ impl Request {
             _ => None,
         }
     }
+}
+
+/// Diagnostic rendering is separate from transport data: secrets must still reach
+/// Graph unchanged, but never appear in dry-runs or tracing.
+pub fn redact_json(value: &Value) -> Value {
+    match value {
+        Value::Object(fields) => Value::Object(
+            fields
+                .iter()
+                .map(|(key, value)| {
+                    let value = if sensitive_key(key) {
+                        Value::String("<redacted>".into())
+                    } else {
+                        redact_json(value)
+                    };
+                    (key.clone(), value)
+                })
+                .collect(),
+        ),
+        Value::Array(items) => Value::Array(items.iter().map(redact_json).collect()),
+        Value::String(text) if text.starts_with("https://") || text.starts_with("http://") => {
+            Value::String(redact_url(text))
+        }
+        _ => value.clone(),
+    }
+}
+
+fn sensitive_key(key: &str) -> bool {
+    let normalized: String = key
+        .chars()
+        .filter(char::is_ascii_alphanumeric)
+        .flat_map(char::to_lowercase)
+        .collect();
+    normalized == "pin"
+        || normalized == "authorization"
+        || normalized.ends_with("token")
+        || normalized.ends_with("secret")
+        || normalized.ends_with("password")
+        || normalized == "appsecretproof"
+}
+
+/// Mask sensitive query parameters, including those in nested callback URLs.
+/// Invalid URLs are omitted rather than risking credentials in parser diagnostics.
+pub fn redact_url(text: &str) -> String {
+    let Ok(mut url) = reqwest::Url::parse(text) else {
+        return "<redacted URL>".into();
+    };
+    let mut changed = false;
+    let pairs: Vec<(String, String)> = url
+        .query_pairs()
+        .map(|(key, value)| {
+            let safe = if sensitive_key(&key) {
+                "<redacted>".to_owned()
+            } else if value.starts_with("https://") || value.starts_with("http://") {
+                redact_url(&value)
+            } else {
+                value.to_string()
+            };
+            changed |= safe != value;
+            (key.into_owned(), safe)
+        })
+        .collect();
+    if changed {
+        url.query_pairs_mut().clear().extend_pairs(pairs);
+    }
+    if !url.username().is_empty() || url.password().is_some() {
+        let _ = url.set_username("redacted");
+        let _ = url.set_password(None);
+        changed = true;
+    }
+    if url.fragment().is_some() {
+        url.set_fragment(None);
+        changed = true;
+    }
+    if changed {
+        url.to_string()
+    } else {
+        text.to_owned()
+    }
+}
+
+/// Non-JSON responses are omitted from diagnostics because they have no reliable
+/// field boundaries for identifying credentials.
+pub fn diagnostic_body(text: &str) -> String {
+    serde_json::from_str::<Value>(text).map_or_else(
+        |_| "<non-JSON body omitted>".into(),
+        |value| redact_json(&value).to_string(),
+    )
 }
 
 /// Percent-encode a query component (RFC 3986 unreserved characters pass through).
@@ -283,5 +377,56 @@ mod tests {
         assert_eq!(d["method"], "POST");
         assert_eq!(d["body"]["a"], 1);
         assert_eq!(d["auth"], "app token (42|<app-secret>)");
+    }
+}
+
+#[cfg(test)]
+mod redaction_tests {
+    use super::*;
+
+    #[test]
+    fn descriptions_mask_nested_secrets_without_mutating_requests() {
+        let body =
+            json!({"pin":"825194", "nested":[{"verifyToken":"VERIFY_SENTINEL", "name":"visible"}]});
+        let request = Request::post("111/register").json(body.clone());
+        let description = request.describe("https://graph.facebook.com", "v26.0");
+        assert_eq!(description["body"]["pin"], "<redacted>");
+        assert_eq!(
+            description["body"]["nested"][0]["verifyToken"],
+            "<redacted>"
+        );
+        assert_eq!(description["body"]["nested"][0]["name"], "visible");
+        assert_eq!(request.json_body(), Some(&body));
+    }
+
+    #[test]
+    fn urls_mask_encoded_keys_nested_callbacks_and_userinfo() {
+        let url = "https://user:PASS_SENTINEL@graph.example/next?access%5Ftoken=TOKEN_SENTINEL&after=C1&callback_url=https%3A%2F%2Fexample.test%2F%3Fverify_token%3DVERIFY_SENTINEL";
+        let safe = redact_url(url);
+        for secret in ["PASS_SENTINEL", "TOKEN_SENTINEL", "VERIFY_SENTINEL"] {
+            assert!(!safe.contains(secret));
+        }
+        assert!(safe.contains("after=C1"));
+        assert_eq!(
+            redact_url("https://g/next?name=hello%20world"),
+            "https://g/next?name=hello%20world"
+        );
+    }
+
+    #[test]
+    fn multipart_and_response_diagnostics_mask_secrets() {
+        let request = Request::post("111/media").multipart(vec![
+            FormPart::text("verify_token", "VERIFY_SENTINEL"),
+            FormPart::text("messaging_product", "whatsapp"),
+        ]);
+        let rendered = request.describe("https://g", "v1");
+        assert_eq!(rendered["multipart"]["verify_token"], "<redacted>");
+        assert_eq!(rendered["multipart"]["messaging_product"], "whatsapp");
+        let body = r#"{"paging":{"next":"https://g/next?access_token=TOKEN_SENTINEL"}}"#;
+        assert!(!diagnostic_body(body).contains("TOKEN_SENTINEL"));
+        assert_eq!(
+            diagnostic_body("not json TOKEN_SENTINEL"),
+            "<non-JSON body omitted>"
+        );
     }
 }

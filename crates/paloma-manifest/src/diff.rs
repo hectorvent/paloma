@@ -16,8 +16,15 @@ pub fn in_sync(desired: &Value, current: Option<&Value>) -> bool {
 
 /// The fields that would change, as `path: current -> desired`.
 pub fn changes(desired: &Value, current: Option<&Value>) -> Vec<String> {
+    let mut original = Vec::new();
+    collect("", desired, current, &mut original);
     let mut out = Vec::new();
-    collect("", desired, current, &mut out);
+    let desired = paloma_graph::request::redact_json(desired);
+    let current = current.map(paloma_graph::request::redact_json);
+    collect("", &desired, current.as_ref(), &mut out);
+    if out != original {
+        out.push("sensitive fields changed (values redacted)".into());
+    }
     out
 }
 
@@ -64,5 +71,35 @@ mod tests {
                 r#"status: (unset) -> "ENABLED""#.to_owned()
             ]
         );
+    }
+}
+
+#[cfg(test)]
+mod redaction_tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn sensitive_only_drift_is_reported_without_rendering_either_secret() {
+        let current = json!({"sip_user_password":"OLD_SENTINEL"});
+        let desired = json!({"sip_user_password":"NEW_SENTINEL"});
+        assert!(!in_sync(&desired, Some(&current)));
+        assert_eq!(
+            changes(&desired, Some(&current)),
+            vec!["sensitive fields changed (values redacted)"]
+        );
+    }
+
+    #[test]
+    fn nested_template_url_drift_uses_the_same_policy() {
+        let current =
+            json!({"components":[{"url":"https://example.test/?access_token=OLD_SENTINEL"}]});
+        let desired =
+            json!({"components":[{"url":"https://example.test/?access_token=NEW_SENTINEL"}]});
+        assert!(!in_sync(&desired, Some(&current)));
+        let rendered = changes(&desired, Some(&current)).join("\n");
+        assert!(!rendered.is_empty());
+        assert!(!rendered.contains("OLD_SENTINEL"));
+        assert!(!rendered.contains("NEW_SENTINEL"));
     }
 }

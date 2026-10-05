@@ -14,7 +14,9 @@ use tokio::io::AsyncWriteExt;
 use tracing::{debug, trace};
 
 use crate::error_map::map_error;
-use crate::request::{Auth, Body, Method, PartValue, Request, Target};
+use crate::request::{
+    Auth, Body, Method, PartValue, Request, Target, diagnostic_body, redact_json, redact_url,
+};
 
 /// Transport settings.
 #[derive(Debug, Clone)]
@@ -107,7 +109,7 @@ impl Client {
         let resp = self.send(req, Some(self.config.timeout)).await?;
         let status = resp.status().as_u16();
         let text = resp.text().await.map_err(transport)?;
-        trace!(status, body = %text, "response");
+        trace!(status, body = %diagnostic_body(&text), "response");
         if (200..300).contains(&status) {
             Ok(Response { status, text })
         } else {
@@ -146,7 +148,7 @@ impl Client {
 
     async fn send(&self, req: &Request, timeout: Option<Duration>) -> Result<reqwest::Response> {
         let url = self.url(req);
-        debug!(method = req.method.as_str(), %url, "request");
+        debug!(method = req.method.as_str(), url = %redact_url(&url), "request");
         let bearer = match &req.auth {
             Auth::User => self.creds.access_token()?.expose_secret().to_owned(),
             Auth::App { app_id } => {
@@ -165,7 +167,7 @@ impl Client {
         builder = match &req.body {
             Body::Empty => builder,
             Body::Json(v) => {
-                trace!(body = %v, "request body");
+                trace!(body = %redact_json(v), "request body");
                 builder.json(v)
             }
             Body::Multipart(parts) => builder.multipart(build_form(parts).await?),
@@ -197,6 +199,8 @@ async fn build_form(parts: &[crate::request::FormPart]) -> Result<Form> {
 
 #[allow(clippy::needless_pass_by_value)] // used as `map_err(transport)`
 fn transport(e: reqwest::Error) -> Error {
+    // reqwest attaches request URLs, which may contain verification tokens.
+    let e = e.without_url();
     if e.is_timeout() {
         Error::other("request timed out (raise it with --timeout)")
     } else if e.is_connect() {

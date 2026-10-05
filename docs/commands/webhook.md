@@ -133,3 +133,5 @@ paloma apply -f webhook.yaml            # only writes what changed
 
 `export` omits `fields` when no app secret is configured (the URL still exports);
 managing `fields` via a manifest needs the app credentials, same as the command.
+
+Verification tokens are redacted from dry-run output and verbose diagnostics, including app-subscription query parameters. The real subscription request sends the supplied token.

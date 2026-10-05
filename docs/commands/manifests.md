@@ -169,3 +169,5 @@ compared whole, since Meta replaces them wholesale). Read-only, Meta-managed fie
       - messages
       - calls
   ```
+
+Dry-run previews and drift diagnostics mask sensitive fields, including nested SIP passwords. Sensitive-only updates still report drift and are applied with their original values.

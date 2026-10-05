@@ -467,3 +467,169 @@ fn export_template_is_offline_and_annotated() {
                 .and(predicate::str::contains("  # sip:")),
         );
 }
+
+#[test]
+fn secret_dry_runs_are_redacted_in_every_output_format() {
+    let home = TempDir::new().unwrap();
+    for format in ["table", "json", "yaml", "raw"] {
+        for args in [
+            vec!["number", "register", "--pin", "825194"],
+            vec!["number", "set-pin", "--pin", "825194"],
+            vec![
+                "webhook",
+                "subscribe",
+                "--callback-url",
+                "https://example.test/hook",
+                "--verify-token",
+                "VERIFY_SENTINEL",
+            ],
+            vec![
+                "webhook",
+                "fields",
+                "set",
+                "messages",
+                "--callback-url",
+                "https://example.test/hook",
+                "--verify-token",
+                "VERIFY_SENTINEL",
+            ],
+        ] {
+            let out = paloma(None, &home)
+                .env("PALOMA_APP_SECRET", "APP_SECRET_SENTINEL")
+                .args(args)
+                .args(["--app-id", "333", "--dry-run", "-vv", "-o", format])
+                .output()
+                .unwrap();
+            assert!(
+                out.status.success(),
+                "{}",
+                String::from_utf8_lossy(&out.stderr)
+            );
+            let combined = format!(
+                "{}{}",
+                String::from_utf8_lossy(&out.stdout),
+                String::from_utf8_lossy(&out.stderr)
+            );
+            for secret in ["825194", "VERIFY_SENTINEL", "APP_SECRET_SENTINEL", TOKEN] {
+                assert!(
+                    !combined.contains(secret),
+                    "secret leaked in {format}: {combined}"
+                );
+            }
+        }
+    }
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn pin_reaches_api_while_verbose_diagnostics_are_redacted() {
+    let graph = MockServer::start().await;
+    let response = json!({"success":true, "access_token":"RESPONSE_SENTINEL", "paging":{"next":"https://graph.test/next?access_token=PAGING_SENTINEL"}});
+    Mock::given(method("POST"))
+        .and(path(format!("/v26.0/{PHONE}")))
+        .and(header("authorization", format!("Bearer {TOKEN}")))
+        .and(body_json(json!({"pin":"825194"})))
+        .respond_with(ResponseTemplate::new(200).set_body_json(&response))
+        .expect(1)
+        .mount(&graph)
+        .await;
+    let home = TempDir::new().unwrap();
+    let out = paloma(Some(&graph), &home)
+        .args(["number", "set-pin", "--pin", "825194", "-vv", "-o", "raw"])
+        .output()
+        .unwrap();
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert_eq!(stdout_json(&out), response);
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    for secret in ["825194", TOKEN, "RESPONSE_SENTINEL", "PAGING_SENTINEL"] {
+        assert!(!stderr.contains(secret), "secret in stderr: {stderr}");
+    }
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn verification_query_reaches_api_but_not_verbose_logs() {
+    let graph = MockServer::start().await;
+    Mock::given(method("POST"))
+        .and(path("/v26.0/333/subscriptions"))
+        .and(query_param("verify_token", "VERIFY_SENTINEL"))
+        .and(header("authorization", "Bearer 333|APP_SECRET_SENTINEL"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({"success":true})))
+        .expect(1)
+        .mount(&graph)
+        .await;
+    let home = TempDir::new().unwrap();
+    let out = paloma(Some(&graph), &home)
+        .env("PALOMA_APP_SECRET", "APP_SECRET_SENTINEL")
+        .args([
+            "webhook",
+            "fields",
+            "set",
+            "messages",
+            "--callback-url",
+            "https://example.test/hook",
+            "--verify-token",
+            "VERIFY_SENTINEL",
+            "--app-id",
+            "333",
+            "--yes",
+            "-vv",
+        ])
+        .output()
+        .unwrap();
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    for secret in ["VERIFY_SENTINEL", "APP_SECRET_SENTINEL", TOKEN] {
+        assert!(!stderr.contains(secret), "secret in stderr: {stderr}");
+    }
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn manifest_password_is_redacted_from_preview_and_drift_but_sent_unchanged() {
+    let graph = MockServer::start().await;
+    mock_calling_settings(&graph).await;
+    Mock::given(method("POST"))
+        .and(path(format!("/v26.0/{PHONE}/settings")))
+        .and(body_json(json!({"messaging_product":"whatsapp", "calling":{
+            "sip":{"servers":[{"hostname":"sip.example.test", "sip_user_password":"SIP_PASSWORD_SENTINEL"}]}
+        }})))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({"success":true})))
+        .expect(1).mount(&graph).await;
+    let home = TempDir::new().unwrap();
+    let file = home.path().join("calling-secret.yaml");
+    std::fs::write(&file, "apiVersion: paloma/v1\nkind: Calling\nspec:\n  sip:\n    servers:\n      - hostname: sip.example.test\n        sipUserPassword: SIP_PASSWORD_SENTINEL\n").unwrap();
+    for command in ["diff", "apply"] {
+        let mut cmd = paloma(Some(&graph), &home);
+        cmd.args([command, "-f"]).arg(&file).arg("-vv");
+        if command == "apply" {
+            cmd.arg("--dry-run");
+        }
+        let out = cmd.output().unwrap();
+        assert_eq!(out.status.code(), Some(i32::from(command == "diff")));
+        let combined = format!(
+            "{}{}",
+            String::from_utf8_lossy(&out.stdout),
+            String::from_utf8_lossy(&out.stderr)
+        );
+        assert!(!combined.contains("SIP_PASSWORD_SENTINEL"), "{combined}");
+        assert!(combined.contains("redacted"));
+    }
+    let out = paloma(Some(&graph), &home)
+        .args(["apply", "-f"])
+        .arg(&file)
+        .arg("-vv")
+        .output()
+        .unwrap();
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert!(!String::from_utf8_lossy(&out.stderr).contains("SIP_PASSWORD_SENTINEL"));
+}

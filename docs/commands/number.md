@@ -44,3 +44,5 @@ Set or update the two-step verification PIN.
 ```bash
 paloma number set-pin --pin 654321
 ```
+
+PIN values are redacted from dry-run output and verbose request diagnostics. The real request sends the supplied PIN.

@@ -112,7 +112,8 @@ impl Apply {
                 if let Some(p) = &plan.preview {
                     app.out.stdout(&format!(
                         "{}\n",
-                        serde_json::to_string_pretty(p).unwrap_or_default()
+                        serde_json::to_string_pretty(&paloma_graph::request::redact_json(p))
+                            .unwrap_or_default()
                     ));
                 }
                 continue;

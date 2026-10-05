@@ -138,7 +138,8 @@ impl App {
         let (data, raw) = match reqs {
             [one] => (
                 described.into_iter().next().unwrap_or_default(),
-                one.json_body().map(ToString::to_string),
+                one.json_body()
+                    .map(|body| paloma_graph::request::redact_json(body).to_string()),
             ),
             _ => (serde_json::Value::Array(described), None),
         };
