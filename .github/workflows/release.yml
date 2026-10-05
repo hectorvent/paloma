@@ -1,0 +1,49 @@
+name: Release
+
+# Runs when a version tag (v1.2.3) is pushed, e.g. by release-plz merging its release PR.
+# Builds `paloma` for every platform, archives it with the man pages and completions,
+# and attaches the archives plus SHA-256 checksums to the GitHub Release.
+
+on:
+  push:
+    tags: ['v[0-9]+.[0-9]+.[0-9]+']
+
+permissions:
+  contents: write
+
+jobs:
+  create-release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: taiki-e/create-gh-release-action@v1
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+  build:
+    name: build (${{ matrix.target }})
+    needs: create-release
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { target: x86_64-unknown-linux-musl, os: ubuntu-latest }
+          - { target: aarch64-unknown-linux-musl, os: ubuntu-latest }
+          - { target: x86_64-apple-darwin, os: macos-latest }
+          - { target: aarch64-apple-darwin, os: macos-latest }
+          - { target: x86_64-pc-windows-msvc, os: windows-latest }
+          - { target: aarch64-pc-windows-msvc, os: windows-latest }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Generate man pages and completions
+        run: cargo xtask dist-assets dist-assets
+      - uses: taiki-e/upload-rust-binary-action@v1
+        with:
+          bin: paloma
+          target: ${{ matrix.target }}
+          include: README.md,dist-assets
+          archive: paloma-$tag-$target
+          checksum: sha256
+          token: ${{ secrets.GITHUB_TOKEN }}

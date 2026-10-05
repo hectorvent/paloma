@@ -1,0 +1,47 @@
+#!/bin/sh
+# Rejects commit messages that would break the release pipeline or the DCO.
+#
+# release-plz derives versions and CHANGELOG.md from Conventional Commit subjects, every
+# commit must carry a DCO sign-off, and the history stays free of AI attribution. CI runs
+# this same script over every commit in a PR, so the rules live in one place.
+#
+# Usage: commit-msg <message-file>    (enable with: git config core.hooksPath .githooks)
+
+msg_file=$1
+[ -f "$msg_file" ] || { echo "commit-msg: no message file given" >&2; exit 2; }
+
+# Drop comment lines and the scissors section git adds for `commit -v`.
+msg=$(sed -e '/^# ------------------------ >8 ------------------------$/,$d' -e '/^#/d' "$msg_file")
+subject=$(printf '%s\n' "$msg" | sed -n '/[^[:space:]]/{p;q;}')
+
+fail=0
+err() { echo "commit-msg: $1" >&2; fail=1; }
+
+case $subject in
+  'Merge '*|'Revert '*|'fixup! '*|'squash! '*|'amend! '*) skip_subject=1 ;;
+  *) skip_subject=0 ;;
+esac
+
+if [ "$skip_subject" -eq 0 ]; then
+  types='feat|fix|docs|refactor|perf|test|build|ci|chore|style|revert'
+  if ! printf '%s\n' "$subject" | grep -Eq "^($types)(\([a-z0-9][a-z0-9._/-]*\))?!?: [^[:space:]]"; then
+    err "subject is not a Conventional Commit: '$subject'"
+    echo "  expected: type(scope): summary   types: $(echo "$types" | tr '|' ' ')" >&2
+  fi
+  if [ "${#subject}" -gt 72 ]; then
+    err "subject is ${#subject} characters; keep it at 72 or fewer"
+  fi
+fi
+
+if ! printf '%s\n' "$msg" | grep -Eq '^Signed-off-by: .+ <[^>]+>$'; then
+  err "missing 'Signed-off-by:' trailer (commit with -s, or: git commit --amend --no-edit -s)"
+fi
+
+if printf '%s\n' "$msg" | grep -Eiq \
+  -e '^Co-Authored-By:.*(claude|anthropic|copilot|chatgpt|openai|gpt-|gemini|cursor|codeium|\bai\b)' \
+  -e 'noreply@anthropic\.com' \
+  -e 'generated (with|by) .*(claude|copilot|chatgpt|gpt|gemini|ai\b)'; then
+  err "message carries AI attribution; remove the Co-Authored-By / 'Generated with' lines"
+fi
+
+exit $fail

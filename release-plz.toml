@@ -1,0 +1,12 @@
+[workspace]
+# One version for the whole workspace, tagged as vX.Y.Z on the binary crate.
+publish = false
+git_tag_enable = false
+changelog_update = false
+
+[[package]]
+name = "paloma-cli"
+git_tag_enable = true
+git_tag_name = "v{{ version }}"
+changelog_update = true
+changelog_path = "CHANGELOG.md"
