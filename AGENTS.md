@@ -1,0 +1,158 @@
+# AGENTS.md
+
+Guidance for coding agents (and humans) working in this repository. This file is the
+source of truth; tool-specific instruction files only import it.
+
+## What this is
+
+**Paloma**: an unofficial, single-binary CLI for the **real** WhatsApp Cloud API
+(`graph.facebook.com`). Not an emulator, not the Web protocol. Rust (2024 edition),
+clap + tokio (current-thread) + reqwest/rustls. A port of the Java/Quarkus build in
+`../paloma`.
+
+The command shape is always `paloma <resource> <verb> [args] [flags]`.
+
+## Commands
+
+| Task | Command |
+|------|---------|
+| Compile check | `cargo check --workspace` |
+| Lint (must be clean) | `cargo clippy --workspace --all-targets` |
+| Format | `cargo fmt --all` |
+| All tests | `cargo test --workspace` |
+| One crate's tests | `cargo test -p paloma-manifest` |
+| Run | `cargo run -q -- send text 15551234567 hi --dry-run --phone-number-id 1` |
+| Release binary | `cargo build --release` → `target/release/paloma` |
+| Man pages + completions | `cargo xtask dist-assets` |
+| Supply chain | `cargo deny check` |
+
+## Architecture
+
+Read [docs/architecture.md](docs/architecture.md) first. The short version:
+
+```
+paloma-core      errors + exit codes, validation, limits, 24h policy, Credentials trait
+paloma-config    config.toml (toml_edit writes), profiles, keyring, Context resolution
+paloma-graph     Request (a call as data), Client, error_map, paging, api::<resource>
+paloma-manifest  YAML manifests: interpolate, case, diff, Kind enum + kinds/*
+paloma-cli       clap tree (commands/*), App wiring, output::Printer
+```
+
+Each cross-cutting concern lives in exactly one place, and that is load-bearing:
+
+- **Exit codes** only in `paloma_core::error`; `main.rs` maps `Result` to the process
+  exit code once. Graph responses map in `paloma_graph::error_map`.
+- **Context precedence** (flag/env → profile → keyring) only in
+  `paloma_config::resolve::Context::resolve`. clap merges flag and env (`env = "PALOMA_…"`).
+- **All stdout** goes through `paloma_cli::output::Printer`. Never `println!`.
+- **`--dry-run`** is enforced by `App::send`; commands build a `Request` and hand it over.
+- **Cloud API limits** are named constants in `paloma_core::limits`.
+
+## Conventions that matter
+
+**Output is a contract.** Data → stdout; diagnostics, warnings, prompts → stderr
+(`app.out.info/note/warn`). `-q` prints only `Output::primary_id`, so
+`MID=$(paloma send text … -q)` works. `-o table|json|yaml|raw`; json/raw pass the raw
+Graph body through. Lists set `.table("/data", COLUMNS)`.
+
+**Exit codes are a contract.** `0` ok, `1` generic, `2` usage (clap), `3` auth,
+`4` rate-limited, `5` validation, `6` policy. Return the right `Error` variant; use
+`Error::Silent(code)` when the command already reported the outcome (e.g. `diff`).
+
+**Requests are data.** Endpoint builders in `paloma_graph::api` are pure and return a
+`Request`. Use `app.send(&req)` (honors `--dry-run`), `app.fetch(&req)` (a read needed to
+build the real request; runs even under `--dry-run`), or `app.send_and_emit(&req, id_fn)`.
+Multi-request commands print all of them under dry-run with `app.print_dry_run(&[..])`.
+
+**Fail before spending an API call.** Validate with `paloma_core::validate` (exit 5)
+before `app.ctx()`. Prefer clap `ValueEnum`s for closed sets (bad values exit 2 with
+suggestions).
+
+**Destructive actions confirm** with `app.confirm_or_abort(what)`: passes under `--yes`
+or `--dry-run`, refuses without a TTY.
+
+**Secrets never touch argv, config or logs.** Tokens live in the keyring
+(`paloma_config::secrets`), service `paloma`, account `paloma/<profile>`. `--token` is
+hidden; `PALOMA_TOKEN` and `auth login --with-token` are the scripting paths. Secrets
+are `SecretString`s; `Request::describe` never includes them.
+
+**Lazy context.** `ctx.require_phone_number_id()` / `require_waba_id()` at the point of
+use; the keyring is read only when a request is sent.
+
+**Docs explain why, not what.** Each module opens with a short `//!` on the constraint
+it exists to satisfy. Match that; don't narrate code.
+
+## How to add a command
+
+1. Add a variant (and an `Args` struct if it has several flags) to the group's
+   `Subcommand` enum in `crates/paloma-cli/src/commands/<group>.rs`; doc comments become
+   `--help`. New top-level group → new module + variant in `commands/mod.rs`.
+2. New Graph node → a pure builder in `crates/paloma-graph/src/api/<resource>.rs`.
+3. In `run`: validate → resolve ids from `app.ctx()?` → `app.send_and_emit(..)`.
+   Payload shaping belongs in `paloma-graph`, not in the command.
+4. Not built yet → `planned("group verb", "vX.Y")`, so it stays discoverable.
+5. Contract test in `crates/paloma-cli/tests/cli.rs` (exit code, stdout vs stderr,
+   exact request body); docs page under `docs/commands/`, linked from `docs/README.md`.
+
+## How to add a manifest kind
+
+Add a variant to `paloma_manifest::Kind` (name, `phone_scoped`, and the `match`es in
+`spec_template`/`export`/`plan`) and a module in `crates/paloma-manifest/src/kinds/`.
+Specs are **camelCase** in manifests, **snake_case** inside kinds (`case` converts);
+`${...}` is expanded before conversion. Singleton kinds use `kind::singleton_plan`.
+`template()` lists writable fields; `export` renders unset ones as comments.
+
+## Testing
+
+Unit tests sit next to the code. Contract tests run the built binary against a
+`wiremock` Graph API with an isolated env (`PALOMA_CONFIG` in a temp dir,
+`PALOMA_TOKEN`, `PALOMA_GRAPH_URL`), so they never touch the real keyring or network.
+Test what the user is promised: exit code, what lands on stdout vs stderr, and the exact
+request body.
+
+## Git workflow
+
+The full rules, with examples, are in [CONTRIBUTING.md](CONTRIBUTING.md). The ones an
+agent must never get wrong:
+
+- **Branches** are `<type>/<short-kebab>` off an up-to-date `main`
+  (`feat/webhook-listen`, `fix/send-media-id`, `docs/roadmap-section`).
+- **Conventional Commits**: `type(scope): imperative summary`, at most 72 characters.
+  release-plz derives versions and `CHANGELOG.md` from them, so the type matters:
+  `feat` bumps minor, `fix`/`perf` bump patch, `!` or `BREAKING CHANGE:` bumps major.
+  Don't hand-edit versions or the changelog.
+- **Scopes** are a crate (`core`, `config`, `graph`, `manifest`, `cli`), a command
+  group (`send`, `template`, `webhook`, `flow`, …), or `deps`, `ci`, `build`, `xtask`.
+- **Every commit is signed off and signed**: `git commit -s -S`. The `Signed-off-by:`
+  trailer is the DCO; the hook and CI reject commits without it.
+- **No AI attribution**: no `Co-Authored-By:` for an AI, no "Generated with …" lines,
+  no mention of an assistant in commit messages, PR titles or PR bodies.
+- One logical change per commit; when a command's behavior changes, its
+  `docs/commands/*.md` page changes in the same commit.
+- Enable the hooks once per clone: `git config core.hooksPath .githooks`.
+- Never push, open a PR, or rewrite published history unless asked.
+
+## Code hygiene
+
+- clippy runs with `pedantic`; keep it at zero warnings. Allow a lint locally with a
+  comment saying why, not crate-wide.
+- `local/` is git-ignored scratch space for internal notes (the working roadmap lives
+  there). Never link to it from tracked files.
+
+## Agent tooling
+
+Project skills and subagents are plain Markdown checklists that any agent can
+read.
+
+| Skill | Use it to |
+|-------|-----------|
+| `git-workflow` | Start a branch, write a commit, prepare or open a PR the project's way |
+| `preflight` | Run the CI checks plus the repo's contract checks before a PR |
+| `add-command` | Add or un-plan a `paloma <group> <verb>` end to end |
+| `add-manifest-kind` | Add a kind to `export` / `apply` / `diff` |
+
+| Agent | Use it to |
+|-------|-----------|
+| `contract-reviewer` | Review a diff against the output, exit-code, dry-run and secrets contracts |
+| `docs-auditor` | Find drift between `--help`, `docs/` and `README.md` |
+| `test-writer` | Write contract tests in `crates/paloma-cli/tests/cli.rs` |
