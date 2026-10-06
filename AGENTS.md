@@ -141,8 +141,19 @@ agent must never get wrong:
 
 ## Agent tooling
 
-Project skills and subagents are plain Markdown checklists that any agent can
-read.
+Shared project tooling lives in `.agents/`:
+
+- Skills: `.agents/skills/<name>/SKILL.md`, discovered directly by Codex.
+- Agent instructions: `.agents/agents/<name>.md`, shared by both tools.
+- Codex agent definitions: `.agents/codex-agents/<name>.toml`, exposed through
+  `.codex/agents`. These adapters read the shared Markdown instructions.
+- Edit the canonical files under `.agents`; a tool's own discovery path may link
+  to them locally.
+
+When adding an agent, add its shared Markdown file and a matching Codex TOML adapter.
+Keep task instructions in the Markdown file; tool-specific configuration stays in
+the adapter. The front matter's `tools` list does not configure Codex permissions.
+See [.agents/README.md](.agents/README.md) for the layout and discovery checks.
 
 | Skill | Use it to |
 |-------|-----------|

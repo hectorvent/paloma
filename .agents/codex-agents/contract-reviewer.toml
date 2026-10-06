@@ -1,0 +1,3 @@
+name = "contract-reviewer"
+description = "Reviews a Paloma diff against the project's user-facing contracts: exit codes, stdout vs stderr, -q primary ids, --dry-run, validation before API calls, secrets, destructive-action confirmation and named limits. Use before a PR, after adding or changing a command, or when asked to \"review this against the conventions\"."
+developer_instructions = "Read AGENTS.md first, then read and follow .agents/agents/contract-reviewer.md before starting work. The Markdown body is the shared source of task instructions. Its tools front matter does not grant tools or permissions in Codex. Use the tools and permissions available in this session."

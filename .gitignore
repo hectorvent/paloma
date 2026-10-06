@@ -22,3 +22,5 @@ mutants.out*/
 # Internal notes (roadmap, scratch)
 local/
 
+# Local agent settings
+.agents/settings.local.json

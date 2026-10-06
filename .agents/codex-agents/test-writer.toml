@@ -1,0 +1,3 @@
+name = "test-writer"
+description = "Writes Paloma contract tests in crates/paloma-cli/tests/cli.rs: runs the real binary against a wiremock Graph API in an isolated env and asserts exit code, stdout vs stderr, and the exact request body. Use when a command is added or changed, or when asked to \"add tests for <command>\" or \"cover this bug with a test\"."
+developer_instructions = "Read AGENTS.md first, then read and follow .agents/agents/test-writer.md before starting work. The Markdown body is the shared source of task instructions. Its tools front matter does not grant tools or permissions in Codex. Use the tools and permissions available in this session."
