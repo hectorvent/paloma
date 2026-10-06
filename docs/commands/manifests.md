@@ -141,11 +141,21 @@ compared whole, since Meta replaces them wholesale). Read-only, Meta-managed fie
 - **Template** is a managed *set* (WABA-scoped), one manifest per template keyed by
   `name` + `language`. `export template` snapshots every template as a multi-document
   file. `apply` creates a missing template or edits a changed one (an **edit
-  resubmits it for approval**); unchanged templates are skipped. Drift is compared on
-  `category` and the BODY text only, so header/button-only changes are not
-  auto-detected (use `paloma template edit`), and templates absent from a manifest are
-  never deleted (use `paloma template delete`). A `spec` may give full `components` or
-  the `body`/`example` shorthand.
+  resubmits it for approval**); unchanged templates are skipped. Templates absent from
+  a manifest are never deleted (use `paloma template delete`). A `spec` may give full
+  `components` or the `body`/`example` shorthand, and that choice sets what drift means:
+  - With **`components`**, every component and field you declare is compared:
+    header, body, footer, buttons and their order. Adding or removing a component
+    counts as drift. `example` blocks are not compared: they are review samples that
+    Meta rewrites on read (an uploaded header handle comes back as a CDN URL). Fields
+    Meta returns that you didn't declare are ignored, and `type`/`format` match in any
+    case.
+  - With the **`body`** shorthand, only `category` and the BODY text are compared.
+    Meta's edit replaces every component, so a shorthand edit resends the live
+    header, footer and buttons unchanged around the new BODY. A template with a
+    media header or a carousel can't be edited this way, because its media must be
+    re-uploaded. `apply` refuses it (exit 5) and asks you to declare its full
+    `components`.
 - <a name="webhook"></a>**Webhook** is the webhook configuration (WABA-scoped), with two
   aspects in one spec: `callbackUrl` (mapped to the per-WABA `override_callback_uri`) and
   an optional `fields` list (the app-level subscribed event types). `apply` reconciles

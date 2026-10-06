@@ -633,3 +633,213 @@ async fn manifest_password_is_redacted_from_preview_and_drift_but_sent_unchanged
     );
     assert!(!String::from_utf8_lossy(&out.stderr).contains("SIP_PASSWORD_SENTINEL"));
 }
+
+fn template_manifest(home: &TempDir, footer: &str) -> std::path::PathBuf {
+    let path = home.path().join("template.yaml");
+    std::fs::write(
+        &path,
+        format!(
+            "apiVersion: paloma/v1\nkind: Template\nspec:\n  name: promo\n  language: en_US\n  category: MARKETING\n  components:\n    - type: header\n      format: image\n      example:\n        headerHandle: [\"4::upload-handle\"]\n    - type: BODY\n      text: \"Hi {{{{1}}}}\"\n    - type: FOOTER\n      text: \"{footer}\"\n    - type: BUTTONS\n      buttons:\n        - type: URL\n          text: Shop\n          url: \"https://example.com/shop\"\n"
+        ),
+    )
+    .unwrap();
+    path
+}
+
+/// The live template as Meta returns it: upper-case types, the header handle rewritten
+/// to a CDN URL, and server fields the manifest never declares.
+async fn mock_live_template(graph: &MockServer) {
+    Mock::given(method("GET"))
+        .and(path(format!("/v26.0/{WABA}/message_templates")))
+        .and(query_param("name", "promo"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({ "data": [{
+            "id": "tpl-1", "name": "promo", "language": "en_US", "status": "APPROVED",
+            "category": "MARKETING",
+            "components": [
+                { "type": "HEADER", "format": "IMAGE", "example": { "header_handle": ["https://scontent.example/h.jpg"] } },
+                { "type": "BODY", "text": "Hi {{1}}" },
+                { "type": "FOOTER", "text": "Reply STOP to opt out" },
+                { "type": "BUTTONS", "buttons": [{ "type": "URL", "text": "Shop", "url": "https://example.com/shop" }] }
+            ]
+        }] })))
+        .mount(graph)
+        .await;
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn template_diff_sees_non_body_changes_but_not_server_metadata() {
+    let graph = MockServer::start().await;
+    mock_live_template(&graph).await;
+    let home = TempDir::new().unwrap();
+
+    let same = template_manifest(&home, "Reply STOP to opt out");
+    paloma(Some(&graph), &home)
+        .args(["diff", "-f"])
+        .arg(&same)
+        .assert()
+        .success()
+        .stderr(predicate::str::contains("in sync"));
+
+    let footer_changed = template_manifest(&home, "Reply STOP to unsubscribe");
+    paloma(Some(&graph), &home)
+        .args(["diff", "-f"])
+        .arg(&footer_changed)
+        .assert()
+        .code(1)
+        .stderr(predicate::str::contains(
+            r#"components.2.text: "Reply STOP to opt out" -> "Reply STOP to unsubscribe""#,
+        ));
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn template_apply_edits_with_the_declared_components() {
+    let graph = MockServer::start().await;
+    mock_live_template(&graph).await;
+    Mock::given(method("POST"))
+        .and(path("/v26.0/tpl-1"))
+        .and(body_json(json!({
+            "category": "MARKETING",
+            "components": [
+                { "type": "header", "format": "image", "example": { "header_handle": ["4::upload-handle"] } },
+                { "type": "BODY", "text": "Hi {{1}}" },
+                { "type": "FOOTER", "text": "Reply STOP to unsubscribe" },
+                { "type": "BUTTONS", "buttons": [{ "type": "URL", "text": "Shop", "url": "https://example.com/shop" }] }
+            ]
+        })))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({ "success": true })))
+        .expect(1)
+        .mount(&graph)
+        .await;
+    let home = TempDir::new().unwrap();
+    let file = template_manifest(&home, "Reply STOP to unsubscribe");
+    paloma(Some(&graph), &home)
+        .args(["apply", "-f"])
+        .arg(&file)
+        .assert()
+        .success();
+}
+
+fn shorthand_manifest(home: &TempDir, category: &str, body: &str) -> std::path::PathBuf {
+    let path = home.path().join("notice.yaml");
+    std::fs::write(
+        &path,
+        format!("apiVersion: paloma/v1\nkind: Template\nspec:\n  name: notice\n  language: en_US\n  category: {category}\n  body: \"{body}\"\n"),
+    )
+    .unwrap();
+    path
+}
+
+fn live_notice(header_format: &str, status: &str) -> Value {
+    json!({ "data": [{
+        "id": "tpl-2", "name": "notice", "language": "en_US", "status": status,
+        "category": "UTILITY",
+        "components": [
+            { "type": "HEADER", "format": header_format, "text": "Order update" },
+            { "type": "BODY", "text": "Your order shipped." },
+            { "type": "FOOTER", "text": "Lucky Shrub" },
+            { "type": "BUTTONS", "buttons": [{ "type": "QUICK_REPLY", "text": "Thanks" }] }
+        ]
+    }] })
+}
+
+async fn mock_notice(graph: &MockServer, header_format: &str, status: &str) {
+    Mock::given(method("GET"))
+        .and(path(format!("/v26.0/{WABA}/message_templates")))
+        .and(query_param("name", "notice"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(live_notice(header_format, status)))
+        .mount(graph)
+        .await;
+}
+
+/// Meta's edit replaces every component, so a `body` shorthand edit must resend the
+/// live header, footer and buttons unchanged around the new BODY.
+#[tokio::test(flavor = "multi_thread")]
+async fn template_shorthand_edit_keeps_the_other_live_components() {
+    let graph = MockServer::start().await;
+    mock_notice(&graph, "TEXT", "APPROVED").await;
+    Mock::given(method("POST"))
+        .and(path("/v26.0/tpl-2"))
+        .and(body_json(json!({
+            "category": "UTILITY",
+            "components": [
+                { "type": "HEADER", "format": "TEXT", "text": "Order update" },
+                { "type": "BODY", "text": "Your order is on its way." },
+                { "type": "FOOTER", "text": "Lucky Shrub" },
+                { "type": "BUTTONS", "buttons": [{ "type": "QUICK_REPLY", "text": "Thanks" }] }
+            ]
+        })))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({ "success": true })))
+        .expect(1)
+        .mount(&graph)
+        .await;
+    let home = TempDir::new().unwrap();
+    let file = shorthand_manifest(&home, "UTILITY", "Your order is on its way.");
+    paloma(Some(&graph), &home)
+        .args(["apply", "-f"])
+        .arg(&file)
+        .assert()
+        .success();
+}
+
+#[tokio::test(flavor = "multi_thread")]
+/// Meta only allows category edits on REJECTED or PAUSED templates
+/// (`templates/template-management.md`), so the fixture is a rejected one.
+async fn template_shorthand_category_change_keeps_every_live_component() {
+    let graph = MockServer::start().await;
+    mock_notice(&graph, "TEXT", "REJECTED").await;
+    let live = live_notice("TEXT", "REJECTED");
+    Mock::given(method("POST"))
+        .and(path("/v26.0/tpl-2"))
+        .and(body_json(json!({
+            "category": "MARKETING",
+            "components": live["data"][0]["components"]
+        })))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({ "success": true })))
+        .expect(1)
+        .mount(&graph)
+        .await;
+    let home = TempDir::new().unwrap();
+    let file = shorthand_manifest(&home, "MARKETING", "Your order shipped.");
+    paloma(Some(&graph), &home)
+        .args(["apply", "-f"])
+        .arg(&file)
+        .assert()
+        .success();
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn template_shorthand_refuses_to_edit_a_media_header_template() {
+    let graph = MockServer::start().await;
+    mock_notice(&graph, "IMAGE", "APPROVED").await;
+    Mock::given(method("POST"))
+        .respond_with(ResponseTemplate::new(200))
+        .expect(0)
+        .mount(&graph)
+        .await;
+    let home = TempDir::new().unwrap();
+    let file = shorthand_manifest(&home, "UTILITY", "Your order is on its way.");
+    paloma(Some(&graph), &home)
+        .args(["apply", "-f"])
+        .arg(&file)
+        .assert()
+        .code(5)
+        .stderr(predicate::str::contains("media header or carousel"));
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn template_apply_in_sync_writes_nothing() {
+    let graph = MockServer::start().await;
+    mock_live_template(&graph).await;
+    Mock::given(method("POST"))
+        .respond_with(ResponseTemplate::new(200))
+        .expect(0)
+        .mount(&graph)
+        .await;
+    let home = TempDir::new().unwrap();
+    let file = template_manifest(&home, "Reply STOP to opt out");
+    paloma(Some(&graph), &home)
+        .args(["apply", "-f"])
+        .arg(&file)
+        .assert()
+        .success();
+}

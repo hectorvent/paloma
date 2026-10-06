@@ -1,6 +1,12 @@
 //! The managed set of templates. Missing ones are created; existing ones are edited
-//! only when category or BODY text differ (an edit resubmits for review). Templates
-//! absent from the manifests are never deleted.
+//! only when they drift (an edit resubmits for review). Templates absent from the
+//! manifests are never deleted.
+//!
+//! Drift is what the manifest declares. A `components` spec compares every declared
+//! component and field, but not `example` blocks: those are review samples Meta rewrites
+//! on read (an uploaded header handle comes back as a CDN URL), so comparing them would
+//! drift forever. Fields Meta adds that the spec doesn't declare are ignored too. The
+//! `body` shorthand declares only the BODY text, so it leaves other live components alone.
 
 use paloma_core::{Error, Result};
 use paloma_graph::api::templates::{self, ListFilter};
@@ -51,7 +57,8 @@ pub async fn plan(cx: Cx<'_>, spec: &Value) -> Result<KindPlan> {
         ));
     }
     let create_body = create_body(spec, &name, &language)?;
-    let desired = normalize(&create_body);
+    let shorthand = spec.get("components").is_none();
+    let desired = normalize(&create_body, shorthand, None);
     let waba = cx.ctx.require_waba_id()?;
 
     let found = read(cx, &templates::lookup(waba, &name, Some(&language))).await?;
@@ -69,18 +76,25 @@ pub async fn plan(cx: Cx<'_>, spec: &Value) -> Result<KindPlan> {
             requests: vec![templates::create(waba, create_body)],
         });
     };
-    let current_norm = normalize(&current);
+    let current_norm = normalize(&current, shorthand, Some(&desired));
     if diff::in_sync(&desired, Some(&current_norm)) {
         return Ok(KindPlan::synced());
     }
-    let mut changes = diff::changes(&desired, Some(&current_norm));
+    let mut changes = component_changes(&desired, &current_norm);
     changes.push(format!("(edit resubmits '{name}/{language}' for approval)"));
     let category = spec
         .get("category")
         .or_else(|| current_norm.get("category"))
         .cloned()
         .unwrap_or_default();
-    let edit_body = json!({ "category": category, "components": create_body.get("components") });
+    // An edit replaces every component, so a shorthand edit must carry the live
+    // non-BODY components forward or it would delete them.
+    let components = if shorthand {
+        shorthand_edit_components(&current, &create_body, &name, &language)?
+    } else {
+        create_body.get("components").cloned().unwrap_or_default()
+    };
+    let edit_body = json!({ "category": category, "components": components });
     let id = current
         .get("id")
         .and_then(Value::as_str)
@@ -119,20 +133,249 @@ fn create_body(spec: &Value, name: &str, language: &str) -> Result<Value> {
     ))
 }
 
-/// The fields compared for drift: category and BODY text.
-fn normalize(t: &Value) -> Value {
-    let body = t
+/// The live components with BODY swapped for the shorthand's. Refused when the live
+/// template has media (a media header or a carousel): Meta returns those examples as
+/// CDN URLs, but an edit needs upload handles, so they can't be resent as read.
+fn shorthand_edit_components(
+    current: &Value,
+    create_body: &Value,
+    name: &str,
+    language: &str,
+) -> Result<Value> {
+    let is_type = |c: &Value, ty: &str| {
+        c.get("type")
+            .and_then(Value::as_str)
+            .is_some_and(|t| t.eq_ignore_ascii_case(ty))
+    };
+    let body = create_body
         .get("components")
         .and_then(Value::as_array)
+        .and_then(|cs| cs.iter().find(|c| is_type(c, "BODY")))
+        .cloned()
+        .unwrap_or_default();
+    let live = current
+        .get("components")
+        .and_then(Value::as_array)
+        .cloned()
+        .unwrap_or_default();
+    let has_media = live.iter().any(|c| {
+        is_type(c, "CAROUSEL")
+            || (is_type(c, "HEADER")
+                && c.get("format").and_then(Value::as_str).is_some_and(|f| {
+                    ["IMAGE", "VIDEO", "DOCUMENT", "GIF"]
+                        .iter()
+                        .any(|m| f.eq_ignore_ascii_case(m))
+                }))
+    });
+    if has_media {
+        return Err(Error::validation(format!(
+            "Template '{name}/{language}' has a media header or carousel, which the 'body' \
+             shorthand can't edit without losing it. Declare its full 'components' instead \
+             (start from 'paloma export template')"
+        )));
+    }
+    let mut out: Vec<Value> = live
         .into_iter()
-        .flatten()
-        .find(|c| {
-            c.get("type")
-                .and_then(Value::as_str)
-                .is_some_and(|ty| ty.eq_ignore_ascii_case("BODY"))
+        .map(|c| if is_type(&c, "BODY") { body.clone() } else { c })
+        .collect();
+    if !out.iter().any(|c| is_type(c, "BODY")) {
+        out.push(body);
+    }
+    Ok(Value::Array(out))
+}
+
+/// The state compared for drift. With `like` (the normalized desired state), the
+/// current state keeps only the fields the spec declares.
+fn normalize(t: &Value, shorthand: bool, like: Option<&Value>) -> Value {
+    let category = t.get("category").and_then(Value::as_str).unwrap_or("");
+    if shorthand {
+        let body = t
+            .get("components")
+            .and_then(Value::as_array)
+            .into_iter()
+            .flatten()
+            .find(|c| {
+                c.get("type")
+                    .and_then(Value::as_str)
+                    .is_some_and(|ty| ty.eq_ignore_ascii_case("BODY"))
+            })
+            .and_then(|c| c.get("text"))
+            .and_then(Value::as_str)
+            .unwrap_or("");
+        return json!({ "category": category, "body": body });
+    }
+    let components = canonical(t.get("components").unwrap_or(&Value::Null));
+    let components = match like.and_then(|l| l.get("components")) {
+        Some(declared) => project(&components, declared),
+        None => components,
+    };
+    json!({ "category": category, "components": components })
+}
+
+/// Drops `example` blocks and upper-cases `type`/`format`, which Meta returns in
+/// upper case whatever case they were created in.
+fn canonical(v: &Value) -> Value {
+    match v {
+        Value::Object(map) => Value::Object(
+            map.iter()
+                .filter(|(k, _)| k.as_str() != "example")
+                .map(|(k, v)| {
+                    let v = match (k.as_str(), v) {
+                        ("type" | "format", Value::String(s)) => Value::String(s.to_uppercase()),
+                        _ => canonical(v),
+                    };
+                    (k.clone(), v)
+                })
+                .collect(),
+        ),
+        Value::Array(items) => Value::Array(items.iter().map(canonical).collect()),
+        other => other.clone(),
+    }
+}
+
+/// `current` reduced to the shape of `declared`: object fields the spec doesn't name
+/// are dropped, arrays of equal length are projected element by element. Arrays of
+/// different length stay whole, so an added or removed component still drifts.
+fn project(current: &Value, declared: &Value) -> Value {
+    match (current, declared) {
+        (Value::Object(c), Value::Object(d)) => Value::Object(
+            c.iter()
+                .filter_map(|(k, v)| d.get(k).map(|dv| (k.clone(), project(v, dv))))
+                .collect(),
+        ),
+        (Value::Array(c), Value::Array(d)) if c.len() == d.len() => {
+            Value::Array(c.iter().zip(d).map(|(cv, dv)| project(cv, dv)).collect())
+        }
+        _ => current.clone(),
+    }
+}
+
+/// Readable drift lines, with array items addressed by index
+/// (`components.2.buttons.0.text: "Shop" -> "Buy"`).
+fn component_changes(desired: &Value, current: &Value) -> Vec<String> {
+    let count = |v: &Value| {
+        v.get("components")
+            .and_then(Value::as_array)
+            .map_or(0, Vec::len)
+    };
+    let mut out = Vec::new();
+    if count(desired) != count(current) {
+        out.push(format!(
+            "components: {} live -> {} in manifest",
+            count(current),
+            count(desired)
+        ));
+    }
+    out.extend(diff::changes(&indexed(desired), Some(&indexed(current))));
+    out
+}
+
+fn indexed(v: &Value) -> Value {
+    match v {
+        Value::Array(items) => Value::Object(
+            items
+                .iter()
+                .enumerate()
+                .map(|(i, item)| (i.to_string(), indexed(item)))
+                .collect(),
+        ),
+        Value::Object(map) => {
+            Value::Object(map.iter().map(|(k, v)| (k.clone(), indexed(v))).collect())
+        }
+        other => other.clone(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use serde_json::json;
+
+    use super::*;
+
+    fn spec_components() -> Value {
+        json!({
+            "category": "MARKETING",
+            "components": [
+                { "type": "header", "format": "image", "example": { "header_handle": ["4::upload-handle"] } },
+                { "type": "BODY", "text": "Hi {{1}}", "example": { "body_text": [["Ana"]] } },
+                { "type": "FOOTER", "text": "Reply STOP to opt out" },
+                { "type": "BUTTONS", "buttons": [{ "type": "URL", "text": "Shop", "url": "https://example.com/{{1}}" }] }
+            ]
         })
-        .and_then(|c| c.get("text"))
-        .and_then(Value::as_str)
-        .unwrap_or("");
-    json!({ "category": t.get("category").and_then(Value::as_str).unwrap_or(""), "body": body })
+    }
+
+    /// What Meta returns for the same template: upper-case types, the handle rewritten
+    /// to a CDN URL, and server-side fields the spec never declared.
+    fn live_components() -> Value {
+        json!({
+            "id": "123",
+            "status": "APPROVED",
+            "category": "MARKETING",
+            "components": [
+                { "type": "HEADER", "format": "IMAGE", "example": { "header_handle": ["https://scontent.example/img.jpg"] } },
+                { "type": "BODY", "text": "Hi {{1}}", "example": { "body_text": [["Ana"]] } },
+                { "type": "FOOTER", "text": "Reply STOP to opt out" },
+                { "type": "BUTTONS", "buttons": [{ "type": "URL", "text": "Shop", "url": "https://example.com/{{1}}", "example": ["https://example.com/a"] }] }
+            ]
+        })
+    }
+
+    fn drifts(spec: &Value, live: &Value) -> bool {
+        let desired = normalize(spec, false, None);
+        !diff::in_sync(&desired, Some(&normalize(live, false, Some(&desired))))
+    }
+
+    #[test]
+    fn same_template_is_in_sync_despite_examples_case_and_server_fields() {
+        assert!(!drifts(&spec_components(), &live_components()));
+    }
+
+    #[test]
+    fn footer_only_change_drifts() {
+        let mut spec = spec_components();
+        spec["components"][2]["text"] = json!("Reply STOP to unsubscribe");
+        assert!(drifts(&spec, &live_components()));
+    }
+
+    #[test]
+    fn button_only_change_drifts_and_names_the_path() {
+        let mut spec = spec_components();
+        spec["components"][3]["buttons"][0]["text"] = json!("Buy");
+        let desired = normalize(&spec, false, None);
+        let current = normalize(&live_components(), false, Some(&desired));
+        assert_eq!(
+            component_changes(&desired, &current),
+            vec![r#"components.3.buttons.0.text: "Shop" -> "Buy""#.to_owned()]
+        );
+    }
+
+    #[test]
+    fn header_format_change_drifts() {
+        let mut spec = spec_components();
+        spec["components"][0]["format"] = json!("VIDEO");
+        assert!(drifts(&spec, &live_components()));
+    }
+
+    #[test]
+    fn removed_component_drifts() {
+        let mut spec = spec_components();
+        spec["components"].as_array_mut().unwrap().remove(2);
+        let desired = normalize(&spec, false, None);
+        let current = normalize(&live_components(), false, Some(&desired));
+        assert!(!diff::in_sync(&desired, Some(&current)));
+        assert_eq!(
+            component_changes(&desired, &current)[0],
+            "components: 4 live -> 3 in manifest"
+        );
+    }
+
+    #[test]
+    fn shorthand_compares_only_category_and_body() {
+        let spec = json!({ "category": "MARKETING", "components": [{ "type": "BODY", "text": "Hi {{1}}" }] });
+        let desired = normalize(&spec, true, None);
+        assert!(diff::in_sync(
+            &desired,
+            Some(&normalize(&live_components(), true, Some(&desired)))
+        ));
+    }
 }
