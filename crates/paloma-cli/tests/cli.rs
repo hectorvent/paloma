@@ -843,3 +843,306 @@ async fn template_apply_in_sync_writes_nothing() {
         .assert()
         .success();
 }
+
+#[tokio::test(flavor = "multi_thread")]
+async fn template_components_file_preserves_payload_and_redacts_dry_runs() {
+    let graph = MockServer::start().await;
+    let components = json!([
+        {"type":"header", "parameters":[{"type":"image", "image":{"link":"https://example.test/header.jpg?access_token=MEDIA_SENTINEL"}}]},
+        {"type":"body", "parameters":[
+            {"type":"text", "parameter_name":"customer_name", "text":"Ana"},
+            {"type":"currency", "currency":{"fallback_value":"$10.00", "code":"USD", "amount_1000":10000}},
+            {"type":"date_time", "date_time":{"fallback_value":"October 26"}}
+        ]},
+        {"type":"button", "sub_type":"url", "index":"0", "parameters":[{"type":"text", "text":"order-42"}]}
+    ]);
+    let expected = json!({"messaging_product":"whatsapp", "recipient_type":"individual", "to":"15551234567", "type":"template", "template":{
+        "name":"order_ready", "language":{"code":"en_US"}, "components":components
+    }});
+    Mock::given(method("POST"))
+        .and(path(format!("/v26.0/{PHONE}/messages")))
+        .and(body_json(&expected))
+        .respond_with(
+            ResponseTemplate::new(200).set_body_json(json!({"messages":[{"id":"wamid.TEMPLATE"}]})),
+        )
+        .expect(2)
+        .mount(&graph)
+        .await;
+    let home = TempDir::new().unwrap();
+    let file = home.path().join("components.json");
+    for document in [components.clone(), json!({"components":components})] {
+        std::fs::write(&file, document.to_string()).unwrap();
+        for format in ["json", "yaml", "table", "raw"] {
+            let out = paloma(Some(&graph), &home)
+                .args([
+                    "send",
+                    "template",
+                    "15551234567",
+                    "order_ready",
+                    "--lang",
+                    "en_US",
+                    "--components-file",
+                ])
+                .arg(&file)
+                .args(["--dry-run", "-o", format])
+                .output()
+                .unwrap();
+            assert!(
+                out.status.success(),
+                "{}",
+                String::from_utf8_lossy(&out.stderr)
+            );
+            let stdout = String::from_utf8_lossy(&out.stdout);
+            assert!(!stdout.contains("MEDIA_SENTINEL"));
+            assert!(stdout.contains("order-42"));
+            assert!(String::from_utf8_lossy(&out.stderr).contains("dry-run"));
+            if format == "raw" {
+                let rendered = stdout_json(&out);
+                assert_eq!(
+                    rendered["template"]["components"][1],
+                    expected["template"]["components"][1]
+                );
+            }
+        }
+        // A real send per file shape: the mock's exact body match covers both.
+        let out = paloma(Some(&graph), &home)
+            .args([
+                "send",
+                "template",
+                "15551234567",
+                "order_ready",
+                "--lang",
+                "en_US",
+                "--components-file",
+            ])
+            .arg(&file)
+            .arg("-q")
+            .output()
+            .unwrap();
+        assert!(
+            out.status.success(),
+            "{}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+        assert_eq!(String::from_utf8_lossy(&out.stdout), "wamid.TEMPLATE\n");
+        assert!(out.stderr.is_empty());
+    }
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn template_text_flags_accept_values_starting_with_a_hyphen() {
+    let graph = MockServer::start().await;
+    Mock::given(method("POST"))
+        .and(path(format!("/v26.0/{PHONE}/messages")))
+        .and(body_json(json!({
+            "messaging_product":"whatsapp", "recipient_type":"individual", "to":"15551234567",
+            "type":"template", "template":{
+                "name":"sale", "language":{"code":"en_US"}, "components":[
+                    {"type":"header", "parameters":[{"type":"text", "text":"-50% today"}]},
+                    {"type":"body", "parameters":[{"type":"text", "text":"-5"}]}
+                ]
+            }
+        })))
+        .respond_with(
+            ResponseTemplate::new(200).set_body_json(json!({"messages":[{"id":"wamid.SALE"}]})),
+        )
+        .expect(1)
+        .mount(&graph)
+        .await;
+    let home = TempDir::new().unwrap();
+    let out = paloma(Some(&graph), &home)
+        .args([
+            "send",
+            "template",
+            "15551234567",
+            "sale",
+            "--lang",
+            "en_US",
+            "--header-text",
+            "-50% today",
+            "--body-var",
+            "-5",
+            "-q",
+        ])
+        .output()
+        .unwrap();
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert_eq!(String::from_utf8_lossy(&out.stdout), "wamid.SALE\n");
+}
+
+#[test]
+fn template_blank_body_var_exits_5_without_a_request() {
+    let home = TempDir::new().unwrap();
+    let out = paloma(None, &home)
+        .args([
+            "send",
+            "template",
+            "15551234567",
+            "sale",
+            "--lang",
+            "en_US",
+            "--body-var",
+            "   ",
+        ])
+        .output()
+        .unwrap();
+    assert_eq!(out.status.code(), Some(5));
+    assert!(out.stdout.is_empty());
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn template_text_flags_send_named_or_positional_body_with_header() {
+    let graph = MockServer::start().await;
+    for (args, parameters) in [
+        (
+            vec!["--var", "customer_name=Ana=VIP", "--var", "order_number=42"],
+            json!([
+                {"type":"text", "parameter_name":"customer_name", "text":"Ana=VIP"},
+                {"type":"text", "parameter_name":"order_number", "text":"42"}
+            ]),
+        ),
+        (
+            vec!["--body-var", "Ana", "--body-var", "42"],
+            json!([
+                {"type":"text", "text":"Ana"}, {"type":"text", "text":"42"}
+            ]),
+        ),
+    ] {
+        let positional = args[0] == "--body-var";
+        let mut components = Vec::new();
+        if positional {
+            components.push(
+                json!({"type":"header", "parameters":[{"type":"text", "text":"Order update"}]}),
+            );
+        }
+        components.push(json!({"type":"body", "parameters":parameters}));
+        Mock::given(method("POST"))
+            .and(path(format!("/v26.0/{PHONE}/messages")))
+            .and(body_json(json!({"messaging_product":"whatsapp", "recipient_type":"individual", "to":"15551234567", "type":"template", "template":{
+                "name":"order_ready", "language":{"code":"en_US"}, "components":components
+            }})))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({"messages":[{"id":"wamid.FLAGS"}]})))
+            .expect(1).mount(&graph).await;
+        let home = TempDir::new().unwrap();
+        let mut command = paloma(Some(&graph), &home);
+        command.args([
+            "send",
+            "template",
+            "15551234567",
+            "order_ready",
+            "--lang",
+            "en_US",
+        ]);
+        if positional {
+            command.args(["--header-text", "Order update"]);
+        }
+        command
+            .args(args)
+            .arg("-q")
+            .assert()
+            .success()
+            .stdout("wamid.FLAGS\n")
+            .stderr("");
+    }
+}
+
+#[test]
+fn template_parameter_errors_fail_before_context_resolution() {
+    let home = TempDir::new().unwrap();
+    // Any attempt to resolve context would fail with a config error instead of exit 5.
+    std::fs::write(home.path().join("config.toml"), "broken = [").unwrap();
+    for args in [
+        vec!["--var", "missing_equals"],
+        vec!["--var", "=Ana"],
+        vec!["--var", "Name=Ana"],
+        vec!["--var", "first-name=Ana"],
+        vec!["--var", "name=   "],
+        vec!["--var", "name=Ana", "--var", "name=Bob"],
+        vec!["--header-text", "   "],
+    ] {
+        paloma(None, &home)
+            .args([
+                "send",
+                "template",
+                "15551234567",
+                "order_ready",
+                "--lang",
+                "en_US",
+            ])
+            .args(args)
+            .assert()
+            .code(5)
+            .stdout(predicate::str::is_empty());
+    }
+    let file = home.path().join("bad-components.json");
+    for document in [
+        "not json",
+        "{}",
+        "null",
+        "[1]",
+        "[{\"type\":\"\"}]",
+        "[{\"type\":\"body\",\"parameters\":{}}]",
+        "[{\"type\":\"body\",\"parameters\":[null]}]",
+        "{\"components\":[],\"to\":\"other\"}",
+    ] {
+        std::fs::write(&file, document).unwrap();
+        paloma(None, &home)
+            .args([
+                "send",
+                "template",
+                "15551234567",
+                "order_ready",
+                "--lang",
+                "en_US",
+                "--components-file",
+            ])
+            .arg(&file)
+            .assert()
+            .code(5)
+            .stdout(predicate::str::is_empty());
+    }
+    paloma(None, &home)
+        .args([
+            "send",
+            "template",
+            "15551234567",
+            "order_ready",
+            "--lang",
+            "en_US",
+            "--components-file",
+        ])
+        .arg(home.path().join("missing.json"))
+        .assert()
+        .code(5)
+        .stdout(predicate::str::is_empty());
+}
+
+#[test]
+fn template_parameter_sources_conflict_as_usage_errors() {
+    let home = TempDir::new().unwrap();
+    for args in [
+        vec!["--components-file", "unused.json", "--body-var", "Ana"],
+        vec!["--components-file", "unused.json", "--var", "name=Ana"],
+        vec!["--components-file", "unused.json", "--header-text", "Hi"],
+        vec!["--body-var", "Ana", "--var", "name=Ana"],
+        vec!["--var", "name=Ana", "--header-text", "Hi"],
+    ] {
+        paloma(None, &home)
+            .args([
+                "send",
+                "template",
+                "15551234567",
+                "order_ready",
+                "--lang",
+                "en_US",
+            ])
+            .args(args)
+            .assert()
+            .code(2)
+            .stdout(predicate::str::is_empty());
+    }
+}

@@ -50,34 +50,47 @@ pub fn text(to: &str, body: &str, preview_url: bool, reply_to: Option<&str>) -> 
 
 /// A template send; `body_vars` fill `{{1}}`, `{{2}}`, … of the BODY component in order.
 pub fn template(to: &str, name: &str, language: &str, body_vars: &[String]) -> Value {
-    #[derive(Serialize)]
-    struct Template<'a> {
-        name: &'a str,
-        language: Language<'a>,
-        #[serde(skip_serializing_if = "Option::is_none")]
-        components: Option<Vec<Value>>,
+    let components = template_text_components(body_vars, &[], None);
+    template_with_components(to, name, language, components)
+}
+
+/// Common text parameters; full component objects use `template_with_components`.
+pub fn template_text_components(
+    body_vars: &[String],
+    named_vars: &[(String, String)],
+    header_text: Option<&str>,
+) -> Vec<Value> {
+    let mut components = Vec::new();
+    if let Some(text) = header_text {
+        components
+            .push(json!({ "type": "header", "parameters": [{ "type": "text", "text": text }] }));
     }
-    #[derive(Serialize)]
-    struct Language<'a> {
-        code: &'a str,
-    }
-    let components = (!body_vars.is_empty()).then(|| {
-        let params: Vec<Value> = body_vars
+    let parameters: Vec<Value> =
+        body_vars
             .iter()
-            .map(|v| json!({ "type": "text", "text": v }))
+            .map(|text| json!({ "type": "text", "text": text }))
+            .chain(named_vars.iter().map(
+                |(name, text)| json!({ "type": "text", "parameter_name": name, "text": text }),
+            ))
             .collect();
-        vec![json!({ "type": "body", "parameters": params })]
-    });
-    envelope(
-        to,
-        "template",
-        None,
-        Template {
-            name,
-            language: Language { code: language },
-            components,
-        },
-    )
+    if !parameters.is_empty() {
+        components.push(json!({ "type": "body", "parameters": parameters }));
+    }
+    components
+}
+
+/// Preserve caller-supplied send components, omitting the field when none are needed.
+pub fn template_with_components(
+    to: &str,
+    name: &str,
+    language: &str,
+    components: Vec<Value>,
+) -> Value {
+    let mut content = json!({ "name": name, "language": { "code": language } });
+    if !components.is_empty() {
+        content["components"] = components.into();
+    }
+    envelope(to, "template", None, content)
 }
 
 /// Media message types that share the `{id | link, caption?, filename?}` shape.
@@ -382,5 +395,24 @@ mod tests {
             Some("wamid.1")
         );
         assert_eq!(message_id(&json!({})), None);
+    }
+}
+
+#[cfg(test)]
+mod template_component_tests {
+    use super::*;
+
+    #[test]
+    fn header_only_template_omits_body_and_empty_components_are_omitted() {
+        let components = template_text_components(&[], &[], Some("Order update"));
+        let payload = template_with_components("15551234567", "order", "en_US", components);
+        assert_eq!(
+            payload["template"]["components"],
+            json!([
+                {"type":"header", "parameters":[{"type":"text", "text":"Order update"}]}
+            ])
+        );
+        let payload = template_with_components("15551234567", "hello", "en_US", vec![]);
+        assert!(payload["template"].get("components").is_none());
     }
 }

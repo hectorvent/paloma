@@ -42,26 +42,65 @@ paloma send text 15551234567 "On it!" --reply-to wamid.HBgL...
 
 ## `paloma send template`
 
-The differentiator: variable filling without hand-writing JSON. Body variables
-fill `{{1}}, {{2}}, …` positionally, in the order the flags are given.
+Send an approved template with positional body variables, named body variables,
+or complete send components from JSON. Positional values fill `{{1}}, {{2}}, …` in
+flag order; named values use the names in the approved template.
 
 ```
-paloma send template <to> <name> --lang <code> [--body-var V]...
+paloma send template <to> <name> --lang <code> [flags]
 ```
 
 | Flag | Description |
 |------|-------------|
 | `<name>` | Template name (positional) |
 | `--lang <code>` | **Required.** Template language, e.g. `en_US`, `es` |
-| `--body-var <value>` | A body variable; repeat in order for `{{1}}`, `{{2}}`, … |
+| `--body-var <value>` | Positional body text variable; repeat in order |
+| `--var <name=value>` | Named body text variable; repeat with unique names; names contain lowercase letters and underscores |
+| `--header-text <text>` | Text value for a positional header variable; combines with `--body-var`; conflicts with `--var` |
+| `--components-file <path>` | JSON array of send components, or `{"components": [...]}`; exclusive with the three shorthand flags above |
 
 ```bash
 paloma send template 15551234567 order_ready --lang en_US \
-    --body-var "Hector" --body-var "#4821"
+    --header-text "Order update" --body-var "Hector" --body-var "#4821"
+paloma send template 15551234567 order_ready --lang en_US \
+    --var first_name=Hector --var order_number=4821
+paloma send template 15551234567 order_ready --lang en_US \
+    --components-file components.json --dry-run
 ```
 
-Templates are always allowed by the 24-hour window guardrail. Header/button
-variables and the `--component-file` escape hatch are [planned](planned.md).
+A components file supports media headers, button parameters, currency/date values,
+and other send component shapes without constructing the message envelope. For example:
+
+```json
+[
+  {"type": "header", "parameters": [
+    {"type": "image", "image": {"id": "MEDIA_ID"}}
+  ]},
+  {"type": "body", "parameters": [
+    {"type": "text", "text": "Hector"}
+  ]},
+  {"type": "button", "sub_type": "url", "index": "0", "parameters": [
+    {"type": "text", "text": "order-4821"}
+  ]}
+]
+```
+
+Use **send-time parameters**, rather than template-creation components. Media headers
+accept an existing media ID or a public link; upload a local file with `media upload`
+first. No resumable upload is needed to send an existing template.
+
+Paloma checks the file envelope, component types, and parameter-array shape locally
+(exit 5 on malformed input). Meta validates component-specific requirements and their
+match to the approved template. Empty component arrays omit the field. To supply named
+header parameters or more complex component combinations, use the file option.
+Tap-target overrides are a component (`tap_target_configuration`), so they go in this
+file too. A custom TTL isn't a send option: `message_send_ttl_seconds` is set on the
+template when it's created.
+
+Templates are always allowed by the 24-hour window guardrail. Dry-runs send no
+requests and redact sensitive fields; real sends preserve supplied component values.
+See Meta's [named parameters](https://developers.facebook.com/documentation/business-messaging/whatsapp/templates/overview#named-parameters)
+and [media template sends](https://developers.facebook.com/documentation/business-messaging/whatsapp/templates/template-media).
 
 ---
 

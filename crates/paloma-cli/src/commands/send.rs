@@ -101,8 +101,22 @@ pub struct Template {
     #[arg(long)]
     lang: String,
     /// Body variable values, in order ({{1}}, {{2}}, …); repeatable.
-    #[arg(long = "body-var", value_name = "VALUE")]
+    #[arg(long = "body-var", value_name = "VALUE", allow_hyphen_values = true)]
     body_vars: Vec<String>,
+    /// Named body text parameter; repeat for each name.
+    #[arg(long = "var", value_name = "NAME=VALUE", conflicts_with = "body_vars")]
+    named_vars: Vec<String>,
+    /// Text value for a positional header parameter.
+    #[arg(
+        long,
+        value_name = "TEXT",
+        conflicts_with = "named_vars",
+        allow_hyphen_values = true
+    )]
+    header_text: Option<String>,
+    /// JSON send components: an array or {"components": [...]}.
+    #[arg(long, value_name = "PATH", conflicts_with_all = ["body_vars", "named_vars", "header_text"])]
+    components_file: Option<PathBuf>,
 }
 
 #[derive(Debug, Args)]
@@ -272,9 +286,36 @@ impl SendCommand {
                 validate::recipient(&a.to)?;
                 validate::not_blank(&a.name, "template name")?;
                 validate::not_blank(&a.lang, "--lang")?;
+                let components = if let Some(path) = &a.components_file {
+                    template_components_file(path)?
+                } else {
+                    let mut named = Vec::new();
+                    for entry in &a.named_vars {
+                        let (name, value) = entry
+                            .split_once('=')
+                            .ok_or_else(|| Error::validation("--var must use NAME=VALUE"))?;
+                        validate::template_parameter_name(name)?;
+                        validate::not_blank(value, "--var value")?;
+                        if named.iter().any(|(existing, _)| existing == name) {
+                            return Err(Error::validation("--var parameter names must be unique"));
+                        }
+                        named.push((name.to_owned(), value.to_owned()));
+                    }
+                    if let Some(text) = &a.header_text {
+                        validate::not_blank(text, "--header-text")?;
+                    }
+                    for value in &a.body_vars {
+                        validate::not_blank(value, "--body-var")?;
+                    }
+                    messages::template_text_components(
+                        &a.body_vars,
+                        &named,
+                        a.header_text.as_deref(),
+                    )
+                };
                 dispatch(
                     app,
-                    messages::template(&a.to, &a.name, &a.lang, &a.body_vars),
+                    messages::template_with_components(&a.to, &a.name, &a.lang, components),
                 )
                 .await
             }
@@ -344,6 +385,58 @@ impl SendCommand {
             Self::Flow => planned("send flow", "v1.0"),
         }
     }
+}
+
+/// Accept the component envelope, not a full message that could override the target.
+fn template_components_file(path: &std::path::Path) -> Result<Vec<Value>> {
+    let document = read_json(path)?;
+    let components = match document {
+        Value::Array(items) => items,
+        Value::Object(mut fields) if fields.len() == 1 => match fields.remove("components") {
+            Some(Value::Array(items)) => items,
+            _ => {
+                return Err(Error::validation(
+                    "components file must hold a JSON array or {\"components\": [...]}",
+                ));
+            }
+        },
+        _ => {
+            return Err(Error::validation(
+                "components file must hold a JSON array or {\"components\": [...]}",
+            ));
+        }
+    };
+    for (index, component) in components.iter().enumerate() {
+        if !component.is_object()
+            || component
+                .get("type")
+                .and_then(Value::as_str)
+                .is_none_or(|s| s.trim().is_empty())
+        {
+            return Err(Error::validation(format!(
+                "components[{index}] needs a non-empty 'type' string"
+            )));
+        }
+        if let Some(parameters) = component.get("parameters") {
+            let Some(parameters) = parameters.as_array() else {
+                return Err(Error::validation(format!(
+                    "components[{index}].parameters must be an array"
+                )));
+            };
+            if parameters.iter().any(|parameter| {
+                !parameter.is_object()
+                    || parameter
+                        .get("type")
+                        .and_then(Value::as_str)
+                        .is_none_or(|s| s.trim().is_empty())
+            }) {
+                return Err(Error::validation(format!(
+                    "components[{index}].parameters entries need a non-empty 'type' string"
+                )));
+            }
+        }
+    }
+    Ok(components)
 }
 
 impl Interactive {

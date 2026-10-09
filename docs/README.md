@@ -22,7 +22,7 @@ New here? Start with [Installation](installation.md) → [Getting started](getti
 
 | Group | Status | Reference |
 |-------|--------|-----------|
-| `paloma send` | text · template · image · document · audio · video · sticker · location · contact · interactive · reaction · raw | [commands/send.md](commands/send.md) |
+| `paloma send` | text · template (named variables, header text, components file) · image · document · audio · video · sticker · location · contact · interactive · reaction · raw | [commands/send.md](commands/send.md) |
 | `paloma template` | list · status · get · create · submit · watch · edit · delete | [commands/template.md](commands/template.md) |
 | `paloma media` | upload · get · download · delete | [commands/media.md](commands/media.md) |
 | `paloma message` | read · typing | [commands/message.md](commands/message.md) |

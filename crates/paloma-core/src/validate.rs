@@ -61,6 +61,16 @@ pub fn not_blank(value: &str, what: &str) -> Result<()> {
     }
 }
 
+/// Named template parameters use lowercase ASCII letters and underscores.
+pub fn template_parameter_name(name: &str) -> Result<()> {
+    if name.is_empty() || !name.bytes().all(|b| b.is_ascii_lowercase() || b == b'_') {
+        return Err(Error::validation(
+            "template parameter names must contain only lowercase letters and underscores",
+        ));
+    }
+    Ok(())
+}
+
 pub fn pin(pin: &str) -> Result<()> {
     if pin.len() == PIN_DIGITS && pin.bytes().all(|b| b.is_ascii_digit()) {
         Ok(())
