@@ -8,6 +8,9 @@ use serde_json::Value;
 const WINDOW_CODES: [i64; 2] = [131_047, 470];
 /// Meta error codes for other messaging-policy blocks (per-user frequency cap, etc.).
 const POLICY_CODES: [i64; 1] = [131_049];
+/// Meta error codes for throttling. Meta says to build on codes rather than HTTP statuses,
+/// and documents no status for some of these, so they count whatever the status is.
+const RATE_LIMIT_CODES: [i64; 4] = [4, 80_007, 130_429, 131_056];
 
 pub fn map_error(status: u16, body: &str) -> Error {
     let root: Value = serde_json::from_str(body).unwrap_or(Value::Null);
@@ -18,11 +21,11 @@ pub fn map_error(status: u16, body: &str) -> Error {
         None => describe(error),
     };
 
+    if status == 429 || code.is_some_and(|c| RATE_LIMIT_CODES.contains(&c)) {
+        return Error::RateLimited(format!("rate limited ({status}): {message}"));
+    }
     if status == 401 || status == 403 {
         return Error::auth(format!("Graph API auth error ({status}): {message}"));
-    }
-    if status == 429 {
-        return Error::RateLimited(format!("rate limited (429): {message}"));
     }
     if let Some(c) = code {
         if WINDOW_CODES.contains(&c) {
@@ -119,6 +122,17 @@ mod tests {
             map_error(400, &body(100, "bad param")).exit_code().code(),
             1
         );
+    }
+
+    #[test]
+    fn throttling_codes_exit_4_whatever_the_status() {
+        for code in [4, 80_007, 130_429, 131_056] {
+            for status in [400, 403, 429, 500] {
+                let e = map_error(status, &body(code, "slow"));
+                assert_eq!(e.exit_code().code(), 4, "#{code} with {status}");
+                assert!(e.to_string().contains(&format!("rate limited ({status})")));
+            }
+        }
     }
 
     #[test]

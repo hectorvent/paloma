@@ -74,7 +74,7 @@ impl Output {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Printer {
     format: Format,
     quiet: bool,

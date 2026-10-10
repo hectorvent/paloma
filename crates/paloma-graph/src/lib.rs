@@ -11,8 +11,9 @@ pub mod client;
 pub mod error_map;
 pub mod paging;
 pub mod request;
+pub mod retry;
 
-pub use client::{Client, ClientConfig, Response};
+pub use client::{Client, ClientConfig, Response, RetryNotice};
 pub use request::{Auth, Body, FormPart, Method, PartValue, Request, Target};
 
 /// The Graph API host.

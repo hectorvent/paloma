@@ -80,7 +80,7 @@ MID=$(paloma send text 15551234567 "hi" -q)
 | `1` | Generic error |
 | `2` | Usage error (bad flags/arguments) |
 | `3` | Auth/token error |
-| `4` | Rate-limited (HTTP 429) |
+| `4` | Rate-limited (HTTP 429, or a Meta throttling code such as 130429), after any [retries](#retries) |
 | `5` | Pre-flight validation failed (caught locally before the API call) |
 | `6` | Policy/window block (e.g. the 24-hour customer-service window) |
 
@@ -91,3 +91,33 @@ without spending an API call.
 ```bash
 paloma send text "not-a-number" "hi" ; echo $?    # → 5
 ```
+
+## Retries
+
+`paloma` tries a request up to 3 times when repeating it is safe, and notes each retry on
+stderr. A repeated message would reach the user twice, so the rules depend on whether the
+request changes anything:
+
+| Failure | Reads (`GET`) | Writes (`POST`, `DELETE`) |
+|---------|---------------|---------------------------|
+| HTTP 429 with a valid `Retry-After` | Retry | Retry |
+| HTTP 429 without one | Retry | **Fail** |
+| HTTP 500, 502, 503, 504 | Retry | **Fail** |
+| Can't connect, including a connection attempt that times out | Retry | **Fail** |
+| Timeout (`--timeout`) | **Fail** | **Fail** |
+| Connection lost after connecting | **Fail** | **Fail** |
+
+Without a server hint, reads wait 1 second and then 2. `Retry-After` must be a number of
+seconds; any other form counts as no hint. If the server asks for more than 30 seconds,
+`paloma` fails straight away, so your script decides whether to wait that long.
+
+A write that fails in a way that's not retried may still have been applied, so check
+before you repeat it.
+
+**Time limits.** `--timeout` applies to each try, and waits between tries are extra. A
+request can take up to 3 × `--timeout` plus 60 seconds of waits, and commands that make
+several requests, such as `template list --all`, can take that long per request. Connecting
+has its own 15-second limit. Downloads only have that connection limit, so `--timeout`
+doesn't stop a download that stalls.
+
+This doesn't throttle: each `paloma` run retries on its own, so it can't pace a shell loop.

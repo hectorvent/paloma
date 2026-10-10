@@ -1,5 +1,6 @@
 //! The HTTP transport: executes [`Request`]s against the Graph API.
 
+use std::fmt;
 use std::path::Path;
 use std::sync::{Arc, Once};
 use std::time::Duration;
@@ -17,6 +18,24 @@ use crate::error_map::map_error;
 use crate::request::{
     Auth, Body, Method, PartValue, Request, Target, diagnostic_body, redact_json, redact_url,
 };
+use crate::retry::{self, Failure};
+
+/// Called before each retry, so a wait never looks like a hang. The transport has no
+/// access to the printer, which belongs to the CLI.
+#[derive(Clone)]
+pub struct RetryNotice(Arc<dyn Fn(&str) + Send + Sync>);
+
+impl RetryNotice {
+    pub fn new(notify: impl Fn(&str) + Send + Sync + 'static) -> Self {
+        Self(Arc::new(notify))
+    }
+}
+
+impl fmt::Debug for RetryNotice {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("RetryNotice")
+    }
+}
 
 /// Transport settings.
 #[derive(Debug, Clone)]
@@ -24,9 +43,11 @@ pub struct ClientConfig {
     /// Graph host, overridable for tests (`PALOMA_GRAPH_URL`).
     pub base_url: String,
     pub api_version: String,
-    /// Whole-request timeout for API calls (downloads only bound the connect phase).
+    /// Whole-request timeout for API calls (downloads only bound the connect phase). It
+    /// applies per try.
     pub timeout: Duration,
     pub user_agent: String,
+    pub on_retry: Option<RetryNotice>,
 }
 
 impl ClientConfig {
@@ -36,6 +57,7 @@ impl ClientConfig {
             api_version: api_version.into(),
             timeout: Duration::from_secs(60),
             user_agent: concat!("paloma/", env!("CARGO_PKG_VERSION")).to_owned(),
+            on_retry: None,
         }
     }
 }
@@ -108,13 +130,15 @@ impl Client {
     pub async fn execute(&self, req: &Request) -> Result<Response> {
         let resp = self.send(req, Some(self.config.timeout)).await?;
         let status = resp.status().as_u16();
+        if !(200..300).contains(&status) {
+            // The status alone decides the exit code, so an unreadable body can't lose it.
+            let text = resp.text().await.unwrap_or_default();
+            trace!(status, body = %diagnostic_body(&text), "response");
+            return Err(map_error(status, &text));
+        }
         let text = resp.text().await.map_err(transport)?;
         trace!(status, body = %diagnostic_body(&text), "response");
-        if (200..300).contains(&status) {
-            Ok(Response { status, text })
-        } else {
-            Err(map_error(status, &text))
-        }
+        Ok(Response { status, text })
     }
 
     /// Stream the response body of a GET to `dest`, returning the bytes written.
@@ -124,6 +148,9 @@ impl Client {
         if !(200..300).contains(&status) {
             let text = resp.text().await.unwrap_or_default();
             return Err(match req.target {
+                Target::Url(_) if status == 429 => {
+                    Error::RateLimited("download failed: rate limited (429)".into())
+                }
                 Target::Url(_) => Error::other(format!("download failed: HTTP {status}")),
                 Target::Node(_) => map_error(status, &text),
             });
@@ -146,7 +173,54 @@ impl Client {
         Ok(written)
     }
 
+    /// Send the request, repeating it when [`retry::delay`] says that's safe. The last
+    /// response is returned as it is, so callers map a final failure as usual.
     async fn send(&self, req: &Request, timeout: Option<Duration>) -> Result<reqwest::Response> {
+        let mut attempt = 1;
+        loop {
+            let result = self.builder(req, timeout).await?.send().await;
+            let (failure, reason) = match &result {
+                Ok(resp) => {
+                    let status = resp.status().as_u16();
+                    let retry_after = resp
+                        .headers()
+                        .get(reqwest::header::RETRY_AFTER)
+                        .and_then(|value| value.to_str().ok())
+                        .and_then(retry::parse_retry_after);
+                    let failure = Failure::Status {
+                        status,
+                        retry_after,
+                    };
+                    (failure, format!("HTTP {status}"))
+                }
+                // Connecting is the one transport failure known to come before the request
+                // was written. Anything later, a --timeout included, isn't repeated.
+                Err(e) if e.is_connect() => (Failure::Unreachable, "cannot connect".to_owned()),
+                Err(_) => return result.map_err(transport),
+            };
+            let Some(wait) = retry::delay(req.method, attempt, failure, retry::BASE_BACKOFF) else {
+                return result.map_err(transport);
+            };
+            drop(result);
+            attempt += 1;
+            let message = format!(
+                "{reason}: retrying in {}s (attempt {attempt} of {})",
+                wait.as_secs(),
+                retry::MAX_ATTEMPTS
+            );
+            debug!(%message, "retry");
+            if let Some(notice) = &self.config.on_retry {
+                (notice.0)(&message);
+            }
+            tokio::time::sleep(wait).await;
+        }
+    }
+
+    async fn builder(
+        &self,
+        req: &Request,
+        timeout: Option<Duration>,
+    ) -> Result<reqwest::RequestBuilder> {
         let url = self.url(req);
         debug!(method = req.method.as_str(), url = %redact_url(&url), "request");
         let bearer = match &req.auth {
@@ -172,7 +246,7 @@ impl Client {
             }
             Body::Multipart(parts) => builder.multipart(build_form(parts).await?),
         };
-        builder.send().await.map_err(transport)
+        Ok(builder)
     }
 }
 
@@ -201,10 +275,11 @@ async fn build_form(parts: &[crate::request::FormPart]) -> Result<Form> {
 fn transport(e: reqwest::Error) -> Error {
     // reqwest attaches request URLs, which may contain verification tokens.
     let e = e.without_url();
-    if e.is_timeout() {
-        Error::other("request timed out (raise it with --timeout)")
-    } else if e.is_connect() {
+    if e.is_connect() {
+        // Checked first: the connect phase has its own limit, which --timeout doesn't raise.
         Error::other(format!("cannot reach the Graph API: {e}"))
+    } else if e.is_timeout() {
+        Error::other("request timed out (raise it with --timeout)")
     } else {
         Error::other(format!("HTTP error: {e}"))
     }

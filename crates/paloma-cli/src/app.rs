@@ -9,7 +9,7 @@ use std::sync::{Arc, OnceLock};
 
 use paloma_config::{Config, ConfigFile, Context, KeyringStore, Overrides, SecretStore};
 use paloma_core::{Error, Result};
-use paloma_graph::{Client, ClientConfig, Request, Response};
+use paloma_graph::{Client, ClientConfig, Request, Response, RetryNotice};
 
 use crate::cli::GlobalArgs;
 use crate::output::{Output, Printer};
@@ -112,6 +112,8 @@ impl App {
         let ctx = self.ctx()?;
         let mut config = ClientConfig::new(&self.globals.graph_url, &ctx.api_version);
         config.timeout = self.globals.timeout;
+        let out = self.out.clone();
+        config.on_retry = Some(RetryNotice::new(move |message| out.note(message)));
         let client = Client::new(config, Arc::clone(ctx) as Arc<dyn paloma_core::Credentials>)?;
         Ok(self.client.get_or_init(|| client))
     }

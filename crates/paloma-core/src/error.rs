@@ -44,7 +44,7 @@ pub enum Error {
     #[error("{0}")]
     Auth(String),
 
-    /// The Graph API answered 429 (exit 4).
+    /// The Graph API answered 429 or a throttling code (exit 4).
     #[error("{0}")]
     RateLimited(String),
 
