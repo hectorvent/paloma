@@ -15,6 +15,7 @@ New here? Start with [Installation](installation.md) → [Getting started](getti
 | [Authentication](authentication.md) | Tokens, the OS keyring, `paloma auth` |
 | [Global flags](global-flags.md) | Flags on every command, output formats, exit codes |
 | [Scripting & automation](scripting.md) | `--output json`, `--quiet`, `--dry-run`, CI usage |
+| [Billing currency](billing-currency.md) | Migrate to INR or BRL billing before Meta's deadlines, then update Paloma |
 | [Architecture](architecture.md) | How the tool is built (for contributors) |
 | [Planned commands](commands/planned.md) | What's visible in `--help` but not implemented yet |
 
