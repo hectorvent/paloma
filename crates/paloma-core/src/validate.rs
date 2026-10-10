@@ -6,8 +6,8 @@ use std::path::{Path, PathBuf};
 use crate::limits::{MAX_CAPTION, MAX_TEXT_BODY, PIN_DIGITS};
 use crate::{Error, Result};
 
-/// An E.164 number (optional `+`, 7–15 digits, no leading zero) or a numeric
-/// business-scoped user id. Surrounding whitespace is tolerated.
+/// An E.164 number (optional `+`, 7–15 digits, no leading zero). Surrounding whitespace
+/// is tolerated.
 pub fn recipient(to: &str) -> Result<()> {
     let trimmed = to.trim();
     if trimmed.is_empty() {
@@ -21,7 +21,7 @@ pub fn recipient(to: &str) -> Result<()> {
         Ok(())
     } else {
         Err(Error::validation(format!(
-            "recipient '{to}' is not a valid E.164 number or business-scoped user id"
+            "recipient '{to}' is not a valid E.164 number"
         )))
     }
 }
@@ -97,7 +97,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn recipient_accepts_e164_and_bsuid() {
+    fn recipient_accepts_e164() {
         for ok in ["15551234567", "+15551234567", " 15551234567 ", "1234567"] {
             assert!(recipient(ok).is_ok(), "{ok}");
         }

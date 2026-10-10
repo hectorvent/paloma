@@ -1,7 +1,8 @@
 # `paloma send`
 
-The hot path. Send a WhatsApp message. Recipient `<to>` accepts E.164
-(`+15551234567` or `15551234567`) or a business-scoped user ID (BSUID).
+The hot path. Send a WhatsApp message. Recipient `<to>` is an E.164 number
+(`+15551234567` or `15551234567`). To send to a business-scoped user ID (BSUID), use
+[`send raw`](#paloma-send-raw) with `recipient` in the payload.
 
 ```
 paloma send <type> <to> [args] [flags]

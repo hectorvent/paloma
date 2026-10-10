@@ -48,8 +48,7 @@ New here? Start with [Installation](installation.md) → [Getting started](getti
 
 - The command shape is always `paloma <resource> <verb> [args] [flags]`, with
   `paloma send …` promoted as the hot path.
-- Recipients accept E.164 (`+15551234567` or `15551234567`) or a
-  business-scoped user ID (BSUID).
+- Recipients are E.164 numbers (`+15551234567` or `15551234567`).
 - This tool talks to the **real** Graph API (`graph.facebook.com`). It is not an
   emulator and not the Web protocol.
 

@@ -73,7 +73,7 @@ impl Policy {
 
 #[derive(Debug, Args)]
 pub struct Text {
-    /// Recipient (E.164 number or business-scoped user id).
+    /// Recipient (E.164 number).
     to: String,
     /// Message body.
     #[arg(required_unless_present = "body_file", conflicts_with = "body_file")]
