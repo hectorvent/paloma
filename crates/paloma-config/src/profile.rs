@@ -21,6 +21,8 @@ pub struct Profile {
     pub api_version: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub app_secret_ref: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub messaging_account_id: Option<String>,
 }
 
 impl Profile {
@@ -31,6 +33,7 @@ impl Profile {
             ProfileKey::PhoneNumberId => self.phone_number_id.as_deref(),
             ProfileKey::ApiVersion => self.api_version.as_deref(),
             ProfileKey::AppSecretRef => self.app_secret_ref.as_deref(),
+            ProfileKey::MessagingAccountId => self.messaging_account_id.as_deref(),
         }
     }
 }
@@ -43,15 +46,17 @@ pub enum ProfileKey {
     PhoneNumberId,
     ApiVersion,
     AppSecretRef,
+    MessagingAccountId,
 }
 
 impl ProfileKey {
-    pub const ALL: [Self; 5] = [
+    pub const ALL: [Self; 6] = [
         Self::TokenRef,
         Self::WabaId,
         Self::PhoneNumberId,
         Self::ApiVersion,
         Self::AppSecretRef,
+        Self::MessagingAccountId,
     ];
 
     pub const fn as_str(self) -> &'static str {
@@ -61,6 +66,7 @@ impl ProfileKey {
             Self::PhoneNumberId => "phone_number_id",
             Self::ApiVersion => "api_version",
             Self::AppSecretRef => "app_secret_ref",
+            Self::MessagingAccountId => "messaging_account_id",
         }
     }
 

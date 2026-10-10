@@ -23,12 +23,14 @@ pub enum ConfigCommand {
     List,
     /// Print one key of the selected profile.
     Get {
-        /// token_ref, waba_id, phone_number_id, api_version or app_secret_ref.
+        /// token_ref, waba_id, phone_number_id, api_version, app_secret_ref or
+        /// messaging_account_id.
         key: ProfileKey,
     },
     /// Set one key of the selected profile (creating it if needed).
     Set {
-        /// token_ref, waba_id, phone_number_id, api_version or app_secret_ref.
+        /// token_ref, waba_id, phone_number_id, api_version, app_secret_ref or
+        /// messaging_account_id.
         key: ProfileKey,
         value: String,
     },

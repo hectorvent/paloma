@@ -31,6 +31,7 @@ pub struct Overrides {
     pub app_id: Option<String>,
     pub app_secret: Option<String>,
     pub api_version: Option<String>,
+    pub messaging_account_id: Option<String>,
 }
 
 /// Where a secret will come from, decided at resolution time and read on first use.
@@ -74,6 +75,9 @@ pub struct Context {
     pub waba_id: Option<String>,
     pub app_id: Option<String>,
     pub api_version: String,
+    /// The account to bill, for tokens that reach several on one phone number. Optional,
+    /// because Meta resolves it from the token when there is only one.
+    pub messaging_account_id: Option<String>,
     /// Diagnostics produced during resolution (e.g. a plaintext token in config); the
     /// CLI prints them to stderr.
     pub warnings: Vec<String>,
@@ -90,6 +94,7 @@ impl fmt::Debug for Context {
             .field("waba_id", &self.waba_id)
             .field("app_id", &self.app_id)
             .field("api_version", &self.api_version)
+            .field("messaging_account_id", &self.messaging_account_id)
             .finish_non_exhaustive()
     }
 }
@@ -134,6 +139,10 @@ impl Context {
             app_id: non_blank(overrides.app_id.as_deref()).map(str::to_owned),
             api_version: pick(&overrides.api_version, &profile.api_version)
                 .unwrap_or_else(|| default_api_version.to_owned()),
+            messaging_account_id: pick(
+                &overrides.messaging_account_id,
+                &profile.messaging_account_id,
+            ),
             profile: profile_name,
             warnings,
             token: Arc::new(LazySecret::new(token)),
@@ -151,6 +160,7 @@ impl Context {
             waba_id: self.waba_id.clone(),
             app_id: self.app_id.clone(),
             api_version: self.api_version.clone(),
+            messaging_account_id: self.messaging_account_id.clone(),
             warnings: Vec::new(),
             token: Arc::clone(&self.token),
             app_secret: Arc::clone(&self.app_secret),

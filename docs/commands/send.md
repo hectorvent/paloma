@@ -202,6 +202,11 @@ paloma send raw --file payload.json
 cat payload.json | paloma send raw --stdin
 ```
 
+There's one exception to "verbatim". If a [messaging account](../global-flags.md#global-flags)
+is set and the payload is a message (it has a `type`) with no `messaging_account_id` of its
+own, Paloma adds it. A value in the payload always wins, including the deprecated
+`paid_messaging_account_id`.
+
 ---
 
 ## Compliance: the 24-hour window

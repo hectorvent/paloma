@@ -122,5 +122,8 @@ such as CI. Then:
 
 Meta then expects `messaging_account_id` on each send. Without it, a message
 [may be billed to the wrong account or rejected](https://developers.facebook.com/documentation/business-messaging/whatsapp/account-model-evolution/messaging).
-Paloma has no flag for this yet, so use [`paloma send raw`](commands/send.md#paloma-send-raw)
-with the field in the payload until it does.
+Name the one to bill with `--messaging-account-id`, or save it on the profile:
+
+```bash
+paloma config set messaging_account_id "$NEW_WABA_ID"
+```

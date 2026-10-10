@@ -14,6 +14,22 @@ pub fn send(phone_number_id: &str, payload: Value) -> Request {
     Request::post(format!("{phone_number_id}/messages")).json(payload)
 }
 
+/// Name the account to bill. Only messages are billed, and those carry a `type`; status
+/// updates such as read receipts don't. A value already in the payload wins, so a
+/// `send raw` payload says what it means. That includes the deprecated alias, which Meta
+/// ignores once `messaging_account_id` is present.
+pub fn with_messaging_account(mut payload: Value, account: Option<&str>) -> Value {
+    if let (Some(account), Some(fields)) = (account, payload.as_object_mut())
+        && fields.contains_key("type")
+        && !fields.contains_key("paid_messaging_account_id")
+    {
+        fields
+            .entry("messaging_account_id")
+            .or_insert_with(|| account.into());
+    }
+    payload
+}
+
 /// The `wamid…` of the sent message.
 pub fn message_id(response: &Value) -> Option<String> {
     response

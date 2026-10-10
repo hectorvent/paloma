@@ -974,6 +974,133 @@ async fn template_text_flags_accept_values_starting_with_a_hyphen() {
     assert_eq!(String::from_utf8_lossy(&out.stdout), "wamid.SALE\n");
 }
 
+#[tokio::test(flavor = "multi_thread")]
+async fn messaging_account_flag_is_sent_on_the_message_and_quiet_still_prints_the_id() {
+    let graph = MockServer::start().await;
+    Mock::given(method("POST"))
+        .and(path(format!("/v26.0/{PHONE}/messages")))
+        .and(body_json(json!({
+            "messaging_product":"whatsapp", "recipient_type":"individual", "to":"15551234567",
+            "type":"text", "text":{"preview_url":false, "body":"hi"},
+            "messaging_account_id":"777"
+        })))
+        .respond_with(
+            ResponseTemplate::new(200).set_body_json(json!({"messages":[{"id":"wamid.BILLED"}]})),
+        )
+        .expect(1)
+        .mount(&graph)
+        .await;
+    let home = TempDir::new().unwrap();
+    let out = paloma(Some(&graph), &home)
+        .args(["send", "text", "15551234567", "hi"])
+        .args(["--messaging-account-id", "777", "-q"])
+        .output()
+        .unwrap();
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert_eq!(String::from_utf8_lossy(&out.stdout), "wamid.BILLED\n");
+}
+
+#[test]
+fn messaging_account_resolves_flag_then_env_then_profile() {
+    let home = TempDir::new().unwrap();
+    paloma(None, &home)
+        .args(["config", "set", "messaging_account_id", "111"])
+        .assert()
+        .success();
+    let account = |env: Option<&str>, flag: Option<&str>| {
+        let mut cmd = paloma(None, &home);
+        cmd.args([
+            "send",
+            "text",
+            "15551234567",
+            "hi",
+            "--dry-run",
+            "-o",
+            "raw",
+        ]);
+        if let Some(value) = env {
+            cmd.env("PALOMA_MESSAGING_ACCOUNT_ID", value);
+        }
+        if let Some(value) = flag {
+            cmd.args(["--messaging-account-id", value]);
+        }
+        stdout_json(&cmd.output().unwrap())["messaging_account_id"].clone()
+    };
+    assert_eq!(account(None, None), json!("111"));
+    assert_eq!(account(Some("222"), None), json!("222"));
+    assert_eq!(account(Some("222"), Some("333")), json!("333"));
+}
+
+#[test]
+fn messaging_account_is_absent_unless_set_and_only_goes_on_messages() {
+    let home = TempDir::new().unwrap();
+    let raw_body = |args: &[&str], stdin: Option<&str>| {
+        let mut cmd = paloma(None, &home);
+        cmd.args(args).args(["--dry-run", "-o", "raw"]);
+        if let Some(input) = stdin {
+            cmd.write_stdin(input);
+        }
+        stdout_json(&cmd.output().unwrap())
+    };
+    let text = raw_body(&["send", "text", "15551234567", "hi"], None);
+    assert!(text.get("messaging_account_id").is_none());
+
+    let account = ["--messaging-account-id", "777"];
+    let read = raw_body(
+        &[&["message", "read", "wamid.X"], &account[..]].concat(),
+        None,
+    );
+    assert!(read.get("messaging_account_id").is_none());
+
+    let raw_args = [&["send", "raw", "--stdin"], &account[..]].concat();
+    let own = r#"{"to":"1","type":"text","text":{"body":"x"},"messaging_account_id":"999"}"#;
+    assert_eq!(
+        raw_body(&raw_args, Some(own))["messaging_account_id"],
+        json!("999")
+    );
+    let unset = r#"{"to":"1","type":"text","text":{"body":"x"}}"#;
+    assert_eq!(
+        raw_body(&raw_args, Some(unset))["messaging_account_id"],
+        json!("777")
+    );
+    let alias = r#"{"to":"1","type":"text","text":{"body":"x"},"paid_messaging_account_id":"999"}"#;
+    let body = raw_body(&raw_args, Some(alias));
+    assert!(body.get("messaging_account_id").is_none());
+    assert_eq!(body["paid_messaging_account_id"], json!("999"));
+    let status = r#"{"messaging_product":"whatsapp","status":"read","message_id":"wamid.X"}"#;
+    assert!(
+        raw_body(&raw_args, Some(status))
+            .get("messaging_account_id")
+            .is_none()
+    );
+}
+
+#[test]
+fn messaging_account_is_shown_on_the_media_message_in_a_file_dry_run() {
+    let home = TempDir::new().unwrap();
+    let file = home.path().join("photo.jpg");
+    std::fs::write(&file, b"jpeg").unwrap();
+    let out = paloma(None, &home)
+        .args(["send", "image", "15551234567", "--file"])
+        .arg(&file)
+        .args(["--messaging-account-id", "777", "--dry-run", "-o", "json"])
+        .output()
+        .unwrap();
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let requests = stdout_json(&out);
+    assert_eq!(requests[1]["body"]["messaging_account_id"], json!("777"));
+    assert!(requests[0].to_string().contains("/media"));
+    assert!(!requests[0].to_string().contains("messaging_account_id"));
+}
+
 #[test]
 fn template_blank_body_var_exits_5_without_a_request() {
     let home = TempDir::new().unwrap();

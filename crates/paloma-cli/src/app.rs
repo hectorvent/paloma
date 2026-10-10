@@ -83,6 +83,7 @@ impl App {
             app_id: g.app_id.clone(),
             app_secret: g.app_secret.clone(),
             api_version: g.api_version.clone(),
+            messaging_account_id: g.messaging_account_id.clone(),
         }
     }
 

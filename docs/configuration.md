@@ -51,6 +51,7 @@ or `paloma config set` (individual keys). See [commands/config.md](commands/conf
 | `phone_number_id` | Sender phone number ID |
 | `api_version` | Graph API version, e.g. `v26.0` (defaults to `v26.0`) |
 | `app_secret_ref` | Keyring handle for the app secret (app-level webhook field subscriptions) |
+| `messaging_account_id` | Messaging account to bill for `send` commands, if your token reaches more than one on the phone number |
 
 ```bash
 paloma config set phone_number_id 1556677889900 --profile acme
@@ -77,6 +78,7 @@ These override the config file (and are themselves overridden by flags):
 | `PALOMA_TOKEN` | access token |
 | `PALOMA_PHONE_NUMBER_ID` | sender phone number ID |
 | `PALOMA_WABA_ID` | WABA ID |
+| `PALOMA_MESSAGING_ACCOUNT_ID` | Messaging account to bill for `send` commands |
 | `PALOMA_API_VERSION` | Graph API version |
 | `PALOMA_APP_ID` | Meta App ID (app-level webhook field subscriptions; also `--app-id`) |
 | `PALOMA_APP_SECRET` | app secret (app-level webhook field subscriptions) |

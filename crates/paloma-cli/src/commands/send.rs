@@ -569,6 +569,10 @@ async fn send_media(app: &App, kind: MediaKind, a: Media) -> Result<()> {
                     a.caption.as_deref(),
                     a.filename.as_deref(),
                 );
+                let payload = messages::with_messaging_account(
+                    payload,
+                    app.ctx()?.messaging_account_id.as_deref(),
+                );
                 return app.print_dry_run(&[upload, messages::send(&phone, payload)]);
             }
             let uploaded: media_api::Uploaded = app.fetch(&upload).await?.parse()?;
@@ -598,7 +602,9 @@ async fn send_media(app: &App, kind: MediaKind, a: Media) -> Result<()> {
 
 /// POST the message and print the response with its wamid as the primary id.
 async fn dispatch(app: &App, payload: Value) -> Result<()> {
-    let phone = app.ctx()?.require_phone_number_id()?.to_owned();
+    let ctx = app.ctx()?;
+    let phone = ctx.require_phone_number_id()?.to_owned();
+    let payload = messages::with_messaging_account(payload, ctx.messaging_account_id.as_deref());
     if let Some(resp) = app.send(&messages::send(&phone, payload)).await? {
         let out = Output::response(&resp)?;
         let id = messages::message_id(&out.data);

@@ -88,6 +88,10 @@ pub struct GlobalArgs {
     #[arg(long, global = true, env = "PALOMA_WABA_ID")]
     pub waba_id: Option<String>,
 
+    /// Messaging account to bill for sends; set it if your token reaches several on one number.
+    #[arg(long, global = true, env = "PALOMA_MESSAGING_ACCOUNT_ID")]
+    pub messaging_account_id: Option<String>,
+
     /// Meta app id (app-level webhook field subscriptions).
     #[arg(long, global = true, env = "PALOMA_APP_ID")]
     pub app_id: Option<String>,

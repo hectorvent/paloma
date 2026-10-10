@@ -56,7 +56,7 @@ paloma config set <key> <value>
 ```
 
 Settable keys: `token_ref`, `waba_id`, `phone_number_id`, `api_version`,
-`app_secret_ref`.
+`app_secret_ref`, `messaging_account_id`.
 
 ```bash
 paloma config set phone_number_id 1556677889900 --profile acme

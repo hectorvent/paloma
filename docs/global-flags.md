@@ -12,6 +12,7 @@ equivalent).
 | `--output <fmt>` | `-o` | `table` (default) · `json` · `yaml` · `raw` |
 | `--phone-number-id <id>` | | Override the active sender phone number ID |
 | `--waba-id <id>` | | Override the active WABA ID |
+| `--messaging-account-id <id>` | | Messaging account to bill for `send` commands. Set it if your token reaches more than one on the phone number |
 | `--app-id <id>` | | Meta App ID (for app-level webhook field subscriptions) |
 | `--api-version <v>` | | Override Graph API version (e.g. `v26.0`) |
 | `--dry-run` | | Print the request with sensitive fields redacted, without sending |
@@ -30,8 +31,9 @@ equivalent).
 proceed without the interactive prompt, which is also required when there is no TTY.
 
 Most flags also read an environment variable: `PALOMA_PROFILE`, `PALOMA_TOKEN`,
-`PALOMA_OUTPUT`, `PALOMA_PHONE_NUMBER_ID`, `PALOMA_WABA_ID`, `PALOMA_APP_ID`,
-`PALOMA_APP_SECRET`, `PALOMA_API_VERSION`, `PALOMA_CONFIG`. A flag beats its variable.
+`PALOMA_OUTPUT`, `PALOMA_PHONE_NUMBER_ID`, `PALOMA_WABA_ID`,
+`PALOMA_MESSAGING_ACCOUNT_ID`, `PALOMA_APP_ID`, `PALOMA_APP_SECRET`,
+`PALOMA_API_VERSION`, `PALOMA_CONFIG`. A flag beats its variable.
 
 ### What `--dry-run` means
 
