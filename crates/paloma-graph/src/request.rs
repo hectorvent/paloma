@@ -267,11 +267,18 @@ pub fn redact_json(value: &Value) -> Value {
                 .collect(),
         ),
         Value::Array(items) => Value::Array(items.iter().map(redact_json).collect()),
-        Value::String(text) if text.starts_with("https://") || text.starts_with("http://") => {
-            Value::String(redact_url(text))
-        }
+        Value::String(text) if has_http_scheme(text) => Value::String(redact_url(text)),
         _ => value.clone(),
     }
+}
+
+/// Whether text starts with an http or https scheme. Schemes are case-insensitive, and a
+/// link missed here would keep any credentials in its query string.
+pub fn has_http_scheme(text: &str) -> bool {
+    ["http://", "https://"].iter().any(|scheme| {
+        text.get(..scheme.len())
+            .is_some_and(|start| start.eq_ignore_ascii_case(scheme))
+    })
 }
 
 fn sensitive_key(key: &str) -> bool {
@@ -300,7 +307,7 @@ pub fn redact_url(text: &str) -> String {
         .map(|(key, value)| {
             let safe = if sensitive_key(&key) {
                 "<redacted>".to_owned()
-            } else if value.starts_with("https://") || value.starts_with("http://") {
+            } else if has_http_scheme(&value) {
                 redact_url(&value)
             } else {
                 value.to_string()
@@ -355,6 +362,19 @@ fn encode(s: &str) -> String {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn links_are_redacted_whatever_the_scheme_case() {
+        let body = serde_json::json!({
+            "link": "HTTPS://x.test/a.png?access_token=SECRET1",
+            "other": "Http://x.test/?callback=hTTps%3A%2F%2Fy.test%2F%3Ftoken%3DSECRET2",
+            "text": "httpfoo://not-a-link?access_token=KEPT"
+        });
+        let redacted = super::redact_json(&body).to_string();
+        assert!(!redacted.contains("SECRET1"), "{redacted}");
+        assert!(!redacted.contains("SECRET2"), "{redacted}");
+        assert!(redacted.contains("KEPT"), "{redacted}");
+    }
+
     use super::*;
 
     #[test]
