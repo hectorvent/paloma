@@ -76,7 +76,7 @@ pub fn pin(pin: &str) -> Result<()> {
         Ok(())
     } else {
         Err(Error::validation(format!(
-            "--pin must be exactly {PIN_DIGITS} digits"
+            "PIN must be exactly {PIN_DIGITS} digits"
         )))
     }
 }

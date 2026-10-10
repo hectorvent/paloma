@@ -7,6 +7,7 @@
 
 use clap::Subcommand;
 use paloma_core::{Error, Result};
+use secrecy::SecretString;
 
 use crate::app::App;
 
@@ -129,6 +130,63 @@ pub fn planned(command: &str, phase: &'static str) -> Result<()> {
         command: format!("paloma {command}"),
         phase,
     })
+}
+
+/// Where a secret value can come from, for commands that need one from the user.
+#[derive(Debug)]
+pub struct SecretSource {
+    pub what: &'static str,
+    pub flag: &'static str,
+    pub stdin_flag: &'static str,
+    pub env: &'static str,
+}
+
+/// Read a secret from stdin, the flag, the environment or a prompt, in that order. The
+/// environment isn't merged by clap here, because a flag value lands in argv where other
+/// processes can read it, and that needs a warning that an env value doesn't.
+pub fn read_secret(
+    app: &App,
+    source: &SecretSource,
+    flag_value: Option<&str>,
+    from_stdin: bool,
+) -> Result<SecretString> {
+    use std::io::{IsTerminal, Read};
+
+    let env_value = || {
+        std::env::var(source.env)
+            .ok()
+            .filter(|v| !v.trim().is_empty())
+    };
+    let value = if from_stdin {
+        let mut buf = String::new();
+        std::io::stdin()
+            .read_to_string(&mut buf)
+            .map_err(|e| Error::io(format!("cannot read {} from stdin", source.what), e))?;
+        buf
+    } else if let Some(value) = flag_value {
+        app.out.warn(format!(
+            "{} is visible to other processes; prefer {} or {}",
+            source.flag, source.env, source.stdin_flag
+        ));
+        value.to_owned()
+    } else if let Some(value) = env_value() {
+        value
+    } else if std::io::stdin().is_terminal() && std::io::stderr().is_terminal() {
+        dialoguer::Password::new()
+            .with_prompt(source.what)
+            .interact()
+            .map_err(|e| Error::other(format!("prompt failed: {e}")))?
+    } else {
+        return Err(Error::validation(format!(
+            "no {} given: pipe it with {}, or set {}",
+            source.what, source.stdin_flag, source.env
+        )));
+    };
+    let value = value.trim();
+    if value.is_empty() {
+        return Err(Error::validation(format!("{} is empty", source.what)));
+    }
+    Ok(SecretString::from(value))
 }
 
 /// Read a whole file for a `--file` style flag, with a validation error naming it.

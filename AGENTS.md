@@ -73,7 +73,9 @@ or `--dry-run`, refuses without a TTY.
 
 **Secrets never touch argv, config or logs.** Tokens live in the keyring
 (`paloma_config::secrets`), service `paloma`, account `paloma/<profile>`. `--token` is
-hidden; `PALOMA_TOKEN` and `auth login --with-token` are the scripting paths. Secrets
+hidden; `PALOMA_TOKEN` and `auth login --with-token` are the scripting paths. Other
+secrets a command needs go through `commands::read_secret` (env, stdin or a prompt; a
+flag only warns). Secrets
 are `SecretString`s; `Request::describe` never includes them.
 
 **Lazy context.** `ctx.require_phone_number_id()` / `require_waba_id()` at the point of

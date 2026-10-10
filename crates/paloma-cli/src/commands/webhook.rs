@@ -1,9 +1,10 @@
 use clap::{Args, Subcommand};
 use paloma_core::{Error, Result};
 use paloma_graph::api::webhook::{self, AVAILABLE_FIELDS};
+use secrecy::{ExposeSecret, SecretString};
 use serde_json::{Value, json};
 
-use super::planned;
+use super::{SecretSource, planned, read_secret};
 use crate::app::{App, no_id};
 use crate::output::Output;
 
@@ -16,9 +17,8 @@ pub enum WebhookCommand {
         /// HTTPS endpoint Meta will call.
         #[arg(long)]
         callback_url: String,
-        /// Token echoed back during Meta's verification handshake.
-        #[arg(long)]
-        verify_token: String,
+        #[command(flatten)]
+        verify_token: VerifyTokenInput,
     },
     /// Remove this app's subscription (and override) from the WABA.
     Unsubscribe,
@@ -39,6 +39,38 @@ pub struct Fields {
     command: Option<FieldsCommand>,
 }
 
+/// The token echoed back during Meta's verification handshake: from
+/// PALOMA_VERIFY_TOKEN, stdin or a prompt.
+#[derive(Debug, Args)]
+pub struct VerifyTokenInput {
+    /// Deprecated: prefer PALOMA_VERIFY_TOKEN or --verify-token-stdin.
+    #[arg(long, hide = true)]
+    verify_token: Option<String>,
+    /// Read the verify token from stdin. Otherwise uses PALOMA_VERIFY_TOKEN, or prompts.
+    #[arg(long, conflicts_with = "verify_token")]
+    verify_token_stdin: bool,
+}
+
+impl VerifyTokenInput {
+    fn read(&self, app: &App) -> Result<SecretString> {
+        read_secret(
+            app,
+            &SecretSource {
+                what: "verify token",
+                flag: "--verify-token",
+                stdin_flag: "--verify-token-stdin",
+                env: "PALOMA_VERIFY_TOKEN",
+            },
+            self.verify_token.as_deref(),
+            self.verify_token_stdin,
+        )
+    }
+
+    fn given(&self) -> bool {
+        self.verify_token.is_some() || self.verify_token_stdin
+    }
+}
+
 #[derive(Debug, Subcommand)]
 enum FieldsCommand {
     /// Replace the subscribed fields.
@@ -48,9 +80,8 @@ enum FieldsCommand {
         /// Change the app-level callback URL at the same time.
         #[arg(long)]
         callback_url: Option<String>,
-        /// Verify token for the new callback URL.
-        #[arg(long)]
-        verify_token: Option<String>,
+        #[command(flatten)]
+        verify_token: VerifyTokenInput,
     },
     /// List every field that can be subscribed (offline).
     Available,
@@ -88,6 +119,7 @@ impl WebhookCommand {
                 callback_url,
                 verify_token,
             } => {
+                let verify_token = verify_token.read(app)?;
                 let waba = app.ctx()?.require_waba_id()?.to_owned();
                 if !app
                     .confirm_or_abort(&format!("change the webhook callback to {callback_url}"))?
@@ -95,7 +127,7 @@ impl WebhookCommand {
                     return Ok(());
                 }
                 app.send_and_emit(
-                    &webhook::subscribe(&waba, &callback_url, &verify_token),
+                    &webhook::subscribe(&waba, &callback_url, verify_token.expose_secret()),
                     no_id,
                 )
                 .await
@@ -138,9 +170,16 @@ impl Fields {
                 callback_url,
                 verify_token,
             }) => {
-                if callback_url.is_some() && verify_token.is_none() {
-                    return Err(Error::validation("--callback-url needs --verify-token"));
-                }
+                // Only a new callback URL uses a token, so a PALOMA_VERIFY_TOKEN that's merely
+                // set in the environment isn't sent without one.
+                let verify_token = if callback_url.is_some() {
+                    Some(verify_token.read(app)?)
+                } else if verify_token.given() {
+                    return Err(Error::validation("a verify token needs --callback-url"));
+                } else {
+                    None
+                };
+                app.ensure_can_confirm("change the app's webhook subscriptions")?;
                 let app_id = app_id(app).await?;
                 if !app.confirm_or_abort(&format!(
                     "subscribe app {app_id} to: {}",
@@ -152,7 +191,7 @@ impl Fields {
                     &app_id,
                     &fields,
                     callback_url.as_deref(),
-                    verify_token.as_deref(),
+                    verify_token.as_ref().map(ExposeSecret::expose_secret),
                 );
                 app.send_and_emit(&req, no_id).await
             }

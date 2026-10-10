@@ -1,7 +1,9 @@
-use clap::Subcommand;
+use clap::{Args, Subcommand};
 use paloma_core::{Result, validate};
 use paloma_graph::api::phone_numbers::{self, DETAIL_FIELDS, QUALITY_FIELDS};
+use secrecy::{ExposeSecret, SecretString};
 
+use super::{SecretSource, read_secret};
 use crate::app::{App, field_id, no_id};
 use crate::output::Output;
 
@@ -22,19 +24,40 @@ pub enum NumberCommand {
     /// Show quality rating, messaging tier and throughput.
     Quality { phone_number_id: Option<String> },
     /// Register the number for Cloud API use.
-    Register {
-        /// Six-digit two-step verification PIN.
-        #[arg(long)]
-        pin: String,
-    },
+    Register(PinInput),
     /// Deregister the number.
     Deregister,
     /// Set the two-step verification PIN.
-    SetPin {
-        /// Six-digit PIN.
-        #[arg(long)]
-        pin: String,
-    },
+    SetPin(PinInput),
+}
+
+/// The six-digit two-step verification PIN: from PALOMA_PIN, stdin or a prompt.
+#[derive(Debug, Args)]
+pub struct PinInput {
+    /// Deprecated: prefer PALOMA_PIN or --pin-stdin.
+    #[arg(long, hide = true)]
+    pin: Option<String>,
+    /// Read the six-digit PIN from stdin. Otherwise uses PALOMA_PIN, or prompts.
+    #[arg(long, conflicts_with = "pin")]
+    pin_stdin: bool,
+}
+
+impl PinInput {
+    fn read(&self, app: &App) -> Result<SecretString> {
+        let pin = read_secret(
+            app,
+            &SecretSource {
+                what: "PIN",
+                flag: "--pin",
+                stdin_flag: "--pin-stdin",
+                env: "PALOMA_PIN",
+            },
+            self.pin.as_deref(),
+            self.pin_stdin,
+        )?;
+        validate::pin(pin.expose_secret())?;
+        Ok(pin)
+    }
 }
 
 impl NumberCommand {
@@ -62,10 +85,10 @@ impl NumberCommand {
                 })
                 .await
             }
-            Self::Register { pin } => {
-                validate::pin(&pin)?;
+            Self::Register(input) => {
+                let pin = input.read(app)?;
                 let phone = app.ctx()?.require_phone_number_id()?.to_owned();
-                app.send_and_emit(&phone_numbers::register(&phone, &pin), no_id)
+                app.send_and_emit(&phone_numbers::register(&phone, pin.expose_secret()), no_id)
                     .await
             }
             Self::Deregister => {
@@ -76,10 +99,10 @@ impl NumberCommand {
                 app.send_and_emit(&phone_numbers::deregister(&phone), no_id)
                     .await
             }
-            Self::SetPin { pin } => {
-                validate::pin(&pin)?;
+            Self::SetPin(input) => {
+                let pin = input.read(app)?;
                 let phone = app.ctx()?.require_phone_number_id()?.to_owned();
-                app.send_and_emit(&phone_numbers::set_pin(&phone, &pin), no_id)
+                app.send_and_emit(&phone_numbers::set_pin(&phone, pin.expose_secret()), no_id)
                     .await
             }
         }

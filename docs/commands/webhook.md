@@ -26,26 +26,32 @@ paloma webhook get -o json | jq '.effective_callback_url'
 
 ## `paloma webhook subscribe`
 
-Set or change the per-WABA override callback URL. Both flags are required: Meta runs
-the `hub.challenge` verification handshake against the URL at set time, echoing the
-verify token, so the token must match what your endpoint expects.
+Set or change the per-WABA override callback URL. A verify token is required too: Meta
+runs the `hub.challenge` verification handshake against the URL at set time, echoing the
+token, so it must match what your endpoint expects.
 
 | Flag | Meaning |
 |------|---------|
 | `--callback-url <url>` | HTTPS callback URL to deliver this WABA's webhooks to |
-| `--verify-token <token>` | Verify token your endpoint echoes during the handshake |
+| `--verify-token-stdin` | Read the verify token from stdin |
+
+The verify token comes from `--verify-token-stdin` or `PALOMA_VERIFY_TOKEN`, or from a
+prompt if there's a terminal. With none of them and no terminal, the command exits `5`. The
+older `--verify-token <value>` flag still works, but it warns, because other processes can
+read a command line.
 
 ```bash
-paloma webhook subscribe \
+printf '%s' "$VERIFY_TOKEN" | paloma webhook subscribe \
       --callback-url https://example.com/webhooks/whatsapp \
-      --verify-token my-verify-token
+      --verify-token-stdin --yes
 
-# preview the exact POST body without sending
-paloma webhook subscribe --callback-url https://example.com/hook --verify-token t --dry-run
+# preview the POST body without sending; the token is masked
+PALOMA_VERIFY_TOKEN=t paloma webhook subscribe --callback-url https://example.com/hook --dry-run
 ```
 
 This re-routes the WABA's webhook delivery, so it asks for confirmation first. Skip
-the prompt with `--yes` (e.g. in CI). A wrong token or an unreachable URL fails the
+the prompt with `--yes` (e.g. in CI). `--verify-token-stdin` always needs `--yes`, because
+piped input leaves no way to answer a prompt. A wrong token or an unreachable URL fails the
 handshake and the call returns a Graph API error (the override is not applied).
 
 ## `paloma webhook unsubscribe`
@@ -102,7 +108,9 @@ unvalidated. Common WhatsApp Business Account fields:
 
 Field names are passed through to Meta (not validated locally), so newly added fields
 keep working; an unknown name is rejected by the API. `set` may require `--callback-url`
-and `--verify-token` to reactivate the subscription; pass them when Meta asks. Setting
+and a verify token to reactivate the subscription; pass them when Meta asks. The token comes
+from the same sources as for `subscribe`, and it's only used with `--callback-url`. As there,
+`--verify-token-stdin` needs `--yes`. Setting
 fields changes which events production receives, so it confirms first (`--yes` to skip).
 
 ## Declarative config

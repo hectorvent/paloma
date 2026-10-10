@@ -173,19 +173,29 @@ impl App {
 
     /// Confirm a destructive action: `true` under `--yes`; refuses without a terminal.
     pub fn confirm(&self, what: &str) -> Result<bool> {
+        self.ensure_can_confirm(what)?;
         if self.globals.yes || self.dry_run() {
             return Ok(true);
-        }
-        if !std::io::stdin().is_terminal() || !std::io::stderr().is_terminal() {
-            return Err(Error::validation(format!(
-                "refusing to {what} without confirmation; pass --yes"
-            )));
         }
         dialoguer::Confirm::new()
             .with_prompt(format!("{what}?"))
             .default(false)
             .interact()
             .map_err(|e| Error::other(format!("prompt failed: {e}")))
+    }
+
+    /// Fail if a confirmation could never pass, for commands that would otherwise spend a
+    /// call before reaching [`Self::confirm`].
+    pub fn ensure_can_confirm(&self, what: &str) -> Result<()> {
+        if self.globals.yes
+            || self.dry_run()
+            || (std::io::stdin().is_terminal() && std::io::stderr().is_terminal())
+        {
+            return Ok(());
+        }
+        Err(Error::validation(format!(
+            "refusing to {what} without confirmation; pass --yes"
+        )))
     }
 
     /// Confirm, or stop with exit 0 and an "aborted" note.

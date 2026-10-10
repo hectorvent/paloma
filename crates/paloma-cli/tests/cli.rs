@@ -1514,6 +1514,325 @@ async fn a_retry_in_the_middle_of_paging_does_not_duplicate_rows() {
     );
 }
 
+/// A secret's safe input paths: the value reaches the API, without a warning or an echo.
+#[tokio::test(flavor = "multi_thread")]
+async fn pin_from_env_or_stdin_reaches_the_api_without_a_warning() {
+    for use_stdin in [false, true] {
+        let graph = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(path(format!("/v26.0/{PHONE}/register")))
+            .and(body_json(
+                json!({"messaging_product":"whatsapp", "pin":"825194"}),
+            ))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({"success":true})))
+            .expect(1)
+            .mount(&graph)
+            .await;
+        let home = TempDir::new().unwrap();
+        let mut cmd = paloma(Some(&graph), &home);
+        cmd.args(["number", "register"]);
+        if use_stdin {
+            cmd.arg("--pin-stdin").write_stdin("825194\n");
+        } else {
+            cmd.env("PALOMA_PIN", "825194");
+        }
+        let out = cmd.output().unwrap();
+        assert!(
+            out.status.success(),
+            "{}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+        let stderr = String::from_utf8_lossy(&out.stderr);
+        assert!(!stderr.contains("visible to other processes"), "{stderr}");
+        assert!(!stderr.contains("825194"), "{stderr}");
+        assert!(!String::from_utf8_lossy(&out.stdout).contains("825194"));
+    }
+}
+
+#[test]
+fn secret_flags_still_work_but_warn_without_echoing_the_value() {
+    let home = TempDir::new().unwrap();
+    for (args, flag, value) in [
+        (
+            vec!["number", "set-pin", "--pin", "825194"],
+            "--pin",
+            "825194",
+        ),
+        (
+            vec![
+                "webhook",
+                "subscribe",
+                "--callback-url",
+                "https://example.test/hook",
+                "--verify-token",
+                "VERIFY_SENTINEL",
+            ],
+            "--verify-token",
+            "VERIFY_SENTINEL",
+        ),
+    ] {
+        let out = paloma(None, &home)
+            .args(args)
+            .args(["--dry-run"])
+            .output()
+            .unwrap();
+        assert!(out.status.success());
+        let stderr = String::from_utf8_lossy(&out.stderr);
+        assert!(
+            stderr.contains(&format!("{flag} is visible to other processes")),
+            "{stderr}"
+        );
+        assert!(!stderr.contains(value), "{stderr}");
+        assert!(!String::from_utf8_lossy(&out.stdout).contains(value));
+    }
+}
+
+#[test]
+fn secret_flags_are_hidden_and_their_stdin_flags_are_shown() {
+    let home = TempDir::new().unwrap();
+    paloma(None, &home)
+        .args(["number", "register", "--help"])
+        .assert()
+        .success()
+        .stdout(
+            predicate::str::contains("--pin-stdin").and(predicate::str::contains("--pin ").not()),
+        );
+    paloma(None, &home)
+        .args(["webhook", "subscribe", "--help"])
+        .assert()
+        .success()
+        .stdout(
+            predicate::str::contains("--verify-token-stdin")
+                .and(predicate::str::contains("--verify-token ").not()),
+        );
+}
+
+#[test]
+fn bad_or_missing_secrets_exit_5_without_a_request() {
+    let home = TempDir::new().unwrap();
+    let hook = "https://example.test/hook";
+    for (args, stdin, needle) in [
+        (vec!["number", "register"], None, "PALOMA_PIN"),
+        (vec!["number", "set-pin"], None, "--pin-stdin"),
+        (
+            vec!["number", "register", "--pin-stdin"],
+            Some("12"),
+            "PIN must be exactly 6 digits",
+        ),
+        (
+            vec!["number", "register", "--pin-stdin"],
+            Some(" \n"),
+            "empty",
+        ),
+        (
+            vec!["webhook", "subscribe", "--callback-url", hook],
+            None,
+            "PALOMA_VERIFY_TOKEN",
+        ),
+        (
+            vec![
+                "webhook",
+                "subscribe",
+                "--callback-url",
+                hook,
+                "--verify-token-stdin",
+            ],
+            Some(""),
+            "empty",
+        ),
+        (
+            vec![
+                "webhook",
+                "fields",
+                "set",
+                "messages",
+                "--callback-url",
+                hook,
+                "--app-id",
+                "3",
+            ],
+            None,
+            "PALOMA_VERIFY_TOKEN",
+        ),
+        (
+            vec![
+                "webhook",
+                "fields",
+                "set",
+                "messages",
+                "--verify-token",
+                "t",
+                "--app-id",
+                "3",
+            ],
+            None,
+            "needs --callback-url",
+        ),
+    ] {
+        let mut cmd = paloma(None, &home);
+        cmd.args(&args);
+        if let Some(input) = stdin {
+            cmd.write_stdin(input);
+        }
+        cmd.assert()
+            .code(5)
+            .stdout(predicate::str::is_empty())
+            .stderr(predicate::str::contains(needle));
+    }
+}
+
+#[test]
+fn secret_flag_and_its_stdin_flag_conflict() {
+    let home = TempDir::new().unwrap();
+    paloma(None, &home)
+        .args(["number", "register", "--pin", "825194", "--pin-stdin"])
+        .assert()
+        .code(2);
+}
+
+#[test]
+fn verify_token_from_env_or_stdin_is_used_and_masked_in_a_dry_run() {
+    let home = TempDir::new().unwrap();
+    let args = [
+        "webhook",
+        "subscribe",
+        "--callback-url",
+        "https://example.test/hook",
+        "--dry-run",
+        "-o",
+        "raw",
+    ];
+    let from_env = paloma(None, &home)
+        .args(args)
+        .env("PALOMA_VERIFY_TOKEN", "VERIFY_SENTINEL")
+        .output()
+        .unwrap();
+    let from_stdin = paloma(None, &home)
+        .args(args)
+        .arg("--verify-token-stdin")
+        .write_stdin("VERIFY_SENTINEL\n")
+        .output()
+        .unwrap();
+    for out in [from_env, from_stdin] {
+        assert!(
+            out.status.success(),
+            "{}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+        let body = stdout_json(&out);
+        assert!(body.get("verify_token").is_some(), "{body}");
+        assert!(!body.to_string().contains("VERIFY_SENTINEL"));
+        assert!(!String::from_utf8_lossy(&out.stderr).contains("visible to other"));
+    }
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn verify_token_from_env_or_stdin_reaches_the_api_exactly() {
+    for use_stdin in [false, true] {
+        let graph = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(path(format!("/v26.0/{WABA}/subscribed_apps")))
+            .and(body_json(json!({
+                "override_callback_uri":"https://example.test/hook",
+                "verify_token":"VERIFY_SENTINEL"
+            })))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({"success":true})))
+            .expect(1)
+            .mount(&graph)
+            .await;
+        Mock::given(method("POST"))
+            .and(path("/v26.0/333/subscriptions"))
+            .and(query_param("callback_url", "https://example.test/hook"))
+            .and(query_param("verify_token", "VERIFY_SENTINEL"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({"success":true})))
+            .expect(1)
+            .mount(&graph)
+            .await;
+        let home = TempDir::new().unwrap();
+        let hook = ["--callback-url", "https://example.test/hook", "--yes"];
+        for verb in [
+            vec!["webhook", "subscribe"],
+            vec!["webhook", "fields", "set", "messages", "--app-id", "333"],
+        ] {
+            let mut cmd = paloma(Some(&graph), &home);
+            cmd.env("PALOMA_APP_SECRET", "s").args(verb).args(hook);
+            if use_stdin {
+                cmd.arg("--verify-token-stdin")
+                    .write_stdin("VERIFY_SENTINEL\n");
+            } else {
+                cmd.env("PALOMA_VERIFY_TOKEN", "VERIFY_SENTINEL");
+            }
+            let out = cmd.output().unwrap();
+            assert!(
+                out.status.success(),
+                "{}",
+                String::from_utf8_lossy(&out.stderr)
+            );
+        }
+    }
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn verify_token_stdin_without_yes_refuses_before_spending_a_call() {
+    let graph = MockServer::start().await;
+    Mock::given(wiremock::matchers::any())
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({"data":[]})))
+        .expect(0)
+        .mount(&graph)
+        .await;
+    let home = TempDir::new().unwrap();
+    let hook = ["--callback-url", "https://example.test/hook"];
+    for verb in [
+        vec!["webhook", "subscribe"],
+        vec!["webhook", "fields", "set", "messages"],
+    ] {
+        paloma(Some(&graph), &home)
+            .args(verb)
+            .args(hook)
+            .arg("--verify-token-stdin")
+            .write_stdin("VERIFY_SENTINEL")
+            .assert()
+            .code(5)
+            .stdout(predicate::str::is_empty())
+            .stderr(predicate::str::contains("pass --yes"));
+    }
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn fields_set_checks_the_verify_token_before_the_app_id_lookup() {
+    let graph = MockServer::start().await;
+    Mock::given(wiremock::matchers::any())
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({"data":[]})))
+        .expect(0)
+        .mount(&graph)
+        .await;
+    let home = TempDir::new().unwrap();
+    paloma(Some(&graph), &home)
+        .args(["webhook", "fields", "set", "messages"])
+        .args(["--callback-url", "https://example.test/hook", "--yes"])
+        .assert()
+        .code(5)
+        .stderr(predicate::str::contains("PALOMA_VERIFY_TOKEN"));
+}
+
+#[test]
+fn fields_set_ignores_a_verify_token_in_the_env_without_a_callback() {
+    let home = TempDir::new().unwrap();
+    let out = paloma(None, &home)
+        .env("PALOMA_APP_SECRET", "s")
+        .env("PALOMA_VERIFY_TOKEN", "VERIFY_SENTINEL")
+        .args(["webhook", "fields", "set", "messages", "--app-id", "333"])
+        .args(["--dry-run", "-o", "json"])
+        .output()
+        .unwrap();
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert!(!String::from_utf8_lossy(&out.stdout).contains("verify_token"));
+}
+
 #[test]
 fn template_blank_body_var_exits_5_without_a_request() {
     let home = TempDir::new().unwrap();
