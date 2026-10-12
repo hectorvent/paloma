@@ -3,12 +3,13 @@ use std::path::PathBuf;
 
 use clap::{ArgGroup, Args, Subcommand};
 use paloma_core::compliance::{NoTracking, SendPolicy, enforce_session_window};
-use paloma_core::limits::{MAX_LIST_ROWS, MAX_REPLY_BUTTONS};
+use paloma_core::limits::{self, MAX_LIST_ROWS, MAX_REPLY_BUTTONS};
 use paloma_core::{Error, Result, validate};
 use paloma_graph::api::media as media_api;
 use paloma_graph::api::messages::{
-    self, Button, InteractiveText, MediaKind, MediaSource, Row, Section,
+    self, Button, InteractiveText, MediaKind, MediaOptions, MediaSource, Row, Section,
 };
+use paloma_graph::request::has_http_scheme;
 use serde_json::Value;
 
 use super::{planned, read_file, read_json};
@@ -26,7 +27,7 @@ pub enum SendCommand {
     /// Send a document.
     Document(Media),
     /// Send an audio clip.
-    Audio(Media),
+    Audio(Audio),
     /// Send a video.
     Video(Media),
     /// Send a sticker.
@@ -44,6 +45,25 @@ pub enum SendCommand {
     Raw(Raw),
     /// Send a Flow into a chat (planned v1.0).
     Flow,
+}
+
+/// The flag on every send type that Meta lets quote an earlier message.
+#[derive(Debug, Args)]
+pub struct Reply {
+    /// Quote-reply to this message id (wamid…).
+    #[arg(long)]
+    reply_to: Option<String>,
+}
+
+impl Reply {
+    /// A blank id is a mistake, such as an unset shell variable, and would otherwise send
+    /// a message that doesn't quote anything.
+    fn id(&self) -> Result<Option<&str>> {
+        if let Some(id) = &self.reply_to {
+            validate::not_blank(id, "--reply-to")?;
+        }
+        Ok(self.reply_to.as_deref())
+    }
 }
 
 /// The 24-hour window guardrail flags.
@@ -84,9 +104,8 @@ pub struct Text {
     /// Render a link preview for the first URL in the body.
     #[arg(long)]
     preview_url: bool,
-    /// Quote-reply to this message id (wamid…).
-    #[arg(long)]
-    reply_to: Option<String>,
+    #[command(flatten)]
+    reply: Reply,
     #[command(flatten)]
     policy: Policy,
 }
@@ -110,13 +129,31 @@ pub struct Template {
     #[arg(
         long,
         value_name = "TEXT",
-        conflicts_with = "named_vars",
+        conflicts_with_all = ["named_vars", "header_media"],
         allow_hyphen_values = true
     )]
     header_text: Option<String>,
+    /// Image for the header: a media id or an http(s) link.
+    #[arg(long, value_name = "ID|URL", group = "header_media")]
+    header_image: Option<String>,
+    /// Video for the header: a media id or an http(s) link.
+    #[arg(long, value_name = "ID|URL", group = "header_media")]
+    header_video: Option<String>,
+    /// Document for the header: a media id or an http(s) link.
+    #[arg(long, value_name = "ID|URL", group = "header_media")]
+    header_document: Option<String>,
+    /// A button's parameter; repeatable. TYPE is url, quick_reply, copy_code, flow or catalog.
+    #[arg(long = "button", value_name = "INDEX:TYPE=VALUE")]
+    buttons: Vec<String>,
     /// JSON send components: an array or {"components": [...]}.
-    #[arg(long, value_name = "PATH", conflicts_with_all = ["body_vars", "named_vars", "header_text"])]
+    #[arg(
+        long,
+        value_name = "PATH",
+        conflicts_with_all = ["body_vars", "named_vars", "header_text", "header_media", "buttons"]
+    )]
     components_file: Option<PathBuf>,
+    #[command(flatten)]
+    reply: Reply,
 }
 
 #[derive(Debug, Args)]
@@ -140,7 +177,18 @@ pub struct Media {
     #[arg(long)]
     filename: Option<String>,
     #[command(flatten)]
+    reply: Reply,
+    #[command(flatten)]
     policy: Policy,
+}
+
+#[derive(Debug, Args)]
+pub struct Audio {
+    #[command(flatten)]
+    media: Media,
+    /// Send as a voice message; use a mono OGG file encoded with OPUS.
+    #[arg(long)]
+    voice: bool,
 }
 
 #[derive(Debug, Args)]
@@ -158,6 +206,8 @@ pub struct Location {
     #[arg(long)]
     address: Option<String>,
     #[command(flatten)]
+    reply: Reply,
+    #[command(flatten)]
     policy: Policy,
 }
 
@@ -168,6 +218,8 @@ pub struct Contact {
     /// JSON file holding the Cloud API `contacts` array (or `{"contacts": [...]}`).
     #[arg(long)]
     file: PathBuf,
+    #[command(flatten)]
+    reply: Reply,
     #[command(flatten)]
     policy: Policy,
 }
@@ -218,6 +270,8 @@ pub struct InteractiveCommon {
     /// Footer text.
     #[arg(long)]
     footer: Option<String>,
+    #[command(flatten)]
+    reply: Reply,
     #[command(flatten)]
     policy: Policy,
 }
@@ -275,17 +329,15 @@ impl SendCommand {
                     None => a.body.clone().unwrap_or_default(),
                 };
                 validate::text_body(&body)?;
+                let reply_to = a.reply.id()?;
                 a.policy.enforce(&a.to)?;
-                dispatch(
-                    app,
-                    messages::text(&a.to, &body, a.preview_url, a.reply_to.as_deref()),
-                )
-                .await
+                dispatch(app, messages::text(&a.to, &body, a.preview_url, reply_to)).await
             }
             Self::Template(a) => {
                 validate::recipient(&a.to)?;
                 validate::not_blank(&a.name, "template name")?;
                 validate::not_blank(&a.lang, "--lang")?;
+                let reply_to = a.reply.id()?;
                 let components = if let Some(path) = &a.components_file {
                     template_components_file(path)?
                 } else {
@@ -301,29 +353,35 @@ impl SendCommand {
                         }
                         named.push((name.to_owned(), value.to_owned()));
                     }
-                    if let Some(text) = &a.header_text {
-                        validate::not_blank(text, "--header-text")?;
-                    }
                     for value in &a.body_vars {
                         validate::not_blank(value, "--body-var")?;
                     }
-                    messages::template_text_components(
-                        &a.body_vars,
-                        &named,
-                        a.header_text.as_deref(),
-                    )
+                    let header = template_header(&a)?;
+                    let buttons = parse_template_buttons(&a.buttons)?;
+                    messages::template_components(&messages::TemplateParams {
+                        body_vars: &a.body_vars,
+                        named_vars: &named,
+                        header,
+                        buttons: &buttons,
+                    })
                 };
+                if reply_to.is_some() {
+                    app.out
+                        .warn("WhatsApp doesn't show the quoted message on a template");
+                }
                 dispatch(
                     app,
-                    messages::template_with_components(&a.to, &a.name, &a.lang, components),
+                    messages::template_with_components(
+                        &a.to, &a.name, &a.lang, components, reply_to,
+                    ),
                 )
                 .await
             }
-            Self::Image(a) => send_media(app, MediaKind::Image, a).await,
-            Self::Document(a) => send_media(app, MediaKind::Document, a).await,
-            Self::Audio(a) => send_media(app, MediaKind::Audio, a).await,
-            Self::Video(a) => send_media(app, MediaKind::Video, a).await,
-            Self::Sticker(a) => send_media(app, MediaKind::Sticker, a).await,
+            Self::Image(a) => send_media(app, MediaKind::Image, a, false).await,
+            Self::Document(a) => send_media(app, MediaKind::Document, a, false).await,
+            Self::Audio(a) => send_media(app, MediaKind::Audio, a.media, a.voice).await,
+            Self::Video(a) => send_media(app, MediaKind::Video, a, false).await,
+            Self::Sticker(a) => send_media(app, MediaKind::Sticker, a, false).await,
             Self::Location(a) => {
                 validate::recipient(&a.to)?;
                 if !(-90.0..=90.0).contains(&a.lat) || !(-180.0..=180.0).contains(&a.long) {
@@ -331,6 +389,7 @@ impl SendCommand {
                         "--lat must be within ±90 and --long within ±180",
                     ));
                 }
+                let reply_to = a.reply.id()?;
                 a.policy.enforce(&a.to)?;
                 let payload = messages::location(
                     &a.to,
@@ -338,6 +397,7 @@ impl SendCommand {
                     a.long,
                     a.name.as_deref(),
                     a.address.as_deref(),
+                    reply_to,
                 );
                 dispatch(app, payload).await
             }
@@ -358,8 +418,9 @@ impl SendCommand {
                 if contacts.as_array().is_none_or(Vec::is_empty) {
                     return Err(Error::validation("contacts file has no contacts"));
                 }
+                let reply_to = a.reply.id()?;
                 a.policy.enforce(&a.to)?;
-                dispatch(app, messages::contacts(&a.to, contacts)).await
+                dispatch(app, messages::contacts(&a.to, contacts, reply_to)).await
             }
             Self::Interactive(i) => i.run(app).await,
             Self::Reaction(a) => {
@@ -385,6 +446,113 @@ impl SendCommand {
             Self::Flow => planned("send flow", "v1.0"),
         }
     }
+}
+
+fn template_header(a: &Template) -> Result<Option<messages::TemplateHeader>> {
+    if let Some(text) = &a.header_text {
+        validate::not_blank(text, "--header-text")?;
+        return Ok(Some(messages::TemplateHeader::Text(text.clone())));
+    }
+    let media = [
+        (&a.header_image, MediaKind::Image, "--header-image"),
+        (&a.header_video, MediaKind::Video, "--header-video"),
+        (&a.header_document, MediaKind::Document, "--header-document"),
+    ];
+    for (value, kind, flag) in media {
+        if let Some(value) = value {
+            let source = media_reference(value, flag)?;
+            return Ok(Some(messages::TemplateHeader::Media(kind, source)));
+        }
+    }
+    Ok(None)
+}
+
+/// A media id or an http(s) link. An error never echoes the value, since a link can carry
+/// credentials in its query string.
+fn media_reference(value: &str, flag: &str) -> Result<MediaSource> {
+    validate::not_blank(value, flag)?;
+    let value = value.trim();
+    let invalid = || Error::validation(format!("{flag} must be a media id or an http(s) link"));
+    if value.chars().any(char::is_whitespace) {
+        return Err(invalid());
+    }
+    if has_http_scheme(value) {
+        let host = value.split_once("://").map_or("", |(_, rest)| rest);
+        if host.is_empty() || host.starts_with('/') {
+            return Err(invalid());
+        }
+        return Ok(MediaSource::Link(value.to_owned()));
+    }
+    if value.contains([':', '/']) {
+        return Err(invalid());
+    }
+    Ok(MediaSource::Id(value.to_owned()))
+}
+
+/// `INDEX:TYPE=VALUE`, split at the first `:` and `=`, so a value may contain both. Errors
+/// name the flag by position and never echo the text, which a typo can fill with a token.
+fn parse_template_buttons(specs: &[String]) -> Result<Vec<messages::TemplateButton>> {
+    use messages::{TemplateButton, TemplateButtonKind as Kind};
+
+    let mut buttons: Vec<TemplateButton> = Vec::new();
+    for (position, spec) in (1..).zip(specs) {
+        let invalid =
+            |problem: String| Error::validation(format!("--button #{position} {problem}"));
+        let parsed = spec.split_once(':').and_then(|(index, rest)| {
+            rest.split_once('=')
+                .map(|(kind, value)| (index, kind, value))
+        });
+        let Some((index, kind, value)) = parsed else {
+            return Err(invalid("must use INDEX:TYPE=VALUE".into()));
+        };
+        let index = index
+            .parse::<u8>()
+            .ok()
+            .filter(|index| *index < limits::MAX_TEMPLATE_BUTTONS)
+            .ok_or_else(|| {
+                invalid(format!(
+                    "index must be 0 to {}",
+                    limits::MAX_TEMPLATE_BUTTONS - 1
+                ))
+            })?;
+        let kind = match kind {
+            "url" => Kind::Url,
+            "quick_reply" => Kind::QuickReply,
+            "copy_code" => Kind::CopyCode,
+            "flow" => Kind::Flow,
+            "catalog" => Kind::Catalog,
+            _ => {
+                return Err(invalid(
+                    "type must be url, quick_reply, copy_code, flow or catalog".into(),
+                ));
+            }
+        };
+        if value.trim().is_empty() {
+            return Err(invalid("value is empty".into()));
+        }
+        if kind == Kind::CopyCode {
+            if value.chars().count() > limits::MAX_COUPON_CODE {
+                return Err(invalid(format!(
+                    "coupon code is over {} characters",
+                    limits::MAX_COUPON_CODE
+                )));
+            }
+            if buttons.iter().any(|button| button.kind == Kind::CopyCode) {
+                return Err(invalid(
+                    "is a second copy_code; a template can have one".into(),
+                ));
+            }
+        }
+        if buttons.iter().any(|button| button.index == index) {
+            return Err(invalid(format!("index {index} is already used")));
+        }
+        buttons.push(TemplateButton {
+            index,
+            kind,
+            value: value.to_owned(),
+        });
+    }
+    Ok(buttons)
 }
 
 /// Accept the component envelope, not a full message that could override the target.
@@ -452,19 +620,21 @@ impl Interactive {
         let c = self.common();
         validate::recipient(&c.to)?;
         validate::not_blank(&c.body, "--body")?;
+        let reply_to = c.reply.id()?;
         let (to, text) = (c.to.clone(), c.text());
         let payload = match &self {
             Self::Button(a) => {
-                messages::interactive_buttons(&to, &text, &parse_buttons(&a.buttons)?)
+                messages::interactive_buttons(&to, &text, &parse_buttons(&a.buttons)?, reply_to)
             }
             Self::List(a) => {
                 validate::not_blank(&a.button, "--button")?;
-                messages::interactive_list(&to, &text, &a.button, &parse_sections(&a.sections)?)
+                let sections = parse_sections(&a.sections)?;
+                messages::interactive_list(&to, &text, &a.button, &sections, reply_to)
             }
             Self::CtaUrl(a) => {
                 validate::not_blank(&a.display, "--display")?;
                 validate::not_blank(&a.url, "--url")?;
-                messages::interactive_cta_url(&to, &text, &a.display, &a.url)
+                messages::interactive_cta_url(&to, &text, &a.display, &a.url, reply_to)
             }
         };
         self.common().policy.enforce(&to)?;
@@ -539,7 +709,7 @@ fn parse_sections(specs: &[String]) -> Result<Vec<Section>> {
     Ok(sections)
 }
 
-async fn send_media(app: &App, kind: MediaKind, a: Media) -> Result<()> {
+async fn send_media(app: &App, kind: MediaKind, a: Media, voice: bool) -> Result<()> {
     validate::recipient(&a.to)?;
     if a.caption.is_some() && !kind.supports_caption() {
         return Err(Error::usage(format!(
@@ -554,6 +724,12 @@ async fn send_media(app: &App, kind: MediaKind, a: Media) -> Result<()> {
         )));
     }
     validate::caption(a.caption.as_deref())?;
+    let options = MediaOptions {
+        caption: a.caption.as_deref(),
+        filename: a.filename.as_deref(),
+        voice,
+        reply_to: a.reply.id()?,
+    };
     let file = a.file.as_deref().map(validate::readable_file).transpose()?;
     a.policy.enforce(&a.to)?;
 
@@ -566,8 +742,7 @@ async fn send_media(app: &App, kind: MediaKind, a: Media) -> Result<()> {
                     &a.to,
                     kind,
                     &MediaSource::Id("<uploaded-at-send-time>".into()),
-                    a.caption.as_deref(),
-                    a.filename.as_deref(),
+                    &options,
                 );
                 let payload = messages::with_messaging_account(
                     payload,
@@ -587,17 +762,7 @@ async fn send_media(app: &App, kind: MediaKind, a: Media) -> Result<()> {
         (None, None, Some(link)) => MediaSource::Link(link),
         (None, None, None) => unreachable!("clap enforces one media source"),
     };
-    dispatch(
-        app,
-        messages::media(
-            &a.to,
-            kind,
-            &source,
-            a.caption.as_deref(),
-            a.filename.as_deref(),
-        ),
-    )
-    .await
+    dispatch(app, messages::media(&a.to, kind, &source, &options)).await
 }
 
 /// POST the message and print the response with its wamid as the primary id.

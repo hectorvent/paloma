@@ -7,6 +7,9 @@ pub const MAX_TEXT_BODY: usize = 4096;
 pub const MAX_CAPTION: usize = 1024;
 /// Reply buttons allowed on an interactive button message.
 pub const MAX_REPLY_BUTTONS: usize = 3;
+/// Most buttons a template can have, so the highest button index is one less.
+pub const MAX_TEMPLATE_BUTTONS: u8 = 10;
+pub const MAX_COUPON_CODE: usize = 20;
 /// Rows allowed across all sections of an interactive list message.
 pub const MAX_LIST_ROWS: usize = 10;
 /// Digits in a two-step verification PIN.

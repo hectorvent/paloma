@@ -1833,6 +1833,211 @@ fn fields_set_ignores_a_verify_token_in_the_env_without_a_callback() {
     assert!(!String::from_utf8_lossy(&out.stdout).contains("verify_token"));
 }
 
+#[tokio::test(flavor = "multi_thread")]
+async fn template_typed_flags_send_the_exact_components_in_order() {
+    let graph = MockServer::start().await;
+    Mock::given(method("POST"))
+        .and(path(format!("/v26.0/{PHONE}/messages")))
+        .and(body_json(json!({
+            "messaging_product":"whatsapp", "recipient_type":"individual", "to":"15551234567",
+            "type":"template", "template":{
+                "name":"order_ready", "language":{"code":"en_US"}, "components":[
+                    {"type":"header", "parameters":[{"type":"image", "image":{"id":"MEDIA1"}}]},
+                    {"type":"body", "parameters":[
+                        {"type":"text", "parameter_name":"first_name", "text":"Ana"}
+                    ]},
+                    {"type":"button", "sub_type":"url", "index":"0", "parameters":[
+                        {"type":"text", "text":"a=b:c"}
+                    ]},
+                    {"type":"button", "sub_type":"quick_reply", "index":"1", "parameters":[
+                        {"type":"payload", "payload":"STOP"}
+                    ]},
+                    {"type":"button", "sub_type":"copy_code", "index":2, "parameters":[
+                        {"type":"coupon_code", "coupon_code":"WINTER25"}
+                    ]},
+                    {"type":"button", "sub_type":"flow", "index":"3", "parameters":[
+                        {"type":"action", "action":{"flow_token":"FLOW_SENTINEL"}}
+                    ]},
+                    {"type":"button", "sub_type":"CATALOG", "index":4, "parameters":[
+                        {"type":"action", "action":{"thumbnail_product_retailer_id":"SKU1"}}
+                    ]}
+                ]
+            }
+        })))
+        .respond_with(
+            ResponseTemplate::new(200).set_body_json(json!({"messages":[{"id":"wamid.T"}]})),
+        )
+        .expect(1)
+        .mount(&graph)
+        .await;
+    let home = TempDir::new().unwrap();
+    let out = paloma(Some(&graph), &home)
+        .args(["send", "template", "15551234567", "order_ready"])
+        .args(["--lang", "en_US", "--header-image", "MEDIA1"])
+        .args(["--var", "first_name=Ana"])
+        .args(["--button", "0:url=a=b:c"])
+        .args(["--button", "1:quick_reply=STOP"])
+        .args(["--button", "2:copy_code=WINTER25"])
+        .args(["--button", "3:flow=FLOW_SENTINEL"])
+        .args(["--button", "4:catalog=SKU1", "-q"])
+        .output()
+        .unwrap();
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert_eq!(String::from_utf8_lossy(&out.stdout), "wamid.T\n");
+}
+
+#[test]
+fn template_media_header_is_an_id_or_a_link_and_a_dry_run_masks_secrets() {
+    let home = TempDir::new().unwrap();
+    let components = |args: &[&str]| {
+        let out = paloma(None, &home)
+            .args(["send", "template", "15551234567", "t", "--lang", "en"])
+            .args(args)
+            .args(["--dry-run", "-o", "raw"])
+            .output()
+            .unwrap();
+        assert!(
+            out.status.success(),
+            "{}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+        stdout_json(&out)["template"]["components"].clone()
+    };
+    assert_eq!(
+        components(&["--header-video", "V1"]),
+        json!([{"type":"header", "parameters":[{"type":"video", "video":{"id":"V1"}}]}])
+    );
+    assert_eq!(
+        components(&["--header-document", "https://example.test/a.pdf"]),
+        json!([{"type":"header", "parameters":[
+            {"type":"document", "document":{"link":"https://example.test/a.pdf"}}
+        ]}])
+    );
+    let flow = components(&["--button", "0:flow=FLOW_SENTINEL"]);
+    assert!(!flow.to_string().contains("FLOW_SENTINEL"), "{flow}");
+}
+
+#[test]
+fn template_header_flags_and_the_components_file_conflict() {
+    let home = TempDir::new().unwrap();
+    let file = home.path().join("c.json");
+    std::fs::write(&file, "[]").unwrap();
+    let file = file.to_str().unwrap();
+    for args in [
+        vec!["--header-image", "A", "--header-video", "B"],
+        vec!["--header-video", "A", "--header-document", "B"],
+        vec!["--header-text", "A", "--header-image", "B"],
+        vec!["--header-image", "B", "--header-text", "A"],
+        vec!["--var", "a=b", "--header-text", "A"],
+        vec!["--components-file", file, "--header-image", "A"],
+        vec!["--components-file", file, "--button", "0:url=a"],
+    ] {
+        paloma(None, &home)
+            .args(["send", "template", "15551234567", "t", "--lang", "en"])
+            .args(args)
+            .assert()
+            .code(2)
+            .stdout(predicate::str::is_empty());
+    }
+}
+
+#[test]
+fn template_bad_typed_flags_exit_5_without_echoing_the_value() {
+    let home = TempDir::new().unwrap();
+    let long_coupon = format!("0:copy_code={}", "A".repeat(21));
+    for (args, needle) in [
+        (vec!["--button", "SECRET"], "#1 must use INDEX:TYPE=VALUE"),
+        (vec!["--button", "0:flowSECRET"], "#1 must use"),
+        (vec!["--button", "0:flow:SECRET"], "#1 must use"),
+        (vec!["--button", "0:flow:SECRET=x"], "#1 type must be"),
+        (vec!["--button", "SECRET:flow=x"], "#1 index must be 0 to 9"),
+        (vec!["--button", "10:url=a"], "#1 index must be 0 to 9"),
+        (vec!["--button", "0:url=  "], "#1 value is empty"),
+        (
+            vec!["--button", "0:url=a", "--button", "0:flow=SECRET"],
+            "#2 index 0 is already used",
+        ),
+        (
+            vec!["--button", "0:copy_code=a", "--button", "1:copy_code=b"],
+            "#2 is a second copy_code",
+        ),
+        (vec!["--button", long_coupon.as_str()], "over 20 characters"),
+        (vec!["--header-image", "  "], "--header-image"),
+        (vec!["--header-image", "ftp://SECRET/a.png"], "media id or"),
+        (vec!["--header-video", "./SECRET.mp4"], "media id or"),
+        (vec!["--header-document", "a SECRET"], "media id or"),
+        (vec!["--header-image", "http://"], "media id or"),
+        (vec!["--header-image", "https:///SECRET"], "media id or"),
+    ] {
+        paloma(None, &home)
+            .args(["send", "template", "15551234567", "t", "--lang", "en"])
+            .args(args)
+            .assert()
+            .code(5)
+            .stdout(predicate::str::is_empty())
+            .stderr(predicate::str::contains(needle).and(predicate::str::contains("SECRET").not()));
+    }
+}
+
+#[test]
+fn template_uppercase_link_is_a_link_and_stays_masked_everywhere() {
+    let home = TempDir::new().unwrap();
+    let args = [
+        "send",
+        "template",
+        "15551234567",
+        "t",
+        "--lang",
+        "en",
+        "--header-image",
+        "HTTPS://x.test/a.png?access_token=SECRET",
+        "--button",
+        "0:flow=SECRET",
+        "--dry-run",
+        "-vv",
+    ];
+    for format in ["table", "json", "yaml", "raw"] {
+        let out = paloma(None, &home)
+            .args(args)
+            .args(["-o", format])
+            .output()
+            .unwrap();
+        assert!(
+            out.status.success(),
+            "{}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+        assert!(!String::from_utf8_lossy(&out.stdout).contains("SECRET"));
+        assert!(!String::from_utf8_lossy(&out.stderr).contains("SECRET"));
+        if format == "raw" {
+            let image = &stdout_json(&out)["template"]["components"][0]["parameters"][0]["image"];
+            assert!(image.get("link").is_some(), "{image}");
+            assert!(image.get("id").is_none(), "{image}");
+        }
+    }
+}
+
+#[test]
+fn template_documented_flag_combinations_work() {
+    let home = TempDir::new().unwrap();
+    for args in [
+        vec!["--header-image", "A", "--body-var", "x"],
+        vec!["--header-image", "A", "--var", "name=x"],
+        vec!["--header-text", "A", "--button", "0:url=b"],
+    ] {
+        paloma(None, &home)
+            .args(["send", "template", "15551234567", "t", "--lang", "en"])
+            .args(args)
+            .arg("--dry-run")
+            .assert()
+            .success();
+    }
+}
+
 #[test]
 fn template_blank_body_var_exits_5_without_a_request() {
     let home = TempDir::new().unwrap();
@@ -2004,4 +2209,312 @@ fn template_parameter_sources_conflict_as_usage_errors() {
             .code(2)
             .stdout(predicate::str::is_empty());
     }
+}
+
+#[test]
+fn reply_to_quotes_the_message_on_every_send_type_that_allows_it() {
+    let home = TempDir::new().unwrap();
+    let contacts = home.path().join("contacts.json");
+    std::fs::write(&contacts, r#"[{"name":{"formatted_name":"A"}}]"#).unwrap();
+    let contacts = contacts.to_str().unwrap();
+    let to = "15551234567";
+    let cases: Vec<Vec<&str>> = vec![
+        vec!["text", to, "hi"],
+        vec!["template", to, "order", "--lang", "en_US"],
+        vec!["image", to, "--id", "9"],
+        vec!["document", to, "--id", "9"],
+        vec!["audio", to, "--id", "9"],
+        vec!["video", to, "--id", "9"],
+        vec!["sticker", to, "--id", "9"],
+        vec!["location", to, "--lat", "1", "--long", "2"],
+        vec!["contact", to, "--file", contacts],
+        vec![
+            "interactive",
+            "button",
+            to,
+            "--body",
+            "b",
+            "--button",
+            "y:Yes",
+        ],
+        vec![
+            "interactive",
+            "list",
+            to,
+            "--body",
+            "b",
+            "--button",
+            "Open",
+            "--section",
+            "S:a:A",
+        ],
+        vec![
+            "interactive",
+            "cta-url",
+            to,
+            "--body",
+            "b",
+            "--display",
+            "D",
+            "--url",
+            "https://x.test",
+        ],
+    ];
+    for case in cases {
+        let out = paloma(None, &home)
+            .arg("send")
+            .args(&case)
+            .args(["--reply-to", "wamid.X", "--dry-run", "-o", "json"])
+            .output()
+            .unwrap();
+        assert!(out.status.success(), "{case:?}");
+        assert_eq!(
+            stdout_json(&out)["body"]["context"],
+            json!({ "message_id": "wamid.X" }),
+            "{case:?}"
+        );
+
+        let out = paloma(None, &home)
+            .arg("send")
+            .args(&case)
+            .args(["--dry-run", "-o", "json"])
+            .output()
+            .unwrap();
+        assert!(
+            stdout_json(&out)["body"].get("context").is_none(),
+            "{case:?}"
+        );
+    }
+}
+
+#[test]
+fn reply_to_is_refused_where_it_cannot_apply_or_is_blank() {
+    let home = TempDir::new().unwrap();
+    let to = "15551234567";
+    // A blank id, such as an unset shell variable, must not send an unquoted message.
+    let contacts = home.path().join("contacts.json");
+    std::fs::write(&contacts, r#"[{"name":{"formatted_name":"A"}}]"#).unwrap();
+    let blank: [&[&str]; 6] = [
+        &["text", to, "hi"],
+        &["template", to, "order", "--lang", "en_US"],
+        &["image", to, "--id", "9"],
+        &["location", to, "--lat", "1", "--long", "2"],
+        &["contact", to, "--file", contacts.to_str().unwrap()],
+        &[
+            "interactive",
+            "button",
+            to,
+            "--body",
+            "b",
+            "--button",
+            "y:Yes",
+        ],
+    ];
+    for case in blank {
+        paloma(None, &home)
+            .arg("send")
+            .args(case)
+            .args(["--reply-to", " ", "--dry-run"])
+            .assert()
+            .code(5)
+            .stdout(predicate::str::is_empty())
+            .stderr(predicate::str::contains("--reply-to"));
+    }
+    let unsupported: [&[&str]; 2] = [
+        &["reaction", to, "--message-id", "wamid.Y", "--emoji", "👍"],
+        &["raw", "--stdin"],
+    ];
+    for case in unsupported {
+        paloma(None, &home)
+            .arg("send")
+            .args(case)
+            .args(["--reply-to", "wamid.X", "--dry-run"])
+            .assert()
+            .code(2)
+            .stdout(predicate::str::is_empty())
+            .stderr(predicate::str::contains("--reply-to"));
+    }
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn blank_reply_to_fails_before_the_upload_and_before_the_context() {
+    let graph = MockServer::start().await;
+    Mock::given(method("POST"))
+        .and(path(format!("/v26.0/{PHONE}/media")))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({ "id": "MEDIA1" })))
+        .expect(0)
+        .mount(&graph)
+        .await;
+    let home = TempDir::new().unwrap();
+    let file = home.path().join("pic.png");
+    std::fs::write(&file, "PNGDATA").unwrap();
+    for without_phone in [false, true] {
+        let mut cmd = paloma(Some(&graph), &home);
+        if without_phone {
+            cmd.env_remove("PALOMA_PHONE_NUMBER_ID");
+        }
+        cmd.args(["send", "image", "15551234567", "--reply-to", " ", "--file"])
+            .arg(&file)
+            .assert()
+            .code(5)
+            .stdout(predicate::str::is_empty())
+            .stderr(predicate::str::contains("--reply-to"));
+    }
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn reply_to_on_a_template_warns_on_stderr_and_still_sends() {
+    let graph = MockServer::start().await;
+    Mock::given(method("POST"))
+        .and(path(format!("/v26.0/{PHONE}/messages")))
+        .and(body_json(json!({
+            "messaging_product": "whatsapp",
+            "recipient_type": "individual",
+            "to": "15551234567",
+            "type": "template",
+            "context": { "message_id": "wamid.X" },
+            "template": { "name": "order", "language": { "code": "en_US" } }
+        })))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .set_body_json(json!({ "messages": [{ "id": "wamid.ABC" }] })),
+        )
+        .expect(1)
+        .mount(&graph)
+        .await;
+    let home = TempDir::new().unwrap();
+    paloma(Some(&graph), &home)
+        .args([
+            "send",
+            "template",
+            "15551234567",
+            "order",
+            "--lang",
+            "en_US",
+        ])
+        .args(["--reply-to", "wamid.X", "-q"])
+        .assert()
+        .success()
+        .stdout("wamid.ABC\n")
+        .stderr(predicate::str::contains("quoted message"));
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn voice_note_from_a_local_file_uploads_then_sends_with_voice_and_reply() {
+    let graph = MockServer::start().await;
+    Mock::given(method("POST"))
+        .and(path(format!("/v26.0/{PHONE}/media")))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({ "id": "MEDIA1" })))
+        .expect(1)
+        .mount(&graph)
+        .await;
+    Mock::given(method("POST"))
+        .and(path(format!("/v26.0/{PHONE}/messages")))
+        .and(body_json(json!({
+            "messaging_product": "whatsapp",
+            "recipient_type": "individual",
+            "to": "15551234567",
+            "type": "audio",
+            "context": { "message_id": "wamid.X" },
+            "audio": { "id": "MEDIA1", "voice": true }
+        })))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .set_body_json(json!({ "messages": [{ "id": "wamid.ABC" }] })),
+        )
+        .expect(1)
+        .mount(&graph)
+        .await;
+    let home = TempDir::new().unwrap();
+    let file = home.path().join("note.ogg");
+    std::fs::write(&file, "OGGDATA").unwrap();
+    paloma(Some(&graph), &home)
+        .args([
+            "send",
+            "audio",
+            "15551234567",
+            "--voice",
+            "--reply-to",
+            "wamid.X",
+            "-q",
+        ])
+        .arg("--file")
+        .arg(&file)
+        .assert()
+        .success()
+        .stdout("wamid.ABC\n");
+}
+
+#[test]
+fn voice_dry_run_shows_the_flag_and_only_audio_accepts_it() {
+    let home = TempDir::new().unwrap();
+    let to = "15551234567";
+    let out = paloma(None, &home)
+        .args([
+            "send",
+            "audio",
+            to,
+            "--link",
+            "https://x.test/a.ogg",
+            "--voice",
+        ])
+        .args(["--dry-run", "-o", "json"])
+        .output()
+        .unwrap();
+    assert_eq!(
+        stdout_json(&out)["body"]["audio"],
+        json!({ "link": "https://x.test/a.ogg", "voice": true })
+    );
+
+    // The local-file path prints its upload too, and the send must still carry both.
+    let file = home.path().join("note.ogg");
+    std::fs::write(&file, "OGGDATA").unwrap();
+    let out = paloma(None, &home)
+        .args(["send", "audio", to, "--voice", "--reply-to", "wamid.X"])
+        .args(["--dry-run", "-o", "json", "--file"])
+        .arg(&file)
+        .output()
+        .unwrap();
+    let requests = stdout_json(&out);
+    assert_eq!(requests.as_array().map(Vec::len), Some(2), "{requests}");
+    assert!(
+        requests[0]["url"].as_str().unwrap().ends_with("/media"),
+        "{requests}"
+    );
+    assert_eq!(
+        requests[1]["body"],
+        json!({
+            "messaging_product": "whatsapp",
+            "recipient_type": "individual",
+            "to": to,
+            "type": "audio",
+            "context": { "message_id": "wamid.X" },
+            "audio": { "id": "<uploaded-at-send-time>", "voice": true }
+        })
+    );
+
+    let out = paloma(None, &home)
+        .args(["send", "audio", to, "--id", "9", "--dry-run", "-o", "json"])
+        .output()
+        .unwrap();
+    assert_eq!(stdout_json(&out)["body"]["audio"], json!({ "id": "9" }));
+
+    for kind in ["image", "document", "video", "sticker"] {
+        paloma(None, &home)
+            .args(["send", kind, to, "--id", "9", "--voice", "--dry-run"])
+            .assert()
+            .code(2)
+            .stdout(predicate::str::is_empty())
+            .stderr(predicate::str::contains("--voice"));
+        paloma(None, &home)
+            .args(["send", kind, "--help"])
+            .assert()
+            .success()
+            .stdout(predicate::str::contains("--voice").not());
+    }
+    paloma(None, &home)
+        .args(["send", "audio", "--help"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("--voice"));
 }

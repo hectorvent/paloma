@@ -16,6 +16,14 @@ Implemented types: **text**, **template**, **image**, **document**, **audio**,
 All sends honor the global `--dry-run` (print the request, don't send),
 `--output`, and `--quiet` flags. See [Global flags](../global-flags.md).
 
+Every type except `reaction` and `raw` takes `--reply-to <wamid>`, which quotes that
+message in the reply. Meta doesn't allow a reaction to be a reply, and a `raw` payload
+carries its own `context`. WhatsApp doesn't show the quote on a template, so Paloma warns
+you and sends it anyway. The quote is also missing if the original message was deleted or
+moved to long-term storage, which typically happens after 30 days unless you've enabled
+local storage, and on KaiOS when the reply is audio, an image or a video. See Meta's
+[contextual replies](https://developers.facebook.com/documentation/business-messaging/whatsapp/messages/contextual-replies).
+
 ---
 
 ## `paloma send text`
@@ -58,7 +66,25 @@ paloma send template <to> <name> --lang <code> [flags]
 | `--body-var <value>` | Positional body text variable; repeat in order |
 | `--var <name=value>` | Named body text variable; repeat with unique names; names contain lowercase letters and underscores |
 | `--header-text <text>` | Text value for a positional header variable; combines with `--body-var`; conflicts with `--var` |
-| `--components-file <path>` | JSON array of send components, or `{"components": [...]}`; exclusive with the three shorthand flags above |
+| `--header-image <id\|url>` | Image header: a media ID or an `http(s)` link |
+| `--header-video <id\|url>` | Video header: a media ID or an `http(s)` link |
+| `--header-document <id\|url>` | Document header: a media ID or an `http(s)` link |
+| `--button <index:type=value>` | A button's parameter; repeat for each button |
+| `--components-file <path>` | JSON array of send components, or `{"components": [...]}`; exclusive with the flags above except `--lang` |
+| `--reply-to <wamid>` | Send as a reply to this message id; WhatsApp doesn't show the quote on a template |
+
+Use one header flag at most. Media headers combine with `--body-var` or `--var`.
+
+`--button` takes the button's zero-based position in the template (0 to 9), then one of these:
+
+| Type | Value | Used for |
+|------|-------|----------|
+| `url` | The URL's variable part, sent as written, so percent-encode special characters first | Dynamic URL buttons |
+| `url` | The one-time password | The copy-code button of an authentication template |
+| `quick_reply` | The payload returned to your webhook when tapped | Quick reply buttons |
+| `copy_code` | The coupon code, up to 20 characters | Coupon buttons; a template has at most one |
+| `flow` | The flow token | Flow buttons |
+| `catalog` | The retailer ID of the thumbnail product | Catalog buttons |
 
 ```bash
 paloma send template 15551234567 order_ready --lang en_US \
@@ -66,11 +92,19 @@ paloma send template 15551234567 order_ready --lang en_US \
 paloma send template 15551234567 order_ready --lang en_US \
     --var first_name=Hector --var order_number=4821
 paloma send template 15551234567 order_ready --lang en_US \
+    --header-image 1234567890 --var first_name=Hector --button 0:url=order-4821
+paloma send template 15551234567 login_code --lang en_US \
+    --body-var 123456 --button 0:url=123456
+paloma send template 15551234567 order_ready --lang en_US \
     --components-file components.json --dry-run
 ```
 
-A components file supports media headers, button parameters, currency/date values,
-and other send component shapes without constructing the message envelope. For example:
+Use a components file for what the flags don't cover: currency and date values, location
+headers, a document's filename, named header or button parameters, carousels, limited-time
+offers, multi-product buttons, a Flow's first-screen data, and a Flow or catalog button sent
+without a token or thumbnail. Use it too if your flow tokens are sensitive, because command
+lines are visible to other processes. It sends component shapes as written, without
+constructing the message envelope. For example:
 
 ```json
 [
@@ -92,9 +126,7 @@ first. No resumable upload is needed to send an existing template.
 
 Paloma checks the file envelope, component types, and parameter-array shape locally
 (exit 5 on malformed input). Meta validates component-specific requirements and their
-match to the approved template. Empty component arrays omit the field. To supply named
-header parameters or more complex component combinations, use the file option.
-Tap-target overrides are a component (`tap_target_configuration`), so they go in this
+match to the approved template. Empty component arrays omit the field. Tap-target overrides are a component (`tap_target_configuration`), so they go in this
 file too. A custom TTL isn't a send option: `message_send_ttl_seconds` is set on the
 template when it's created.
 
@@ -120,6 +152,7 @@ paloma send image <to> (--file <path> | --id <media-id> | --link <url>) [--capti
 | `--id <media-id>` | Reuse an already-uploaded media id |
 | `--link <url>` | Public `https` link to the image |
 | `--caption <text>` | Caption shown under the image |
+| `--reply-to <wamid>` | Quote this message in the reply |
 | `--force` / `--strict` | 24-hour window controls (as for `send text`) |
 
 ```bash
@@ -137,19 +170,27 @@ placeholder media id so you can inspect the request offline.
 
 The other media types share the image flow: one of `--file` (auto-uploaded),
 `--id`, or `--link`. `document` and `video` also take `--caption`; `document`
-takes `--filename`; `audio` and `sticker` take neither.
+takes `--filename`; `audio` and `sticker` take neither. `audio` takes `--voice`.
 
 ```bash
 paloma send document 15551234567 --link https://x.com/invoice.pdf --filename invoice.pdf
-paloma send audio    15551234567 --file ./voice.ogg
+paloma send audio    15551234567 --file ./song.mp3
+paloma send audio    15551234567 --file ./note.ogg --voice
 paloma send video    15551234567 --file ./promo.mp4 --caption "New batch!"
 paloma send sticker  15551234567 --file ./sticker.webp
 ```
 
+`--voice` sends the audio as a [voice message](https://developers.facebook.com/documentation/business-messaging/whatsapp/messages/audio-messages#voice-messages),
+which downloads automatically and shows your profile picture with a microphone icon. It
+also gets a `played` status webhook the first time the user plays it. Voice messages must
+be mono `.ogg` files encoded with OPUS, and transcription fails on anything else. Paloma
+doesn't check the file. The play icon only appears at 512 KB or smaller; a larger file
+shows a download icon.
+
 ## `paloma send location`
 
 ```
-paloma send location <to> --lat <n> --long <n> [--name ...] [--address ...]
+paloma send location <to> --lat <n> --long <n> [--name ...] [--address ...] [--reply-to <wamid>]
 ```
 
 ```bash
@@ -176,7 +217,7 @@ paloma send reaction 15551234567 --message-id wamid.XXX --emoji 👍
 
 ## `paloma send interactive`
 
-Three kinds, each taking `--body` plus optional `--header` and `--footer`.
+Three kinds, each taking `--body` plus optional `--header`, `--footer` and `--reply-to`.
 
 ```bash
 # Reply buttons (up to 3), given as id:Title

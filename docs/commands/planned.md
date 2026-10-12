@@ -31,6 +31,5 @@ The features that make this more than "curl with flags," in order of value:
 2. **Compliance guardrails**: full 24-hour window tracking, rate limiting.
 
 The **template lifecycle** (`create → watch → send`) is implemented. Template sends
-support positional/named body text, text-header parameters, and a JSON components
-file. Typed media and button flags remain planned; see
-[send template](send.md#paloma-send-template).
+support positional/named body text, text and media headers, button parameters, and a
+JSON components file; see [send template](send.md#paloma-send-template).

@@ -66,32 +66,116 @@ pub fn text(to: &str, body: &str, preview_url: bool, reply_to: Option<&str>) -> 
 
 /// A template send; `body_vars` fill `{{1}}`, `{{2}}`, … of the BODY component in order.
 pub fn template(to: &str, name: &str, language: &str, body_vars: &[String]) -> Value {
-    let components = template_text_components(body_vars, &[], None);
-    template_with_components(to, name, language, components)
+    let params = TemplateParams {
+        body_vars,
+        ..TemplateParams::default()
+    };
+    template_with_components(to, name, language, template_components(&params), None)
 }
 
-/// Common text parameters; full component objects use `template_with_components`.
-pub fn template_text_components(
-    body_vars: &[String],
-    named_vars: &[(String, String)],
-    header_text: Option<&str>,
-) -> Vec<Value> {
+/// A template's header parameter at send time.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum TemplateHeader {
+    Text(String),
+    Media(MediaKind, MediaSource),
+}
+
+/// What a template button takes at send time.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TemplateButtonKind {
+    /// The variable part of a URL, including a one-time password.
+    Url,
+    QuickReply,
+    CopyCode,
+    Flow,
+    Catalog,
+}
+
+/// One template button's send-time parameter.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TemplateButton {
+    pub index: u8,
+    pub kind: TemplateButtonKind,
+    pub value: String,
+}
+
+impl TemplateButton {
+    /// Meta's examples write `index` as a string for some kinds and an integer for others,
+    /// so each kind follows its own documented shape.
+    fn to_component(&self) -> Value {
+        let (sub_type, index, parameter) = match self.kind {
+            TemplateButtonKind::Url => (
+                "url",
+                self.index.to_string().into(),
+                json!({ "type": "text", "text": self.value }),
+            ),
+            TemplateButtonKind::QuickReply => (
+                "quick_reply",
+                self.index.to_string().into(),
+                json!({ "type": "payload", "payload": self.value }),
+            ),
+            TemplateButtonKind::CopyCode => (
+                "copy_code",
+                Value::from(self.index),
+                json!({ "type": "coupon_code", "coupon_code": self.value }),
+            ),
+            TemplateButtonKind::Flow => (
+                "flow",
+                self.index.to_string().into(),
+                json!({ "type": "action", "action": { "flow_token": self.value } }),
+            ),
+            TemplateButtonKind::Catalog => (
+                "CATALOG",
+                Value::from(self.index),
+                json!({
+                    "type": "action",
+                    "action": { "thumbnail_product_retailer_id": self.value }
+                }),
+            ),
+        };
+        json!({ "type": "button", "sub_type": sub_type, "index": index, "parameters": [parameter] })
+    }
+}
+
+/// The send-time parameters with typed flags. Anything else goes through
+/// [`template_with_components`] as full component objects.
+#[derive(Debug, Default)]
+pub struct TemplateParams<'a> {
+    pub body_vars: &'a [String],
+    pub named_vars: &'a [(String, String)],
+    pub header: Option<TemplateHeader>,
+    pub buttons: &'a [TemplateButton],
+}
+
+pub fn template_components(params: &TemplateParams<'_>) -> Vec<Value> {
     let mut components = Vec::new();
-    if let Some(text) = header_text {
-        components
-            .push(json!({ "type": "header", "parameters": [{ "type": "text", "text": text }] }));
+    match &params.header {
+        Some(TemplateHeader::Text(text)) => components
+            .push(json!({ "type": "header", "parameters": [{ "type": "text", "text": text }] })),
+        Some(TemplateHeader::Media(kind, source)) => {
+            let media = match source {
+                MediaSource::Id(id) => json!({ "id": id }),
+                MediaSource::Link(link) => json!({ "link": link }),
+            };
+            let kind = kind.as_str();
+            components
+                .push(json!({ "type": "header", "parameters": [{ "type": kind, kind: media }] }));
+        }
+        None => {}
     }
     let parameters: Vec<Value> =
-        body_vars
+        params
+            .body_vars
             .iter()
             .map(|text| json!({ "type": "text", "text": text }))
-            .chain(named_vars.iter().map(
+            .chain(params.named_vars.iter().map(
                 |(name, text)| json!({ "type": "text", "parameter_name": name, "text": text }),
             ))
             .collect();
     if !parameters.is_empty() {
         components.push(json!({ "type": "body", "parameters": parameters }));
     }
+    components.extend(params.buttons.iter().map(TemplateButton::to_component));
     components
 }
 
@@ -101,12 +185,13 @@ pub fn template_with_components(
     name: &str,
     language: &str,
     components: Vec<Value>,
+    reply_to: Option<&str>,
 ) -> Value {
     let mut content = json!({ "name": name, "language": { "code": language } });
     if !components.is_empty() {
         content["components"] = components.into();
     }
-    envelope(to, "template", None, content)
+    envelope(to, "template", reply_to, content)
 }
 
 /// Media message types that share the `{id | link, caption?, filename?}` shape.
@@ -137,6 +222,10 @@ impl MediaKind {
     pub const fn supports_filename(self) -> bool {
         matches!(self, Self::Document)
     }
+
+    pub const fn supports_voice(self) -> bool {
+        matches!(self, Self::Audio)
+    }
 }
 
 /// Where the media comes from: an uploaded media id or a public HTTPS link.
@@ -146,13 +235,16 @@ pub enum MediaSource {
     Link(String),
 }
 
-pub fn media(
-    to: &str,
-    kind: MediaKind,
-    source: &MediaSource,
-    caption: Option<&str>,
-    filename: Option<&str>,
-) -> Value {
+/// The optional parts of a media message. A kind that can't use one drops it.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct MediaOptions<'a> {
+    pub caption: Option<&'a str>,
+    pub filename: Option<&'a str>,
+    pub voice: bool,
+    pub reply_to: Option<&'a str>,
+}
+
+pub fn media(to: &str, kind: MediaKind, source: &MediaSource, options: &MediaOptions<'_>) -> Value {
     #[derive(Serialize)]
     struct Media<'a> {
         #[serde(skip_serializing_if = "Option::is_none")]
@@ -163,6 +255,8 @@ pub fn media(
         caption: Option<&'a str>,
         #[serde(skip_serializing_if = "Option::is_none")]
         filename: Option<&'a str>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        voice: Option<bool>,
     }
     let (id, link) = match source {
         MediaSource::Id(id) => (Some(id.as_str()), None),
@@ -171,10 +265,11 @@ pub fn media(
     let m = Media {
         id,
         link,
-        caption: non_blank(caption).filter(|_| kind.supports_caption()),
-        filename: non_blank(filename).filter(|_| kind.supports_filename()),
+        caption: non_blank(options.caption).filter(|_| kind.supports_caption()),
+        filename: non_blank(options.filename).filter(|_| kind.supports_filename()),
+        voice: (options.voice && kind.supports_voice()).then_some(true),
     };
-    envelope(to, kind.as_str(), None, m)
+    envelope(to, kind.as_str(), options.reply_to, m)
 }
 
 pub fn location(
@@ -183,6 +278,7 @@ pub fn location(
     longitude: f64,
     name: Option<&str>,
     address: Option<&str>,
+    reply_to: Option<&str>,
 ) -> Value {
     #[derive(Serialize)]
     struct Location<'a> {
@@ -196,7 +292,7 @@ pub fn location(
     envelope(
         to,
         "location",
-        None,
+        reply_to,
         Location {
             latitude,
             longitude,
@@ -207,11 +303,12 @@ pub fn location(
 }
 
 /// `contacts` is the Cloud API contacts array, passed through as authored.
-pub fn contacts(to: &str, contacts: Value) -> Value {
-    envelope(to, "contacts", None, contacts)
+pub fn contacts(to: &str, contacts: Value, reply_to: Option<&str>) -> Value {
+    envelope(to, "contacts", reply_to, contacts)
 }
 
-/// React to a message; an empty emoji removes the reaction.
+/// React to a message; an empty emoji removes the reaction. Meta doesn't allow a reaction
+/// to be a contextual reply, so this one takes no `reply_to`.
 pub fn reaction(to: &str, message_id: &str, emoji: &str) -> Value {
     envelope(
         to,
@@ -251,7 +348,13 @@ pub struct Section {
     pub rows: Vec<Row>,
 }
 
-fn interactive(to: &str, kind: &str, text: &InteractiveText, action: Value) -> Value {
+fn interactive(
+    to: &str,
+    kind: &str,
+    text: &InteractiveText,
+    action: Value,
+    reply_to: Option<&str>,
+) -> Value {
     let mut m = Map::new();
     m.insert("type".into(), kind.into());
     if let Some(h) = non_blank(text.header.as_deref()) {
@@ -262,15 +365,20 @@ fn interactive(to: &str, kind: &str, text: &InteractiveText, action: Value) -> V
         m.insert("footer".into(), json!({ "text": f }));
     }
     m.insert("action".into(), action);
-    envelope(to, "interactive", None, Value::Object(m))
+    envelope(to, "interactive", reply_to, Value::Object(m))
 }
 
-pub fn interactive_buttons(to: &str, text: &InteractiveText, buttons: &[Button]) -> Value {
+pub fn interactive_buttons(
+    to: &str,
+    text: &InteractiveText,
+    buttons: &[Button],
+    reply_to: Option<&str>,
+) -> Value {
     let buttons: Vec<Value> = buttons
         .iter()
         .map(|b| json!({ "type": "reply", "reply": { "id": b.id, "title": b.title } }))
         .collect();
-    interactive(to, "button", text, json!({ "buttons": buttons }))
+    interactive(to, "button", text, json!({ "buttons": buttons }), reply_to)
 }
 
 pub fn interactive_list(
@@ -278,6 +386,7 @@ pub fn interactive_list(
     text: &InteractiveText,
     button: &str,
     sections: &[Section],
+    reply_to: Option<&str>,
 ) -> Value {
     let sections: Vec<Value> = sections
         .iter()
@@ -301,6 +410,7 @@ pub fn interactive_list(
         "list",
         text,
         json!({ "button": button, "sections": sections }),
+        reply_to,
     )
 }
 
@@ -309,12 +419,14 @@ pub fn interactive_cta_url(
     text: &InteractiveText,
     display_text: &str,
     url: &str,
+    reply_to: Option<&str>,
 ) -> Value {
     interactive(
         to,
         "cta_url",
         text,
         json!({ "name": "cta_url", "parameters": { "display_text": display_text, "url": url } }),
+        reply_to,
     )
 }
 
@@ -365,21 +477,42 @@ mod tests {
             "1",
             MediaKind::Audio,
             &MediaSource::Link("https://x/a.ogg".into()),
-            Some("c"),
-            Some("f"),
+            &MediaOptions {
+                caption: Some("c"),
+                filename: Some("f"),
+                ..MediaOptions::default()
+            },
         );
         assert_eq!(v["audio"], json!({ "link": "https://x/a.ogg" }));
         let v = media(
             "1",
             MediaKind::Document,
             &MediaSource::Id("9".into()),
-            Some("c"),
-            Some("f.pdf"),
+            &MediaOptions {
+                caption: Some("c"),
+                filename: Some("f.pdf"),
+                ..MediaOptions::default()
+            },
         );
         assert_eq!(
             v["document"],
             json!({ "id": "9", "caption": "c", "filename": "f.pdf" })
         );
+    }
+
+    #[test]
+    fn voice_is_set_only_on_audio_and_only_when_asked() {
+        let source = MediaSource::Id("9".into());
+        let voice = MediaOptions {
+            voice: true,
+            ..MediaOptions::default()
+        };
+        let v = media("1", MediaKind::Audio, &source, &voice);
+        assert_eq!(v["audio"], json!({ "id": "9", "voice": true }));
+        let v = media("1", MediaKind::Audio, &source, &MediaOptions::default());
+        assert_eq!(v["audio"], json!({ "id": "9" }));
+        let v = media("1", MediaKind::Video, &source, &voice);
+        assert_eq!(v["video"], json!({ "id": "9" }));
     }
 
     #[test]
@@ -396,6 +529,7 @@ mod tests {
                 id: "y".into(),
                 title: "Yes".into(),
             }],
+            None,
         );
         assert!(v["interactive"].get("header").is_none());
         assert_eq!(
@@ -420,15 +554,18 @@ mod template_component_tests {
 
     #[test]
     fn header_only_template_omits_body_and_empty_components_are_omitted() {
-        let components = template_text_components(&[], &[], Some("Order update"));
-        let payload = template_with_components("15551234567", "order", "en_US", components);
+        let components = template_components(&TemplateParams {
+            header: Some(TemplateHeader::Text("Order update".into())),
+            ..TemplateParams::default()
+        });
+        let payload = template_with_components("15551234567", "order", "en_US", components, None);
         assert_eq!(
             payload["template"]["components"],
             json!([
                 {"type":"header", "parameters":[{"type":"text", "text":"Order update"}]}
             ])
         );
-        let payload = template_with_components("15551234567", "hello", "en_US", vec![]);
+        let payload = template_with_components("15551234567", "hello", "en_US", vec![], None);
         assert!(payload["template"].get("components").is_none());
     }
 }
