@@ -7,11 +7,12 @@ use std::time::Duration;
 
 use futures_util::StreamExt;
 use paloma_core::{Credentials, Error, Result};
+use reqwest::header::HeaderValue;
 use reqwest::multipart::{Form, Part};
 use secrecy::ExposeSecret;
 use serde::de::DeserializeOwned;
 use serde_json::Value;
-use tokio::io::AsyncWriteExt;
+use tokio::io::{AsyncSeekExt, AsyncWriteExt};
 use tracing::{debug, trace};
 
 use crate::error_map::map_error;
@@ -223,18 +224,28 @@ impl Client {
     ) -> Result<reqwest::RequestBuilder> {
         let url = self.url(req);
         debug!(method = req.method.as_str(), url = %redact_url(&url), "request");
-        let bearer = match &req.auth {
-            Auth::User => self.creds.access_token()?.expose_secret().to_owned(),
-            Auth::App { app_id } => {
-                format!("{app_id}|{}", self.creds.app_secret()?.expose_secret())
-            }
-        };
         let mut builder = match req.method {
             Method::Get => self.http.get(&url),
             Method::Post => self.http.post(&url),
             Method::Delete => self.http.delete(&url),
+        };
+        builder = match &req.auth {
+            Auth::User => builder.bearer_auth(self.creds.access_token()?.expose_secret()),
+            Auth::App { app_id } => builder.bearer_auth(format!(
+                "{app_id}|{}",
+                self.creds.app_secret()?.expose_secret()
+            )),
+            Auth::OAuth => {
+                let token = self.creds.access_token()?;
+                let mut value = HeaderValue::from_str(&format!("OAuth {}", token.expose_secret()))
+                    .map_err(|_| Error::auth("the access token isn't a valid header value"))?;
+                value.set_sensitive(true);
+                builder.header(reqwest::header::AUTHORIZATION, value)
+            }
+        };
+        for (name, value) in &req.headers {
+            builder = builder.header(name.as_str(), value.as_str());
         }
-        .bearer_auth(bearer);
         if let Some(t) = timeout {
             builder = builder.timeout(t);
         }
@@ -245,6 +256,21 @@ impl Client {
                 builder.json(v)
             }
             Body::Multipart(parts) => builder.multipart(build_form(parts).await?),
+            Body::File { path, offset } => {
+                let unreadable = |e| Error::io(format!("cannot read {}", path.display()), e);
+                let mut file = tokio::fs::File::open(path).await.map_err(unreadable)?;
+                let size = file.metadata().await.map_err(unreadable)?.len();
+                file.seek(std::io::SeekFrom::Start(*offset))
+                    .await
+                    .map_err(unreadable)?;
+                builder
+                    .header(reqwest::header::CONTENT_TYPE, "application/octet-stream")
+                    .header(
+                        reqwest::header::CONTENT_LENGTH,
+                        size.saturating_sub(*offset),
+                    )
+                    .body(reqwest::Body::from(file))
+            }
         };
         Ok(builder)
     }

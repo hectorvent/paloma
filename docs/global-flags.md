@@ -13,7 +13,7 @@ equivalent).
 | `--phone-number-id <id>` | | Override the active sender phone number ID |
 | `--waba-id <id>` | | Override the active WABA ID |
 | `--messaging-account-id <id>` | | Messaging account to bill for `send` commands. Set it if your token reaches more than one on the phone number |
-| `--app-id <id>` | | Meta App ID (for app-level webhook field subscriptions) |
+| `--app-id <id>` | | Meta App ID (for app-level webhook field subscriptions and upload handles) |
 | `--api-version <v>` | | Override Graph API version (e.g. `v26.0`) |
 | `--dry-run` | | Print the request with sensitive fields redacted, without sending |
 | `--quiet` | `-q` | Only essential output (IDs, errors) — script-friendly |
@@ -39,7 +39,8 @@ Most flags also read an environment variable: `PALOMA_PROFILE`, `PALOMA_TOKEN`,
 
 `--dry-run` never **writes**. Commands that must read live state to build the real
 request still read it: `apply --dry-run` compares against live config, and
-`webhook fields set --dry-run` looks up the app id. Everything else prints the request
+`webhook fields set --dry-run` and `media upload --handle --dry-run` look up the app id
+unless you set it. Everything else prints the request
 without any network call. Multi-step commands (`send image --file`, `flow update`
 with metadata and Flow JSON) print every request as a JSON array.
 
@@ -113,6 +114,11 @@ seconds; any other form counts as no hint. If the server asks for more than 30 s
 
 A write that fails in a way that's not retried may still have been applied, so check
 before you repeat it.
+
+`media upload --handle` is the one exception. After a 500, 502, 503 or 504, a timeout or a
+lost connection, it asks Meta how much of the file arrived and continues from there, so
+nothing is sent twice. That's up to 3 transfers in total, each with its own `--timeout`,
+and the reads between them are retried as usual.
 
 **Time limits.** `--timeout` applies to each try, and waits between tries are extra. A
 request can take up to 3 × `--timeout` plus 60 seconds of waits, and commands that make

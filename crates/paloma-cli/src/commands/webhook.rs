@@ -161,7 +161,7 @@ impl Fields {
                 Ok(())
             }
             None => {
-                let app_id = app_id(app).await?;
+                let app_id = super::app_id(app).await?;
                 app.send_and_emit(&webhook::app_subscriptions(&app_id), no_id)
                     .await
             }
@@ -180,7 +180,7 @@ impl Fields {
                     None
                 };
                 app.ensure_can_confirm("change the app's webhook subscriptions")?;
-                let app_id = app_id(app).await?;
+                let app_id = super::app_id(app).await?;
                 if !app.confirm_or_abort(&format!(
                     "subscribe app {app_id} to: {}",
                     fields.join(", ")
@@ -197,15 +197,4 @@ impl Fields {
             }
         }
     }
-}
-
-/// The app id: explicit, or discovered from the WABA (a read, done even under
-/// --dry-run so the printed request is the real one).
-async fn app_id(app: &App) -> Result<String> {
-    let ctx = app.ctx()?;
-    if let Some(id) = ctx.app_id.clone() {
-        return Ok(id);
-    }
-    let waba = ctx.require_waba_id()?.to_owned();
-    webhook::resolve_app_id(app.client()?, None, &waba).await
 }

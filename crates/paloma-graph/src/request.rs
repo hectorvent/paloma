@@ -35,6 +35,9 @@ pub enum Auth {
     User,
     /// An app access token `<app_id>|<app_secret>` (app-level webhook subscriptions).
     App { app_id: String },
+    /// The profile's access token under the `OAuth` scheme, which the Resumable Upload API
+    /// requires when it transfers a file.
+    OAuth,
 }
 
 /// Where the request goes.
@@ -93,6 +96,11 @@ pub enum Body {
     Empty,
     Json(Value),
     Multipart(Vec<FormPart>),
+    /// A file's raw bytes from `offset` to its end, read when the request is sent.
+    File {
+        path: PathBuf,
+        offset: u64,
+    },
 }
 
 /// A fully-specified Graph API call.
@@ -101,6 +109,7 @@ pub struct Request {
     pub method: Method,
     pub target: Target,
     pub query: Vec<(String, String)>,
+    pub headers: Vec<(String, String)>,
     pub body: Body,
     pub auth: Auth,
 }
@@ -111,6 +120,7 @@ impl Request {
             method,
             target: Target::Node(node.into()),
             query: Vec::new(),
+            headers: Vec::new(),
             body: Body::Empty,
             auth: Auth::User,
         }
@@ -169,6 +179,29 @@ impl Request {
         self
     }
 
+    /// Send a file's raw bytes from `offset` on.
+    #[must_use]
+    pub fn file(mut self, path: impl Into<PathBuf>, offset: u64) -> Self {
+        self.body = Body::File {
+            path: path.into(),
+            offset,
+        };
+        self
+    }
+
+    #[must_use]
+    #[allow(clippy::needless_pass_by_value)] // builder ergonomics: `.header("file_offset", 0)`
+    pub fn header(mut self, name: &str, value: impl ToString) -> Self {
+        self.headers.push((name.to_owned(), value.to_string()));
+        self
+    }
+
+    #[must_use]
+    pub fn oauth_auth(mut self) -> Self {
+        self.auth = Auth::OAuth;
+        self
+    }
+
     #[must_use]
     pub fn app_auth(mut self, app_id: impl Into<String>) -> Self {
         self.auth = Auth::App {
@@ -201,11 +234,25 @@ impl Request {
         let mut out = Map::new();
         out.insert("method".into(), self.method.as_str().into());
         out.insert("url".into(), redact_url(&self.url(base, version)).into());
-        if let Auth::App { app_id } = &self.auth {
-            out.insert(
-                "auth".into(),
-                format!("app token ({app_id}|<app-secret>)").into(),
-            );
+        match &self.auth {
+            Auth::User => {}
+            Auth::App { app_id } => {
+                out.insert(
+                    "auth".into(),
+                    format!("app token ({app_id}|<app-secret>)").into(),
+                );
+            }
+            Auth::OAuth => {
+                out.insert("auth".into(), "OAuth <access-token>".into());
+            }
+        }
+        if !self.headers.is_empty() {
+            let headers: Map<String, Value> = self
+                .headers
+                .iter()
+                .map(|(name, value)| (name.clone(), value.clone().into()))
+                .collect();
+            out.insert("headers".into(), Value::Object(headers));
         }
         match &self.body {
             Body::Empty => {}
@@ -235,6 +282,15 @@ impl Request {
                     form.insert(p.name.clone(), v);
                 }
                 out.insert("multipart".into(), Value::Object(form));
+            }
+            Body::File { path, offset } => {
+                let size = std::fs::metadata(path)
+                    .map(|m| m.len().saturating_sub(*offset))
+                    .ok();
+                out.insert(
+                    "file".into(),
+                    json!({ "path": path.display().to_string(), "bytes": size }),
+                );
             }
         }
         Value::Object(out)
@@ -268,6 +324,11 @@ pub fn redact_json(value: &Value) -> Value {
         ),
         Value::Array(items) => Value::Array(items.iter().map(redact_json).collect()),
         Value::String(text) if has_http_scheme(text) => Value::String(redact_url(text)),
+        // An upload session id isn't a URL, but it can carry a signature in a query string.
+        Value::String(text) if text.starts_with("upload:") && text.contains('?') => {
+            let session = text.split('?').next().unwrap_or_default();
+            Value::String(format!("{session}?<redacted>"))
+        }
         _ => value.clone(),
     }
 }
@@ -293,6 +354,7 @@ fn sensitive_key(key: &str) -> bool {
         || normalized.ends_with("secret")
         || normalized.ends_with("password")
         || normalized == "appsecretproof"
+        || normalized == "sig"
 }
 
 /// Mask sensitive query parameters, including those in nested callback URLs.

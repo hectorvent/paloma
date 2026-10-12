@@ -10,6 +10,14 @@ pub const MAX_REPLY_BUTTONS: usize = 3;
 /// Most buttons a template can have, so the highest button index is one less.
 pub const MAX_TEMPLATE_BUTTONS: u8 = 10;
 pub const MAX_COUPON_CODE: usize = 20;
+/// File types the Resumable Upload API accepts.
+pub const RESUMABLE_UPLOAD_TYPES: [&str; 5] = [
+    "application/pdf",
+    "image/jpeg",
+    "image/jpg",
+    "image/png",
+    "video/mp4",
+];
 /// Rows allowed across all sections of an interactive list message.
 pub const MAX_LIST_ROWS: usize = 10;
 /// Digits in a two-step verification PIN.

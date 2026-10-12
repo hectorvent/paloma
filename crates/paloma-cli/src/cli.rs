@@ -92,7 +92,7 @@ pub struct GlobalArgs {
     #[arg(long, global = true, env = "PALOMA_MESSAGING_ACCOUNT_ID")]
     pub messaging_account_id: Option<String>,
 
-    /// Meta app id (app-level webhook field subscriptions).
+    /// Meta app id (webhook field subscriptions and upload handles).
     #[arg(long, global = true, env = "PALOMA_APP_ID")]
     pub app_id: Option<String>,
 

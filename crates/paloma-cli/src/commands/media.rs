@@ -6,12 +6,13 @@ use paloma_graph::Request;
 use paloma_graph::api::media;
 use serde_json::json;
 
+use super::{HandleUpload, app_id};
 use crate::app::{App, field_id};
 use crate::output::Output;
 
 #[derive(Debug, Subcommand)]
 pub enum MediaCommand {
-    /// Upload a file; prints the media id.
+    /// Upload a file; prints the media id, or a handle with --handle.
     Upload(Upload),
     /// Show a media object's metadata (including its short-lived URL).
     Get {
@@ -34,6 +35,9 @@ pub struct Upload {
     /// MIME type [default: guessed from the extension].
     #[arg(long = "type", value_name = "MIME")]
     mime: Option<String>,
+    /// Get a resumable upload handle, for template headers, instead of a media id.
+    #[arg(long)]
+    handle: bool,
 }
 
 #[derive(Debug, Args)]
@@ -48,6 +52,16 @@ pub struct Download {
 impl MediaCommand {
     pub async fn run(self, app: &App) -> Result<()> {
         match self {
+            Self::Upload(a) if a.handle => {
+                let upload = HandleUpload::new(&a.file, a.mime)?;
+                let app_id = app_id(app).await?;
+                if app.dry_run() {
+                    return app.print_dry_run(&upload.requests(&app_id));
+                }
+                let (handle, response) = upload.run(app, &app_id).await?;
+                app.out.emit(&Output::response(&response)?.id(Some(handle)));
+                Ok(())
+            }
             Self::Upload(a) => {
                 let path = validate::readable_file(&a.file)?;
                 let mime = a.mime.unwrap_or_else(|| media::guess_mime(&path));

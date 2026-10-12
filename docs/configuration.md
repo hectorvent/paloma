@@ -82,7 +82,7 @@ These override the config file (and are themselves overridden by flags):
 | `PALOMA_PIN` | two-step verification PIN for `number register` and `number set-pin` |
 | `PALOMA_VERIFY_TOKEN` | verify token for `webhook subscribe` and `webhook fields set --callback-url` |
 | `PALOMA_API_VERSION` | Graph API version |
-| `PALOMA_APP_ID` | Meta App ID (app-level webhook field subscriptions; also `--app-id`) |
+| `PALOMA_APP_ID` | Meta App ID (app-level webhook field subscriptions and upload handles; also `--app-id`) |
 | `PALOMA_APP_SECRET` | app secret (app-level webhook field subscriptions) |
 | `PALOMA_OUTPUT` | default `--output` format |
 | `PALOMA_CONFIG` | config file path |

@@ -12,6 +12,7 @@ pub mod messages;
 pub mod phone_numbers;
 pub mod profile;
 pub mod templates;
+pub mod uploads;
 pub mod webhook;
 
 /// The constant every Cloud API write carries.

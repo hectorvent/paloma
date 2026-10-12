@@ -6,7 +6,9 @@
 //! discoverable in `--help` and exits honestly.
 
 use clap::Subcommand;
-use paloma_core::{Error, Result};
+use paloma_core::{Error, Result, limits, validate};
+use paloma_graph::api::uploads;
+use paloma_graph::retry;
 use secrecy::SecretString;
 
 use crate::app::App;
@@ -187,6 +189,174 @@ pub fn read_secret(
         return Err(Error::validation(format!("{} is empty", source.what)));
     }
     Ok(SecretString::from(value))
+}
+
+/// The app id: explicit, or discovered from the WABA (a read, done even under
+/// --dry-run so the printed request is the real one). A WABA can have several apps and the
+/// first may not be the token's, so a discovered id is always reported.
+pub async fn app_id(app: &App) -> Result<String> {
+    use paloma_graph::api::webhook;
+
+    let ctx = app.ctx()?;
+    if let Some(id) = ctx.app_id.clone() {
+        return Ok(id);
+    }
+    let Some(waba) = ctx.waba_id.clone() else {
+        return Err(Error::auth(
+            "no app id: pass --app-id, set PALOMA_APP_ID, or set a WABA id to look it up",
+        ));
+    };
+    let subscribed = app
+        .client()?
+        .execute(&webhook::subscribed_apps(&waba))
+        .await?
+        .json()?;
+    let id = webhook::subscribed_app_id(&subscribed).ok_or_else(|| {
+        Error::validation(
+            "no app id: pass --app-id, set PALOMA_APP_ID, or subscribe an app to the WABA first",
+        )
+    })?;
+    let count = subscribed["data"].as_array().map_or(0, Vec::len);
+    if count > 1 {
+        app.out.warn(format!(
+            "WABA {waba} has {count} subscribed apps; using the first, {id}. Pick one with --app-id"
+        ));
+    } else {
+        app.out
+            .note(format!("using app {id}, subscribed to WABA {waba}"));
+    }
+    Ok(id)
+}
+
+/// A file checked for the Resumable Upload API, so a bad one fails before any API call.
+#[derive(Debug)]
+pub struct HandleUpload {
+    path: std::path::PathBuf,
+    file_name: String,
+    length: u64,
+    modified: Option<std::time::SystemTime>,
+    mime: String,
+}
+
+impl HandleUpload {
+    pub fn new(file: &std::path::Path, mime: Option<String>) -> Result<Self> {
+        let path = validate::readable_file(file)?;
+        let mime = mime.unwrap_or_else(|| paloma_graph::api::media::guess_mime(&path));
+        if !limits::RESUMABLE_UPLOAD_TYPES.contains(&mime.as_str()) {
+            return Err(Error::validation(format!(
+                "a handle upload can't take {mime}; it takes {}",
+                limits::RESUMABLE_UPLOAD_TYPES.join(", ")
+            )));
+        }
+        let unreadable = || {
+            Error::validation(format!(
+                "file not found or not readable: {}",
+                path.display()
+            ))
+        };
+        let metadata = std::fs::File::open(&path)
+            .and_then(|file| file.metadata())
+            .map_err(|_| unreadable())?;
+        if metadata.len() == 0 {
+            return Err(Error::validation(format!("{} is empty", path.display())));
+        }
+        let file_name = path
+            .file_name()
+            .map_or_else(|| "upload".to_owned(), |n| n.to_string_lossy().into_owned());
+        Ok(Self {
+            file_name,
+            length: metadata.len(),
+            modified: metadata.modified().ok(),
+            mime,
+            path,
+        })
+    }
+
+    /// What a dry run prints. The session id only exists once the first call has run.
+    pub fn requests(&self, app_id: &str) -> [paloma_graph::Request; 2] {
+        [
+            uploads::start(app_id, &self.file_name, self.length, &self.mime),
+            uploads::transfer("upload:SESSION_ID", &self.path, 0),
+        ]
+    }
+
+    /// The session declared this file's size, and a resume joins bytes from two reads, so a
+    /// file that changed would produce a handle for something that was never on disk.
+    fn ensure_unchanged(&self) -> Result<()> {
+        let unchanged = std::fs::metadata(&self.path).is_ok_and(|metadata| {
+            metadata.len() == self.length && metadata.modified().ok() == self.modified
+        });
+        if unchanged {
+            Ok(())
+        } else {
+            Err(Error::validation(format!(
+                "{} changed during the upload, so start it again",
+                self.path.display()
+            )))
+        }
+    }
+
+    /// Open a session and send the file. Asking Meta for the offset is what makes a repeat
+    /// safe here, so this resumes where a plain POST would never be repeated. An answer that
+    /// says the call itself was wrong, such as a bad token, stops at once.
+    pub async fn run(&self, app: &App, app_id: &str) -> Result<(String, paloma_graph::Response)> {
+        let start = uploads::start(app_id, &self.file_name, self.length, &self.mime);
+        let started = app.fetch(&start).await?.json()?;
+        let session = uploads::session_id(&started)
+            .ok_or_else(|| Error::other("the Graph API returned no upload session"))?;
+        let mut offset = 0;
+        let mut attempt = 1;
+        let response = loop {
+            self.ensure_unchanged()?;
+            let transfer = uploads::transfer(session, &self.path, offset);
+            match app.fetch(&transfer).await {
+                Ok(response) => break response,
+                Err(e) if attempt < retry::MAX_ATTEMPTS && interrupted(&e) => {
+                    app.out.note(format!("{e}: checking how much arrived"));
+                    tokio::time::sleep(retry::BASE_BACKOFF).await;
+                    let status = app.fetch(&uploads::status(session)).await?.json()?;
+                    offset = uploads::offset(&status)
+                        .filter(|offset| *offset <= self.length)
+                        .ok_or_else(|| {
+                            Error::other("the Graph API returned an unusable upload offset")
+                        })?;
+                    attempt += 1;
+                    app.out.note(format!(
+                        "resuming at byte {offset} of {} (attempt {attempt} of {})",
+                        self.length,
+                        retry::MAX_ATTEMPTS
+                    ));
+                }
+                Err(e) => {
+                    // Meta's guide doesn't say what a call with nothing left to send returns.
+                    if offset == self.length {
+                        app.out.note(
+                            "Meta has the whole file but returned no handle, so start the \
+                             upload again",
+                        );
+                    }
+                    return Err(e);
+                }
+            }
+        };
+        self.ensure_unchanged()?;
+        let handle = uploads::handle(&response.json()?)
+            .ok_or_else(|| Error::other("the Graph API returned no upload handle"))?
+            .to_owned();
+        Ok((handle, response))
+    }
+}
+
+/// A transport failure or a server error, which says nothing about the request itself.
+fn interrupted(error: &Error) -> bool {
+    matches!(error, Error::Other(_))
+        || matches!(
+            error,
+            Error::Api {
+                status: 500 | 502 | 503 | 504,
+                ..
+            }
+        )
 }
 
 /// Read a whole file for a `--file` style flag, with a validation error naming it.
