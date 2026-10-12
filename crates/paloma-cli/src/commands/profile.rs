@@ -1,9 +1,11 @@
+use std::path::PathBuf;
+
 use clap::{Args, Subcommand};
-use paloma_core::{Error, Result};
+use paloma_core::{Error, Result, limits};
 use paloma_graph::api::profile;
 use serde_json::{Map, Value};
 
-use super::planned;
+use super::{HandleUpload, app_id};
 use crate::app::{App, no_id};
 use crate::output::Output;
 
@@ -13,8 +15,8 @@ pub enum ProfileCommand {
     Get,
     /// Update profile fields.
     Set(Set),
-    /// Change the profile photo (planned v1.0).
-    Photo,
+    /// Upload an image and make it the profile photo.
+    Photo(Photo),
 }
 
 #[derive(Debug, Args)]
@@ -34,6 +36,15 @@ pub struct Set {
     vertical: Option<String>,
     #[arg(long)]
     description: Option<String>,
+}
+
+#[derive(Debug, Args)]
+pub struct Photo {
+    /// JPEG or PNG file.
+    file: PathBuf,
+    /// MIME type [default: guessed from the extension].
+    #[arg(long = "type", value_name = "MIME")]
+    mime: Option<String>,
 }
 
 impl ProfileCommand {
@@ -81,7 +92,27 @@ impl ProfileCommand {
                 app.send_and_emit(&profile::set(&phone, fields), no_id)
                     .await
             }
-            Self::Photo => planned("profile photo", "v1.0"),
+            Self::Photo(a) => {
+                let upload = HandleUpload::new(&a.file, a.mime, &limits::PROFILE_PHOTO_TYPES)?;
+                let phone = app.ctx()?.require_phone_number_id()?.to_owned();
+                let app_id = app_id(app).await?;
+                if app.dry_run() {
+                    let [start, transfer] = upload.requests(&app_id);
+                    let set = profile::set_photo(&phone, "<handle-from-the-upload>");
+                    return app.print_dry_run(&[start, transfer, set]);
+                }
+                let (handle, _) = upload.run(app, &app_id).await?;
+                let updated = app
+                    .send_and_emit(&profile::set_photo(&phone, &handle), no_id)
+                    .await;
+                if updated.is_err() {
+                    app.out.warn(
+                        "the file uploaded, but the profile update failed. It may still have \
+                         applied, so check with `paloma profile get` before you repeat it",
+                    );
+                }
+                updated
+            }
         }
     }
 }

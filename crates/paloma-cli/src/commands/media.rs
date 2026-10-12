@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 
 use clap::{Args, Subcommand};
-use paloma_core::{Error, Result, validate};
+use paloma_core::{Error, Result, limits, validate};
 use paloma_graph::Request;
 use paloma_graph::api::media;
 use serde_json::json;
@@ -53,7 +53,7 @@ impl MediaCommand {
     pub async fn run(self, app: &App) -> Result<()> {
         match self {
             Self::Upload(a) if a.handle => {
-                let upload = HandleUpload::new(&a.file, a.mime)?;
+                let upload = HandleUpload::new(&a.file, a.mime, &limits::RESUMABLE_UPLOAD_TYPES)?;
                 let app_id = app_id(app).await?;
                 if app.dry_run() {
                     return app.print_dry_run(&upload.requests(&app_id));

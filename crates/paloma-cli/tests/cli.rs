@@ -3051,3 +3051,205 @@ fn upload_handle_refuses_an_unreadable_file_before_any_call() {
         .code(5)
         .stdout(predicate::str::is_empty());
 }
+
+#[tokio::test(flavor = "multi_thread")]
+async fn profile_photo_uploads_then_sets_the_handle() {
+    let graph = MockServer::start().await;
+    mount_upload_session(&graph).await;
+    Mock::given(method("POST"))
+        .and(path("/v26.0/upload:S1"))
+        .and(wiremock::matchers::body_string("PNGDATA"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({ "h": "4::HANDLE" })))
+        .expect(1)
+        .mount(&graph)
+        .await;
+    Mock::given(method("POST"))
+        .and(path(format!("/v26.0/{PHONE}/whatsapp_business_profile")))
+        .and(body_json(json!({
+            "messaging_product": "whatsapp",
+            "profile_picture_handle": "4::HANDLE"
+        })))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({ "success": true })))
+        .expect(1)
+        .mount(&graph)
+        .await;
+    let home = TempDir::new().unwrap();
+    let file = home.path().join("pic.png");
+    std::fs::write(&file, "PNGDATA").unwrap();
+    let out = paloma(Some(&graph), &home)
+        .args(["profile", "photo", "--app-id", "999", "-o", "json"])
+        .arg(&file)
+        .output()
+        .unwrap();
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert_eq!(stdout_json(&out), json!({ "success": true }));
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn profile_photo_does_not_update_the_profile_when_the_upload_fails() {
+    let graph = MockServer::start().await;
+    mount_upload_session(&graph).await;
+    Mock::given(method("POST"))
+        .and(path("/v26.0/upload:S1"))
+        .respond_with(ResponseTemplate::new(401).set_body_json(json!({
+            "error": { "message": "bad token", "code": 190 }
+        })))
+        .expect(1)
+        .mount(&graph)
+        .await;
+    Mock::given(method("POST"))
+        .and(path(format!("/v26.0/{PHONE}/whatsapp_business_profile")))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({ "success": true })))
+        .expect(0)
+        .mount(&graph)
+        .await;
+    let home = TempDir::new().unwrap();
+    let file = home.path().join("pic.png");
+    std::fs::write(&file, "PNGDATA").unwrap();
+    paloma(Some(&graph), &home)
+        .args(["profile", "photo", "--app-id", "999"])
+        .arg(&file)
+        .assert()
+        .code(3)
+        .stdout(predicate::str::is_empty());
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn profile_photo_explains_a_failed_update_after_a_good_upload() {
+    let graph = MockServer::start().await;
+    mount_upload_session(&graph).await;
+    Mock::given(method("POST"))
+        .and(path("/v26.0/upload:S1"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({ "h": "4::HANDLE" })))
+        .expect(1)
+        .mount(&graph)
+        .await;
+    Mock::given(method("POST"))
+        .and(path(format!("/v26.0/{PHONE}/whatsapp_business_profile")))
+        .respond_with(ResponseTemplate::new(400).set_body_json(json!({
+            "error": { "message": "handle is invalid", "code": 100 }
+        })))
+        .expect(1)
+        .mount(&graph)
+        .await;
+    let home = TempDir::new().unwrap();
+    let file = home.path().join("pic.png");
+    std::fs::write(&file, "PNGDATA").unwrap();
+    paloma(Some(&graph), &home)
+        .args(["profile", "photo", "--app-id", "999"])
+        .arg(&file)
+        .assert()
+        .code(1)
+        .stdout(predicate::str::is_empty())
+        .stderr(
+            predicate::str::contains("handle is invalid")
+                .and(predicate::str::contains("profile get")),
+        );
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn profile_photo_quiet_prints_nothing_and_raw_prints_the_update_response() {
+    let cases: [(&[&str], &str); 2] = [(&["-q"], ""), (&["-o", "raw"], "{\"success\":true}")];
+    for (flags, expected) in cases {
+        let graph = MockServer::start().await;
+        mount_upload_session(&graph).await;
+        Mock::given(method("POST"))
+            .and(path("/v26.0/upload:S1"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({ "h": "4::HANDLE" })))
+            .mount(&graph)
+            .await;
+        Mock::given(method("POST"))
+            .and(path(format!("/v26.0/{PHONE}/whatsapp_business_profile")))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({ "success": true })))
+            .mount(&graph)
+            .await;
+        let home = TempDir::new().unwrap();
+        let file = home.path().join("pic.png");
+        std::fs::write(&file, "PNGDATA").unwrap();
+        let out = paloma(Some(&graph), &home)
+            .args(["profile", "photo", "--app-id", "999"])
+            .args(flags)
+            .arg(&file)
+            .output()
+            .unwrap();
+        assert!(out.status.success(), "{flags:?}");
+        assert_eq!(String::from_utf8_lossy(&out.stdout).trim(), expected);
+    }
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn profile_photo_checks_the_file_then_the_phone_before_any_call() {
+    // Any request reaching this server fails the assertion at the end.
+    let graph = MockServer::start().await;
+    let home = TempDir::new().unwrap();
+    let write = |name: &str| {
+        let file = home.path().join(name);
+        std::fs::write(&file, "DATA").unwrap();
+        file
+    };
+    for file in [write("menu.pdf"), write("promo.mp4"), write("notes.txt")] {
+        paloma(Some(&graph), &home)
+            .env_remove("PALOMA_WABA_ID")
+            .env_remove("PALOMA_PHONE_NUMBER_ID")
+            .args(["profile", "photo"])
+            .arg(&file)
+            .assert()
+            .code(5)
+            .stdout(predicate::str::is_empty())
+            .stderr(predicate::str::contains(
+                "it takes image/jpeg, image/jpg, image/png
+",
+            ));
+    }
+    let png = write("pic.png");
+    paloma(Some(&graph), &home)
+        .args(["profile", "photo", "--type", "application/pdf"])
+        .arg(&png)
+        .assert()
+        .code(5);
+    // The phone check comes before the app lookup, which would otherwise spend a read.
+    paloma(Some(&graph), &home)
+        .env_remove("PALOMA_PHONE_NUMBER_ID")
+        .args(["profile", "photo"])
+        .arg(&png)
+        .assert()
+        .code(3)
+        .stderr(predicate::str::contains("phone number id"));
+    assert_eq!(graph.received_requests().await.unwrap().len(), 0);
+}
+
+#[test]
+fn profile_photo_dry_run_prints_every_step_and_honors_the_type_flag() {
+    let home = TempDir::new().unwrap();
+    let file = home.path().join("logo.bin");
+    std::fs::write(&file, "DATA").unwrap();
+    let out = paloma(None, &home)
+        .args(["profile", "photo", "--app-id", "999", "--type", "image/png"])
+        .args(["--dry-run", "-o", "json"])
+        .arg(&file)
+        .output()
+        .unwrap();
+    assert!(out.status.success());
+    let requests = stdout_json(&out);
+    assert_eq!(requests.as_array().map(Vec::len), Some(3), "{requests}");
+    assert!(
+        requests[0]["url"]
+            .as_str()
+            .unwrap()
+            .contains("/999/uploads?file_name=logo.bin&file_length=4&file_type=image%2Fpng"),
+        "{requests}"
+    );
+    assert_eq!(requests[1]["file"]["bytes"], 4);
+    assert_eq!(
+        requests[2]["body"],
+        json!({
+            "messaging_product": "whatsapp",
+            "profile_picture_handle": "<handle-from-the-upload>"
+        })
+    );
+    assert!(!requests.to_string().contains(TOKEN), "{requests}");
+}

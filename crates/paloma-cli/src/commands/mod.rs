@@ -6,7 +6,7 @@
 //! discoverable in `--help` and exits honestly.
 
 use clap::Subcommand;
-use paloma_core::{Error, Result, limits, validate};
+use paloma_core::{Error, Result, validate};
 use paloma_graph::api::uploads;
 use paloma_graph::retry;
 use secrecy::SecretString;
@@ -239,13 +239,14 @@ pub struct HandleUpload {
 }
 
 impl HandleUpload {
-    pub fn new(file: &std::path::Path, mime: Option<String>) -> Result<Self> {
+    /// `types` is what the command can use, from the types Meta's upload takes.
+    pub fn new(file: &std::path::Path, mime: Option<String>, types: &[&str]) -> Result<Self> {
         let path = validate::readable_file(file)?;
         let mime = mime.unwrap_or_else(|| paloma_graph::api::media::guess_mime(&path));
-        if !limits::RESUMABLE_UPLOAD_TYPES.contains(&mime.as_str()) {
+        if !types.contains(&mime.as_str()) {
             return Err(Error::validation(format!(
-                "a handle upload can't take {mime}; it takes {}",
-                limits::RESUMABLE_UPLOAD_TYPES.join(", ")
+                "this upload can't take {mime}; it takes {}",
+                types.join(", ")
             )));
         }
         let unreadable = || {

@@ -18,7 +18,6 @@ Also planned within implemented groups:
   surface, including `interactive` (button/list/cta-url), is implemented.
 - **`paloma template`**: only `namespace` remains. The rest of the lifecycle
   (get/create/submit/watch/edit/delete) is implemented.
-- **`paloma profile`**: only `photo` remains (needs the resumable upload flow).
 - **`paloma auth`**: `refresh`.
 
 ## The differentiators on the way

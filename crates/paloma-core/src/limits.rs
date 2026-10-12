@@ -18,6 +18,8 @@ pub const RESUMABLE_UPLOAD_TYPES: [&str; 5] = [
     "image/png",
     "video/mp4",
 ];
+/// The image types among those, which is what a profile photo can be.
+pub const PROFILE_PHOTO_TYPES: [&str; 3] = ["image/jpeg", "image/jpg", "image/png"];
 /// Rows allowed across all sections of an interactive list message.
 pub const MAX_LIST_ROWS: usize = 10;
 /// Digits in a two-step verification PIN.

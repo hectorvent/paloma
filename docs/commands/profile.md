@@ -27,7 +27,24 @@ paloma profile set --about "Bakery & catering" \
       --address "Santo Domingo" --vertical FOOD --description "..."
 ```
 
-## Planned
+## `paloma profile photo`
 
-`profile photo` (upload the profile picture) needs the resumable upload handle
-flow and lands in a later phase. See the [planned commands](planned.md).
+Upload a JPEG or PNG and make it the profile photo.
+
+```
+paloma profile photo <file> [--type <mime>]
+```
+
+```bash
+paloma profile photo ./logo.png --app-id 1234567890
+```
+
+This takes two steps: a [handle upload](media.md#upload-handles), then a profile update with
+that handle. The upload's rules apply, including how the app id is chosen and how an
+interrupted transfer resumes. `--dry-run` prints all the requests and uploads nothing.
+
+Paloma judges the file by its extension, or by `--type` if you set it, not by its contents.
+Meta's docs give no size or dimension rules for profile photos, so Meta decides those.
+
+If the upload works but the profile update fails, Paloma warns you. The update may still
+have applied, so check with `paloma profile get` before you repeat the command.

@@ -19,3 +19,10 @@ pub fn set(phone_number_id: &str, fields: Map<String, Value>) -> Request {
     body.extend(fields);
     Request::post(format!("{phone_number_id}/whatsapp_business_profile")).json(Value::Object(body))
 }
+
+/// Make an uploaded file the profile photo. `handle` comes from the Resumable Upload API.
+pub fn set_photo(phone_number_id: &str, handle: &str) -> Request {
+    let mut fields = Map::new();
+    fields.insert("profile_picture_handle".into(), handle.into());
+    set(phone_number_id, fields)
+}

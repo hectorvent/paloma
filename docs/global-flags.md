@@ -39,8 +39,8 @@ Most flags also read an environment variable: `PALOMA_PROFILE`, `PALOMA_TOKEN`,
 
 `--dry-run` never **writes**. Commands that must read live state to build the real
 request still read it: `apply --dry-run` compares against live config, and
-`webhook fields set --dry-run` and `media upload --handle --dry-run` look up the app id
-unless you set it. Everything else prints the request
+`webhook fields set --dry-run`, `media upload --handle --dry-run` and
+`profile photo --dry-run` look up the app id unless you set it. Everything else prints the request
 without any network call. Multi-step commands (`send image --file`, `flow update`
 with metadata and Flow JSON) print every request as a JSON array.
 
@@ -115,10 +115,10 @@ seconds; any other form counts as no hint. If the server asks for more than 30 s
 A write that fails in a way that's not retried may still have been applied, so check
 before you repeat it.
 
-`media upload --handle` is the one exception. After a 500, 502, 503 or 504, a timeout or a
-lost connection, it asks Meta how much of the file arrived and continues from there, so
-nothing is sent twice. That's up to 3 transfers in total, each with its own `--timeout`,
-and the reads between them are retried as usual.
+File transfers in `media upload --handle` and `profile photo` are the one exception. After
+a 500, 502, 503 or 504, a timeout or a lost connection, Paloma asks Meta how much of the
+file arrived and continues from there, so nothing is sent twice. That's up to 3 transfers
+in total, each with its own `--timeout`, and the reads between them are retried as usual.
 
 **Time limits.** `--timeout` applies to each try, and waits between tries are extra. A
 request can take up to 3 × `--timeout` plus 60 seconds of waits, and commands that make
