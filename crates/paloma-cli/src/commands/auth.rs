@@ -4,10 +4,10 @@ use clap::Subcommand;
 use paloma_config::ProfileKey;
 use paloma_config::secrets::{keyring_ref, token_account};
 use paloma_core::{Error, Result};
-use paloma_graph::api::phone_numbers;
+use paloma_graph::api::{phone_numbers, tokens};
+use secrecy::ExposeSecret;
 use serde_json::{Value, json};
 
-use super::planned;
 use crate::app::App;
 use crate::output::Output;
 
@@ -20,20 +20,24 @@ pub enum AuthCommand {
         with_token: bool,
     },
     /// Check that the token works against the active phone number.
-    Status,
+    Status {
+        /// Inspect the token instead: its type, scopes and expiry. Needs no phone number id,
+        /// so it still answers when a missing permission is what fails the usual check.
+        #[arg(long)]
+        scopes: bool,
+    },
     /// Show who the active profile acts as.
     Whoami,
     /// Remove the profile's token from the keyring.
     Logout,
-    /// Exchange for a long-lived token (planned v0.5).
-    Refresh,
 }
 
 impl AuthCommand {
     pub async fn run(self, app: &App) -> Result<()> {
         match self {
             Self::Login { with_token } => login(app, with_token),
-            Self::Status => {
+            Self::Status { scopes: true } => token_details(app).await,
+            Self::Status { scopes: false } => {
                 let (ctx, number) = phone_status(app).await?;
                 let Some(number) = number else { return Ok(()) };
                 app.out.emit(
@@ -75,7 +79,6 @@ impl AuthCommand {
                 });
                 Ok(())
             }
-            Self::Refresh => planned("auth refresh", "v0.5"),
         }
     }
 }
@@ -151,6 +154,34 @@ pub fn store_login(
         "config": file.path().display().to_string(),
     }))
     .id(Some(profile.to_owned())))
+}
+
+/// Meta's description of the active token. An answer that doesn't call it valid exits 3, so
+/// `auth status --scopes -q` can gate a script the way `auth status -q` does.
+async fn token_details(app: &App) -> Result<()> {
+    let ctx = app.ctx()?;
+    if app.dry_run() {
+        // A placeholder, so a dry run never reads the keyring.
+        return app.print_dry_run(&[tokens::debug("<active-token>")]);
+    }
+    let token = ctx.require_token()?;
+    let resp = app.fetch(&tokens::debug(token.expose_secret())).await?;
+    let data = resp
+        .json()?
+        .get("data")
+        .cloned()
+        .ok_or_else(|| Error::other("the Graph API returned no token details"))?;
+    if data.get("is_valid") != Some(&Value::Bool(true)) {
+        return Err(Error::auth("the access token is not valid"));
+    }
+    app.out.emit(
+        &Output {
+            data,
+            ..Output::response(&resp)?
+        }
+        .id(Some("valid".into())),
+    );
+    Ok(())
 }
 
 /// `((profile, phone_number_id), number)`; `number` is `None` under `--dry-run`.

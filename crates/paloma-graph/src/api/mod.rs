@@ -12,6 +12,7 @@ pub mod messages;
 pub mod phone_numbers;
 pub mod profile;
 pub mod templates;
+pub mod tokens;
 pub mod uploads;
 pub mod webhook;
 

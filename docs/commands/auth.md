@@ -40,6 +40,21 @@ paloma auth status
 paloma auth status -o json
 ```
 
+Add `--scopes` to ask Meta about the token itself, using
+[`debug_token`](https://developers.facebook.com/documentation/business-messaging/whatsapp/permissions).
+It shows the token's type, app, granted scopes and expiry, and skips the phone-number
+check, so it needs no phone number id and still answers when a missing permission is the
+problem.
+
+```bash
+paloma auth status --scopes
+paloma auth status --scopes -o json   # Meta's response, unchanged
+```
+
+It exits `3` if the token is missing or Meta doesn't report it as valid. With `-q` it prints
+`valid`. Times are Unix timestamps as Meta returns them. Meta's example for a system user
+token shows `expires_at` as `0`, but its docs don't define that value.
+
 ---
 
 ## `paloma auth whoami`
@@ -61,10 +76,3 @@ config are left intact.
 paloma auth logout
 paloma auth logout --profile staging
 ```
-
----
-
-## Planned verbs
-
-`refresh` — exchange/refresh a long-lived token where applicable. See the
-[planned commands](planned.md).

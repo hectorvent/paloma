@@ -55,9 +55,9 @@ token_ref = "keyring:paloma/default"
 |---------|--------------|
 | `paloma auth login` | Store a token for a profile (prompts, never echoes) |
 | `paloma auth status` | Validate the active token against the API; show its context |
+| `paloma auth status --scopes` | Show the active token's type, granted scopes and expiry |
 | `paloma auth whoami` | Show the active WABA, sender number, and business name |
 | `paloma auth logout` | Remove the stored token for a profile (other settings stay) |
-| `paloma auth refresh` | *(planned)* refresh a long-lived token |
 
 ```bash
 paloma auth status -o json     # machine-readable
