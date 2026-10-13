@@ -3,7 +3,7 @@
 
 use std::path::{Path, PathBuf};
 
-use crate::limits::{MAX_CAPTION, MAX_TEXT_BODY, PIN_DIGITS};
+use crate::limits::{DATA_LOCALIZATION_REGIONS, MAX_CAPTION, MAX_TEXT_BODY, PIN_DIGITS};
 use crate::{Error, Result};
 
 /// An E.164 number (optional `+`, 7–15 digits, no leading zero). Surrounding whitespace
@@ -81,6 +81,29 @@ pub fn pin(pin: &str) -> Result<()> {
     }
 }
 
+/// A `--limit` page size: at least one, and at most `max` where the edge documents one.
+pub fn page_size(limit: Option<u32>, max: Option<u32>) -> Result<()> {
+    match (limit, max) {
+        (Some(n), Some(max)) if n == 0 || n > max => Err(Error::validation(format!(
+            "--limit must be between 1 and {max}"
+        ))),
+        (Some(0), None) => Err(Error::validation("--limit must be at least 1")),
+        _ => Ok(()),
+    }
+}
+
+/// A country that local storage supports, as an uppercase ISO 3166 code.
+pub fn data_localization_region(region: &str) -> Result<()> {
+    if DATA_LOCALIZATION_REGIONS.contains(&region) {
+        Ok(())
+    } else {
+        Err(Error::validation(format!(
+            "'{region}' is not a supported data localization region; use one of {}",
+            DATA_LOCALIZATION_REGIONS.join(", ")
+        )))
+    }
+}
+
 /// The path must be a regular, readable file.
 pub fn readable_file(path: &Path) -> Result<PathBuf> {
     match std::fs::metadata(path) {
@@ -139,5 +162,26 @@ mod tests {
         assert!(pin("123456").is_ok());
         assert!(pin("12345").is_err());
         assert!(pin("12345a").is_err());
+    }
+
+    #[test]
+    fn page_size_bounds() {
+        assert!(page_size(None, Some(100)).is_ok());
+        assert!(page_size(Some(100), Some(100)).is_ok());
+        assert!(page_size(Some(101), Some(100)).is_err());
+        assert!(page_size(Some(0), Some(100)).is_err());
+        assert!(page_size(Some(5000), None).is_ok());
+        assert!(page_size(Some(0), None).is_err());
+    }
+
+    #[test]
+    fn data_localization_region_is_a_closed_set() {
+        for ok in DATA_LOCALIZATION_REGIONS {
+            assert!(data_localization_region(ok).is_ok(), "{ok}");
+        }
+        for bad in ["", "US", "de", "DEU"] {
+            let err = data_localization_region(bad).unwrap_err();
+            assert_eq!(err.exit_code().code(), 5, "{bad}");
+        }
     }
 }

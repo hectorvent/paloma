@@ -2,7 +2,7 @@
 //! with a `pin` always counts as drift.
 
 use paloma_core::{Result, validate};
-use paloma_graph::api::phone_numbers::{self, DETAIL_FIELDS};
+use paloma_graph::api::phone_numbers::{self, EXPORT_FIELDS};
 use serde_json::{Value, json};
 
 use crate::kind::{Cx, KindPlan, read};
@@ -14,7 +14,7 @@ pub fn template() -> Value {
 pub async fn export(cx: Cx<'_>) -> Result<Vec<Value>> {
     let phone = cx.ctx.require_phone_number_id()?;
     Ok(vec![
-        read(cx, &phone_numbers::get(phone, DETAIL_FIELDS)).await?,
+        read(cx, &phone_numbers::get(phone, EXPORT_FIELDS)).await?,
     ])
 }
 

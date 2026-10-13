@@ -9,17 +9,33 @@ paloma number <verb> [args] [flags]
 
 ## `paloma number list`
 
-List every phone number on the active WABA.
+List the phone numbers on the active WABA. A single page warns on stderr when more
+exist.
+
+| Flag | Meaning |
+|------|---------|
+| `--account-mode <SANDBOX\|LIVE>` | Only numbers in this account mode. Meta is still testing this filter, so not every developer has it |
+| `--sort <last-onboarded-asc\|last-onboarded-desc>` | Order by when Embedded Signup onboarding finished. Newest first is Meta's default, so `last-onboarded-desc` sends no parameter |
+| `--limit <n>` | Page size, 1 to 100; anything else exits `5` |
+| `--all` | Follow every page and merge them |
+| `--after <cursor>` | Start after this cursor |
 
 ```bash
 paloma number list
+paloma number list --all --account-mode LIVE --sort last-onboarded-asc
 paloma number list -o json | jq -r '.data[] | "\(.id)\t\(.display_phone_number)\t\(.quality_rating)"'
 ```
 
 ## `paloma number get` / `quality`
 
 Show details for a number (defaults to the active sender; pass an id to target
-another). `quality` is a compact view of rating, messaging tier, and throughput.
+another). `get` includes the number's `status`, its display name's `name_status`, and
+`health_status`, the summary of whether it can send messages. `quality` is a compact view
+of rating, messaging limit, and throughput.
+
+The limit comes from `whatsapp_business_manager_messaging_limit` (for example `TIER_250`).
+[Meta sets it per business portfolio](https://developers.facebook.com/documentation/business-messaging/whatsapp/messaging-limits),
+so every number in a portfolio shares it.
 
 ```bash
 paloma number get
@@ -34,8 +50,23 @@ Register the active number for Cloud API with its six-digit PIN, or deregister i
 
 ```bash
 paloma number register              # prompts for the PIN
+paloma number register --data-localization-region DE
 paloma number deregister --yes
 ```
+
+### Local storage
+
+`--data-localization-region <CC>` enables
+[local storage](https://developers.facebook.com/documentation/business-messaging/whatsapp/local-storage)
+as part of the registration, keeping message data at rest in that country. It accepts
+`AE`, `AU`, `BH`, `BR`, `CA`, `CH`, `DE`, `GB`, `ID`, `IN`, `JP`, `KR`, `SG` and `ZA`,
+in uppercase. Any other value exits `5` before the PIN is read or a request is sent.
+
+The flag applies only when first registering a number. To enable, change or disable local
+storage on a registered number, deregister it, use the
+[Settings API](https://developers.facebook.com/documentation/business-messaging/whatsapp/reference/whatsapp-business-phone-number/settings-api),
+then register again without this flag. Paloma doesn't call the Settings API yet.
+Deregistering doesn't turn local storage off.
 
 ## `paloma number set-pin`
 

@@ -1,11 +1,11 @@
-use clap::{Args, Subcommand};
+use clap::{Args, Subcommand, ValueEnum};
+use paloma_core::limits::MAX_PHONE_NUMBERS_PAGE;
 use paloma_core::{Result, validate};
-use paloma_graph::api::phone_numbers::{self, DETAIL_FIELDS, QUALITY_FIELDS};
+use paloma_graph::api::phone_numbers::{self, DETAIL_FIELDS, ListFilter, QUALITY_FIELDS};
 use secrecy::{ExposeSecret, SecretString};
 
 use super::{SecretSource, read_secret};
 use crate::app::{App, field_id, no_id};
-use crate::output::Output;
 
 const LIST_COLUMNS: &[&str] = &[
     "id",
@@ -18,17 +18,71 @@ const LIST_COLUMNS: &[&str] = &[
 #[derive(Debug, Subcommand)]
 pub enum NumberCommand {
     /// List the WABA's phone numbers.
-    List,
+    List(ListArgs),
     /// Show a phone number's details [default: the active number].
     Get { phone_number_id: Option<String> },
-    /// Show quality rating, messaging tier and throughput.
+    /// Show quality rating, messaging limit and throughput.
     Quality { phone_number_id: Option<String> },
     /// Register the number for Cloud API use.
-    Register(PinInput),
+    Register(RegisterArgs),
     /// Deregister the number.
     Deregister,
     /// Set the two-step verification PIN.
     SetPin(PinInput),
+}
+
+#[derive(Debug, Args)]
+pub struct ListArgs {
+    /// Only numbers in this account mode. Meta is still testing this filter, so not every
+    /// developer has it.
+    #[arg(long, value_enum)]
+    account_mode: Option<AccountMode>,
+    /// Order by when Embedded Signup onboarding finished. Meta's default is
+    /// last-onboarded-desc.
+    #[arg(long, value_enum)]
+    sort: Option<Sort>,
+    /// Page size, at most 100.
+    #[arg(long)]
+    limit: Option<u32>,
+    /// Follow every page.
+    #[arg(long)]
+    all: bool,
+    /// Start after this cursor.
+    #[arg(long)]
+    after: Option<String>,
+}
+
+#[derive(Debug, Clone, Copy, ValueEnum)]
+#[value(rename_all = "SCREAMING_SNAKE_CASE")]
+enum AccountMode {
+    Sandbox,
+    Live,
+}
+
+impl From<AccountMode> for phone_numbers::AccountMode {
+    fn from(mode: AccountMode) -> Self {
+        match mode {
+            AccountMode::Sandbox => Self::Sandbox,
+            AccountMode::Live => Self::Live,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, ValueEnum)]
+enum Sort {
+    LastOnboardedAsc,
+    LastOnboardedDesc,
+}
+
+#[derive(Debug, Args)]
+pub struct RegisterArgs {
+    #[command(flatten)]
+    pin: PinInput,
+    /// Store message data at rest in this country (AE, AU, BH, BR, CA, CH, DE, GB, ID, IN,
+    /// JP, KR, SG, ZA). First registration only: a registered number changes this through
+    /// the Settings API after deregistering, which Paloma doesn't do yet.
+    #[arg(long, value_name = "CC")]
+    data_localization_region: Option<String>,
 }
 
 /// The six-digit two-step verification PIN: from PALOMA_PIN, stdin or a prompt.
@@ -63,13 +117,22 @@ impl PinInput {
 impl NumberCommand {
     pub async fn run(self, app: &App) -> Result<()> {
         match self {
-            Self::List => {
+            Self::List(a) => {
+                validate::page_size(a.limit, Some(MAX_PHONE_NUMBERS_PAGE))?;
                 let waba = app.ctx()?.require_waba_id()?.to_owned();
-                if let Some(resp) = app.send(&phone_numbers::list(&waba)).await? {
-                    app.out
-                        .emit(&Output::response(&resp)?.table("/data", LIST_COLUMNS));
-                }
-                Ok(())
+                let filter = ListFilter {
+                    account_mode: a.account_mode.map(Into::into),
+                    oldest_first: matches!(a.sort, Some(Sort::LastOnboardedAsc)),
+                    limit: a.limit,
+                };
+                super::template::list(
+                    app,
+                    a.all,
+                    a.after,
+                    |after| phone_numbers::list(&waba, &filter, after),
+                    LIST_COLUMNS,
+                )
+                .await
             }
             Self::Get { phone_number_id } => {
                 let id = target(app, phone_number_id)?;
@@ -85,11 +148,18 @@ impl NumberCommand {
                 })
                 .await
             }
-            Self::Register(input) => {
-                let pin = input.read(app)?;
+            Self::Register(a) => {
+                if let Some(region) = &a.data_localization_region {
+                    validate::data_localization_region(region)?;
+                }
+                let pin = a.pin.read(app)?;
                 let phone = app.ctx()?.require_phone_number_id()?.to_owned();
-                app.send_and_emit(&phone_numbers::register(&phone, pin.expose_secret()), no_id)
-                    .await
+                let req = phone_numbers::register(
+                    &phone,
+                    pin.expose_secret(),
+                    a.data_localization_region.as_deref(),
+                );
+                app.send_and_emit(&req, no_id).await
             }
             Self::Deregister => {
                 let phone = app.ctx()?.require_phone_number_id()?.to_owned();

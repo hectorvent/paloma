@@ -19,6 +19,8 @@ pub fn remove(phone_number_id: &str, users: &[String]) -> Request {
     Request::delete(format!("{phone_number_id}/block_users")).json(body(users))
 }
 
-pub fn list(phone_number_id: &str) -> Request {
+pub fn list(phone_number_id: &str, limit: Option<u32>, after: Option<&str>) -> Request {
     Request::get(format!("{phone_number_id}/block_users"))
+        .query_opt("limit", limit)
+        .query_opt("after", after)
 }

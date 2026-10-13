@@ -11,9 +11,24 @@ paloma block <verb> [args] [flags]
 
 List currently blocked users.
 
+| Flag | Meaning |
+|------|---------|
+| `--limit <n>` | Page size, at least 1 |
+| `--all` | Follow every page and merge them |
+| `--after <cursor>` | Start after this cursor |
+
 ```bash
 paloma block list
+paloma block list --all
+paloma block list --all -o json | jq -r '.data[].wa_id'
 ```
+
+Meta's documented response for this list has cursors but no link to a next page, so a
+page doesn't always show whether it's the last one. When it doesn't, a single page notes
+on stderr that more results may exist. `--all` keeps going until a page comes back empty,
+which can take one request more than the list needs. It exits `1` if Meta repeats a
+cursor, and also if the block list changes during the walk (error `139102`). Run it again
+in that case.
 
 ## `paloma block add` / `remove`
 

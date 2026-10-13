@@ -3343,3 +3343,508 @@ fn profile_photo_dry_run_prints_every_step_and_honors_the_type_flag() {
     );
     assert!(!requests.to_string().contains(TOKEN), "{requests}");
 }
+
+#[tokio::test(flavor = "multi_thread")]
+async fn number_get_and_quality_request_the_current_limit_field() {
+    let graph = MockServer::start().await;
+    let p = format!("/v26.0/{PHONE}");
+    Mock::given(method("GET"))
+        .and(path(&p))
+        .and(query_param(
+            "fields",
+            "id,display_phone_number,verified_name,quality_rating,code_verification_status,\
+             name_status,status,health_status,whatsapp_business_manager_messaging_limit,\
+             throughput,platform_type",
+        ))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "id": PHONE,
+            "status": "CONNECTED",
+            "whatsapp_business_manager_messaging_limit": "TIER_250",
+            "health_status": {
+                "can_send_message": "AVAILABLE",
+                "entities": [{"entity_type": "PHONE_NUMBER", "id": PHONE, "can_send_message": "AVAILABLE"}]
+            }
+        })))
+        .expect(1)
+        .mount(&graph)
+        .await;
+    Mock::given(method("GET"))
+        .and(path(&p))
+        .and(query_param(
+            "fields",
+            "display_phone_number,quality_rating,whatsapp_business_manager_messaging_limit,throughput",
+        ))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "quality_rating": "GREEN",
+            "whatsapp_business_manager_messaging_limit": "TIER_250"
+        })))
+        .expect(1)
+        .mount(&graph)
+        .await;
+
+    let home = TempDir::new().unwrap();
+    paloma(Some(&graph), &home)
+        .args(["number", "get"])
+        .assert()
+        .success()
+        .stdout(
+            predicate::str::contains("TIER_250")
+                .and(predicate::str::contains("CONNECTED"))
+                .and(predicate::str::contains("AVAILABLE")),
+        );
+    paloma(Some(&graph), &home)
+        .args(["number", "quality", "-q"])
+        .assert()
+        .success()
+        .stdout("GREEN\n");
+}
+
+#[test]
+fn number_reads_no_longer_ask_for_the_deprecated_limit_field() {
+    let home = TempDir::new().unwrap();
+    for verb in ["get", "quality"] {
+        let out = paloma(None, &home)
+            .args(["number", verb, "--dry-run", "-o", "json"])
+            .output()
+            .unwrap();
+        assert!(out.status.success());
+        let url = stdout_json(&out)["url"].as_str().unwrap().to_owned();
+        assert!(!url.contains("messaging_limit_tier"), "{url}");
+        assert!(
+            url.contains("whatsapp_business_manager_messaging_limit"),
+            "{url}"
+        );
+    }
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn number_list_all_follows_paging_next_and_keeps_the_filters() {
+    let graph = MockServer::start().await;
+    let p = format!("/v26.0/{WABA}/phone_numbers");
+    let filtering = r#"[{"field":"account_mode","operator":"EQUAL","value":"LIVE"}]"#;
+    let sort = "['last_onboarded_time_ascending']";
+    Mock::given(method("GET"))
+        .and(path(&p))
+        .and(query_param("after", "C1"))
+        .and(query_param("filtering", filtering))
+        .and(query_param("sort", sort))
+        .and(query_param("limit", "5"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "data": [{ "id": "2" }],
+            "paging": { "cursors": { "after": "C2" } }
+        })))
+        .expect(1)
+        .mount(&graph)
+        .await;
+    Mock::given(method("GET"))
+        .and(path(&p))
+        .and(query_param("filtering", filtering))
+        .and(query_param("sort", sort))
+        .and(query_param("limit", "5"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "data": [{ "id": "1" }],
+            "paging": { "cursors": { "after": "C1" }, "next": "https://graph/next" }
+        })))
+        .expect(1)
+        .mount(&graph)
+        .await;
+
+    let home = TempDir::new().unwrap();
+    let out = paloma(Some(&graph), &home)
+        .args(["number", "list", "--all", "-o", "json", "--limit", "5"])
+        .args(["--account-mode", "LIVE", "--sort", "last-onboarded-asc"])
+        .output()
+        .unwrap();
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert_eq!(
+        stdout_json(&out),
+        json!({ "data": [{ "id": "1" }, { "id": "2" }] })
+    );
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn number_list_single_page_renders_columns_and_warns_on_stderr() {
+    let graph = MockServer::start().await;
+    Mock::given(method("GET"))
+        .and(path(format!("/v26.0/{WABA}/phone_numbers")))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "data": [{ "id": "1", "verified_name": "Jasper" }],
+            "paging": { "cursors": { "after": "C1" }, "next": "https://graph/next" }
+        })))
+        .expect(1)
+        .mount(&graph)
+        .await;
+    let home = TempDir::new().unwrap();
+    paloma(Some(&graph), &home)
+        .args(["number", "list", "--sort", "last-onboarded-desc"])
+        .assert()
+        .success()
+        .stdout(
+            predicate::str::contains("VERIFIED NAME")
+                .and(predicate::str::contains("Jasper"))
+                .and(predicate::str::contains("--after").not()),
+        )
+        .stderr(predicate::str::contains("--after C1"));
+    // Newest first is Meta's default, so asking for it sends no parameters at all.
+    let received = graph.received_requests().await.unwrap();
+    assert_eq!(received[0].url.query(), None);
+}
+
+#[test]
+fn number_list_dry_run_prints_the_page_request() {
+    let home = TempDir::new().unwrap();
+    let out = paloma(None, &home)
+        .args(["number", "list", "--dry-run", "-o", "json", "--all"])
+        .args([
+            "--account-mode",
+            "SANDBOX",
+            "--limit",
+            "100",
+            "--after",
+            "C9",
+        ])
+        .output()
+        .unwrap();
+    assert!(out.status.success());
+    let v = stdout_json(&out);
+    let url = v["url"].as_str().unwrap();
+    assert_eq!(v["method"], "GET");
+    assert!(
+        url.contains(&format!("/{WABA}/phone_numbers?filtering=")),
+        "{url}"
+    );
+    assert!(url.contains("SANDBOX"), "{url}");
+    assert!(url.contains("limit=100&after=C9"), "{url}");
+    assert!(String::from_utf8_lossy(&out.stderr).contains("dry-run: no request sent"));
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn number_list_rejects_bad_flags_before_any_request() {
+    let graph = MockServer::start().await;
+    let home = TempDir::new().unwrap();
+    for limit in ["0", "101"] {
+        paloma(Some(&graph), &home)
+            .env_remove("PALOMA_WABA_ID")
+            .args(["number", "list", "--limit", limit])
+            .assert()
+            .code(5)
+            .stdout(predicate::str::is_empty())
+            .stderr(predicate::str::contains("between 1 and 100"));
+    }
+    paloma(Some(&graph), &home)
+        .args(["number", "list", "--account-mode", "PAUSED"])
+        .assert()
+        .code(2);
+    paloma(Some(&graph), &home)
+        .args(["number", "list", "--sort", "creation-time"])
+        .assert()
+        .code(2);
+    assert_eq!(graph.received_requests().await.unwrap().len(), 0);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn block_list_all_walks_to_an_empty_page_without_paging_next() {
+    let graph = MockServer::start().await;
+    let p = format!("/v26.0/{PHONE}/block_users");
+    Mock::given(method("GET"))
+        .and(path(&p))
+        .and(query_param("after", "C2"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "data": [],
+            "paging": { "cursors": { "after": "C2", "before": "C2" } }
+        })))
+        .expect(1)
+        .mount(&graph)
+        .await;
+    Mock::given(method("GET"))
+        .and(path(&p))
+        .and(query_param("after", "C1"))
+        .and(query_param("limit", "1"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "data": [{ "messaging_product": "whatsapp", "wa_id": "2" }],
+            "paging": { "cursors": { "after": "C2", "before": "C1" } }
+        })))
+        .expect(1)
+        .mount(&graph)
+        .await;
+    Mock::given(method("GET"))
+        .and(path(&p))
+        .and(query_param("limit", "1"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "data": [{ "messaging_product": "whatsapp", "wa_id": "1" }],
+            "paging": { "cursors": { "after": "C1", "before": "C0" } }
+        })))
+        .expect(1)
+        .mount(&graph)
+        .await;
+
+    let home = TempDir::new().unwrap();
+    let out = paloma(Some(&graph), &home)
+        .args(["block", "list", "--all", "--limit", "1", "-o", "json"])
+        .output()
+        .unwrap();
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert_eq!(
+        stdout_json(&out),
+        json!({ "data": [
+            { "messaging_product": "whatsapp", "wa_id": "1" },
+            { "messaging_product": "whatsapp", "wa_id": "2" }
+        ] })
+    );
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn block_list_all_refuses_a_repeated_cursor_rather_than_truncating() {
+    let graph = MockServer::start().await;
+    Mock::given(method("GET"))
+        .and(path(format!("/v26.0/{PHONE}/block_users")))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "data": [{ "wa_id": "1" }],
+            "paging": { "cursors": { "after": "SAME" } }
+        })))
+        .expect(2)
+        .mount(&graph)
+        .await;
+    let home = TempDir::new().unwrap();
+    paloma(Some(&graph), &home)
+        .args(["block", "list", "--all"])
+        .assert()
+        .code(1)
+        .stdout(predicate::str::is_empty())
+        .stderr(predicate::str::contains("SAME twice"));
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn block_list_single_page_says_what_paging_can_and_cannot_tell() {
+    let graph = MockServer::start().await;
+    let p = format!("/v26.0/{PHONE}/block_users");
+    Mock::given(method("GET"))
+        .and(path(&p))
+        .and(query_param("after", "NEXT"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "data": [{ "wa_id": "2" }],
+            "paging": { "cursors": { "after": "END" }, "next": "https://graph/next" }
+        })))
+        .mount(&graph)
+        .await;
+    Mock::given(method("GET"))
+        .and(path(&p))
+        .and(query_param("after", "EMPTY"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "data": [],
+            "paging": { "cursors": { "after": "EMPTY" } }
+        })))
+        .mount(&graph)
+        .await;
+    Mock::given(method("GET"))
+        .and(path(&p))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "data": [{ "messaging_product": "whatsapp", "wa_id": "1" }],
+            "paging": { "cursors": { "after": "NEXT" } }
+        })))
+        .mount(&graph)
+        .await;
+
+    let home = TempDir::new().unwrap();
+    paloma(Some(&graph), &home)
+        .args(["block", "list"])
+        .assert()
+        .success()
+        .stdout(
+            predicate::str::contains("WA ID")
+                .and(predicate::str::contains("USER").not())
+                .and(predicate::str::contains("--after").not()),
+        )
+        .stderr(
+            predicate::str::contains("may exist").and(predicate::str::contains("--after NEXT")),
+        );
+    paloma(Some(&graph), &home)
+        .args(["block", "list", "--after", "NEXT"])
+        .assert()
+        .success()
+        .stderr(
+            predicate::str::contains("more results exist")
+                .and(predicate::str::contains("--after END")),
+        );
+    paloma(Some(&graph), &home)
+        .args(["block", "list", "--after", "EMPTY"])
+        .assert()
+        .success()
+        .stdout("(none)\n")
+        .stderr(predicate::str::is_empty());
+}
+
+#[test]
+fn block_list_dry_run_prints_the_page_request() {
+    let home = TempDir::new().unwrap();
+    let out = paloma(None, &home)
+        .args(["block", "list", "--dry-run", "-o", "json", "--all"])
+        .args(["--limit", "10", "--after", "C9"])
+        .output()
+        .unwrap();
+    assert!(out.status.success());
+    let v = stdout_json(&out);
+    assert_eq!(v["method"], "GET");
+    assert!(
+        v["url"]
+            .as_str()
+            .unwrap()
+            .ends_with(&format!("/{PHONE}/block_users?limit=10&after=C9")),
+        "{v}"
+    );
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn block_list_rejects_a_zero_limit_before_resolving_the_phone_number() {
+    let graph = MockServer::start().await;
+    let home = TempDir::new().unwrap();
+    paloma(Some(&graph), &home)
+        .env_remove("PALOMA_PHONE_NUMBER_ID")
+        .args(["block", "list", "--limit", "0"])
+        .assert()
+        .code(5)
+        .stdout(predicate::str::is_empty())
+        .stderr(predicate::str::contains("--limit"));
+    assert_eq!(graph.received_requests().await.unwrap().len(), 0);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn number_register_sends_the_data_localization_region() {
+    let graph = MockServer::start().await;
+    Mock::given(method("POST"))
+        .and(path(format!("/v26.0/{PHONE}/register")))
+        .and(body_json(json!({
+            "messaging_product": "whatsapp",
+            "pin": "825194",
+            "data_localization_region": "CH"
+        })))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({"success": true})))
+        .expect(1)
+        .mount(&graph)
+        .await;
+    let home = TempDir::new().unwrap();
+    paloma(Some(&graph), &home)
+        .env("PALOMA_PIN", "825194")
+        .args(["number", "register", "--data-localization-region", "CH"])
+        .assert()
+        .success();
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn number_register_without_a_region_leaves_it_out_of_the_body() {
+    let graph = MockServer::start().await;
+    Mock::given(method("POST"))
+        .and(path(format!("/v26.0/{PHONE}/register")))
+        .and(body_json(json!({
+            "messaging_product": "whatsapp",
+            "pin": "825194"
+        })))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({"success": true})))
+        .expect(1)
+        .mount(&graph)
+        .await;
+    let home = TempDir::new().unwrap();
+    paloma(Some(&graph), &home)
+        .env("PALOMA_PIN", "825194")
+        .args(["number", "register"])
+        .assert()
+        .success();
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn number_register_rejects_an_unsupported_region_before_the_pin_or_any_request() {
+    let graph = MockServer::start().await;
+    let home = TempDir::new().unwrap();
+    for bad in ["US", "de", "DEU", ""] {
+        // No PIN and no phone number id: either would fail differently if read first.
+        paloma(Some(&graph), &home)
+            .env_remove("PALOMA_PHONE_NUMBER_ID")
+            .args(["number", "register", "--data-localization-region", bad])
+            .assert()
+            .code(5)
+            .stdout(predicate::str::is_empty())
+            .stderr(predicate::str::contains("data localization region"));
+    }
+    assert_eq!(graph.received_requests().await.unwrap().len(), 0);
+}
+
+#[test]
+fn number_register_dry_run_shows_the_region_and_masks_the_pin() {
+    let home = TempDir::new().unwrap();
+    let out = paloma(None, &home)
+        .env("PALOMA_PIN", "825194")
+        .args(["number", "register", "--data-localization-region", "DE"])
+        .args(["--dry-run", "-o", "json"])
+        .output()
+        .unwrap();
+    assert!(out.status.success());
+    let v = stdout_json(&out);
+    assert_eq!(v["body"]["data_localization_region"], "DE");
+    assert_eq!(v["body"]["pin"], "<redacted>");
+    assert!(!v.to_string().contains("825194"), "{v}");
+}
+
+// Review fixes across the v0.5 lists, lookups and validation.
+
+#[tokio::test(flavor = "multi_thread")]
+async fn block_list_all_follows_next_even_past_an_empty_page() {
+    let graph = MockServer::start().await;
+    let phone_path = format!("/v26.0/{PHONE}/block_users");
+    Mock::given(method("GET"))
+        .and(path(phone_path.clone()))
+        .and(query_param("after", "C1"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "data": [{ "wa_id": "15550001" }],
+            "paging": { "cursors": { "after": "C2" } }
+        })))
+        .mount(&graph)
+        .await;
+    Mock::given(method("GET"))
+        .and(path(phone_path.clone()))
+        .and(query_param("after", "C2"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({ "data": [] })))
+        .mount(&graph)
+        .await;
+    Mock::given(method("GET"))
+        .and(path(phone_path))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "data": [],
+            "paging": { "next": "https://graph/next", "cursors": { "after": "C1" } }
+        })))
+        .mount(&graph)
+        .await;
+    let home = TempDir::new().unwrap();
+    let out = paloma(Some(&graph), &home)
+        .args(["block", "list", "--all", "-o", "json"])
+        .output()
+        .unwrap();
+    assert!(out.status.success());
+    assert_eq!(
+        stdout_json(&out),
+        json!({ "data": [{ "wa_id": "15550001" }] })
+    );
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_list_page_with_no_data_is_an_error() {
+    let graph = MockServer::start().await;
+    Mock::given(method("GET"))
+        .and(path(format!("/v26.0/{PHONE}/block_users")))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({})))
+        .mount(&graph)
+        .await;
+    let home = TempDir::new().unwrap();
+    paloma(Some(&graph), &home)
+        .args(["block", "list", "--all"])
+        .assert()
+        .code(1)
+        .stdout(predicate::str::is_empty());
+}
