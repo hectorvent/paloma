@@ -7,7 +7,8 @@ use paloma_core::limits::{self, MAX_LIST_ROWS, MAX_REPLY_BUTTONS};
 use paloma_core::{Error, Result, validate};
 use paloma_graph::api::media as media_api;
 use paloma_graph::api::messages::{
-    self, Button, InteractiveText, MediaKind, MediaOptions, MediaSource, Row, Section,
+    self, Button, InteractiveHeader, InteractiveText, MediaKind, MediaOptions, MediaSource, Row,
+    Section,
 };
 use paloma_graph::request::has_http_scheme;
 use serde_json::Value;
@@ -279,7 +280,7 @@ pub struct InteractiveCommon {
 impl InteractiveCommon {
     fn text(&self) -> InteractiveText {
         InteractiveText {
-            header: self.header.clone(),
+            header: self.header.clone().map(InteractiveHeader::Text),
             body: self.body.clone(),
             footer: self.footer.clone(),
         }
@@ -293,6 +294,30 @@ pub struct InteractiveButton {
     /// A reply button as `id:Title` (or just `Title`); repeat up to three times.
     #[arg(long = "button", value_name = "ID:TITLE", required = true)]
     buttons: Vec<String>,
+    /// Image for the header: a media id or an http(s) link.
+    #[arg(
+        long,
+        value_name = "ID|URL",
+        group = "header_media",
+        conflicts_with = "header"
+    )]
+    header_image: Option<String>,
+    /// Video for the header: a media id or an http(s) link.
+    #[arg(
+        long,
+        value_name = "ID|URL",
+        group = "header_media",
+        conflicts_with = "header"
+    )]
+    header_video: Option<String>,
+    /// Document for the header: a media id or an http(s) link.
+    #[arg(
+        long,
+        value_name = "ID|URL",
+        group = "header_media",
+        conflicts_with = "header"
+    )]
+    header_document: Option<String>,
 }
 
 #[derive(Debug, Args)]
@@ -302,7 +327,8 @@ pub struct InteractiveList {
     /// Label of the button that opens the list.
     #[arg(long)]
     button: String,
-    /// A section as `Title:id:Label,id2:Label2`; repeatable.
+    /// A section as `Title:id:Label::Description,id2:Label2`; repeatable. The description
+    /// is optional; write a comma in a row's text as `\,`.
     #[arg(long = "section", value_name = "SECTION", required = true)]
     sections: Vec<String>,
 }
@@ -317,6 +343,30 @@ pub struct InteractiveCta {
     /// URL the button opens.
     #[arg(long)]
     url: String,
+    /// Image for the header: an http(s) link.
+    #[arg(
+        long,
+        value_name = "URL",
+        group = "header_media",
+        conflicts_with = "header"
+    )]
+    header_image: Option<String>,
+    /// Video for the header: an http(s) link.
+    #[arg(
+        long,
+        value_name = "URL",
+        group = "header_media",
+        conflicts_with = "header"
+    )]
+    header_video: Option<String>,
+    /// Document for the header: an http(s) link.
+    #[arg(
+        long,
+        value_name = "URL",
+        group = "header_media",
+        conflicts_with = "header"
+    )]
+    header_document: Option<String>,
 }
 
 impl SendCommand {
@@ -621,9 +671,17 @@ impl Interactive {
         validate::recipient(&c.to)?;
         validate::not_blank(&c.body, "--body")?;
         let reply_to = c.reply.id()?;
-        let (to, text) = (c.to.clone(), c.text());
+        let (to, mut text) = (c.to.clone(), c.text());
         let payload = match &self {
             Self::Button(a) => {
+                let header = interactive_media_header(
+                    a.header_image.as_deref(),
+                    a.header_video.as_deref(),
+                    a.header_document.as_deref(),
+                )?;
+                if header.is_some() {
+                    text.header = header;
+                }
                 messages::interactive_buttons(&to, &text, &parse_buttons(&a.buttons)?, reply_to)
             }
             Self::List(a) => {
@@ -634,12 +692,44 @@ impl Interactive {
             Self::CtaUrl(a) => {
                 validate::not_blank(&a.display, "--display")?;
                 validate::not_blank(&a.url, "--url")?;
+                let header = interactive_media_header(
+                    a.header_image.as_deref(),
+                    a.header_video.as_deref(),
+                    a.header_document.as_deref(),
+                )?;
+                if let Some(InteractiveHeader::Media(_, MediaSource::Id(_))) = header {
+                    return Err(Error::validation(
+                        "a cta-url media header must be an http(s) link, not a media id",
+                    ));
+                }
+                if header.is_some() {
+                    text.header = header;
+                }
                 messages::interactive_cta_url(&to, &text, &a.display, &a.url, reply_to)
             }
         };
         self.common().policy.enforce(&to)?;
         dispatch(app, payload).await
     }
+}
+
+fn interactive_media_header(
+    image: Option<&str>,
+    video: Option<&str>,
+    document: Option<&str>,
+) -> Result<Option<InteractiveHeader>> {
+    let media = [
+        (image, MediaKind::Image, "--header-image"),
+        (video, MediaKind::Video, "--header-video"),
+        (document, MediaKind::Document, "--header-document"),
+    ];
+    for (value, kind, flag) in media {
+        if let Some(value) = value {
+            let source = media_reference(value, flag)?;
+            return Ok(Some(InteractiveHeader::Media(kind, source)));
+        }
+    }
+    Ok(None)
 }
 
 /// `id:Title`, or a bare title used as its own id.
@@ -680,7 +770,44 @@ pub(super) fn split_rows(rows: &str) -> Vec<String> {
     parts
 }
 
-/// `Title:id:Label,id2:Label2`.
+/// `id:Label`, or `id:Label::Description`. A single `:` can't start the description, since
+/// a label has always been free to contain one. So a label can't hold `::` or start with `:`.
+fn parse_row(row: &str, section: &str) -> Result<Row> {
+    let (id, rest) = row.split_once(':').ok_or_else(|| {
+        Error::validation(format!(
+            "row '{row}' in --section '{section}' must look like id:Label"
+        ))
+    })?;
+    let (label, description) = match rest.split_once("::") {
+        Some((label, description)) => (label, Some(description.trim())),
+        None => (rest, None),
+    };
+    let (id, label) = (id.trim(), label.trim());
+    validate::not_blank(id, "row id")?;
+    validate::not_blank(label, "row title")?;
+    if label.starts_with(':') {
+        return Err(Error::validation(format!(
+            "row '{row}' in --section '{section}' has no title; use id:Label::Description"
+        )));
+    }
+    validate::max_chars(id, limits::MAX_LIST_ROW_ID, "row id")?;
+    validate::max_chars(label, limits::MAX_LIST_ROW_TITLE, "row title")?;
+    if let Some(description) = description {
+        validate::not_blank(description, "row description")?;
+        validate::max_chars(
+            description,
+            limits::MAX_LIST_ROW_DESCRIPTION,
+            "row description",
+        )?;
+    }
+    Ok(Row {
+        id: id.to_owned(),
+        title: label.to_owned(),
+        description: description.map(str::to_owned),
+    })
+}
+
+/// `Title:id:Label::Description,id2:Label2`.
 fn parse_sections(specs: &[String]) -> Result<Vec<Section>> {
     let sections = specs
         .iter()
@@ -690,27 +817,22 @@ fn parse_sections(specs: &[String]) -> Result<Vec<Section>> {
                     "--section '{spec}' must look like Title:id:Label,id2:Label2"
                 ))
             })?;
-            let rows = rows
-                .split(',')
+            let rows = split_rows(rows)
+                .iter()
                 .filter(|r| !r.trim().is_empty())
-                .map(|r| {
-                    let (id, label) = r.split_once(':').ok_or_else(|| {
-                        Error::validation(format!(
-                            "row '{r}' in --section '{title}' must look like id:Label"
-                        ))
-                    })?;
-                    Ok(Row {
-                        id: id.trim().to_owned(),
-                        title: label.trim().to_owned(),
-                        description: None,
-                    })
-                })
+                .map(|r| parse_row(r, title))
                 .collect::<Result<Vec<_>>>()?;
             if rows.is_empty() {
                 return Err(Error::validation(format!(
                     "--section '{title}' has no rows"
                 )));
             }
+            validate::not_blank(title, "section title")?;
+            validate::max_chars(
+                title.trim(),
+                limits::MAX_LIST_SECTION_TITLE,
+                "section title",
+            )?;
             Ok(Section {
                 title: title.trim().to_owned(),
                 rows,
@@ -830,5 +952,21 @@ mod tests {
             .collect::<Vec<_>>()
             .join(",");
         assert!(parse_sections(&[format!("Big:{many}")]).is_err());
+    }
+
+    #[test]
+    fn a_row_keeps_its_colons_and_takes_an_optional_description() {
+        let s = parse_sections(&["Times:a:Today: 10:30,b:Soon::Next day: by 5".into()]).unwrap();
+        assert_eq!(s[0].rows[0].title, "Today: 10:30");
+        assert_eq!(s[0].rows[0].description, None);
+        assert_eq!(s[0].rows[1].title, "Soon");
+        assert_eq!(s[0].rows[1].description.as_deref(), Some("Next day: by 5"));
+    }
+
+    #[test]
+    fn an_escaped_comma_stays_inside_the_row() {
+        let s = parse_sections(&[r"S:a:A::One\, two,b:B".into()]).unwrap();
+        assert_eq!(s[0].rows.len(), 2);
+        assert_eq!(s[0].rows[0].description.as_deref(), Some("One, two"));
     }
 }

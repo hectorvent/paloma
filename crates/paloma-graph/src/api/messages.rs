@@ -153,10 +153,7 @@ pub fn template_components(params: &TemplateParams<'_>) -> Vec<Value> {
         Some(TemplateHeader::Text(text)) => components
             .push(json!({ "type": "header", "parameters": [{ "type": "text", "text": text }] })),
         Some(TemplateHeader::Media(kind, source)) => {
-            let media = match source {
-                MediaSource::Id(id) => json!({ "id": id }),
-                MediaSource::Link(link) => json!({ "link": link }),
-            };
+            let media = media_object(source);
             let kind = kind.as_str();
             components
                 .push(json!({ "type": "header", "parameters": [{ "type": kind, kind: media }] }));
@@ -233,6 +230,13 @@ impl MediaKind {
 pub enum MediaSource {
     Id(String),
     Link(String),
+}
+
+fn media_object(source: &MediaSource) -> Value {
+    match source {
+        MediaSource::Id(id) => json!({ "id": id }),
+        MediaSource::Link(link) => json!({ "link": link }),
+    }
 }
 
 /// The optional parts of a media message. A kind that can't use one drops it.
@@ -318,10 +322,17 @@ pub fn reaction(to: &str, message_id: &str, emoji: &str) -> Value {
     )
 }
 
-/// The header/body/footer text shared by every interactive message.
+/// An interactive message's header. A list message can only use `Text`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum InteractiveHeader {
+    Text(String),
+    Media(MediaKind, MediaSource),
+}
+
+/// The header, body and footer shared by every interactive message.
 #[derive(Debug, Clone, Default)]
 pub struct InteractiveText {
-    pub header: Option<String>,
+    pub header: Option<InteractiveHeader>,
     pub body: String,
     pub footer: Option<String>,
 }
@@ -357,8 +368,18 @@ fn interactive(
 ) -> Value {
     let mut m = Map::new();
     m.insert("type".into(), kind.into());
-    if let Some(h) = non_blank(text.header.as_deref()) {
-        m.insert("header".into(), json!({ "type": "text", "text": h }));
+    match &text.header {
+        Some(InteractiveHeader::Text(h)) if !h.trim().is_empty() => {
+            m.insert("header".into(), json!({ "type": "text", "text": h }));
+        }
+        Some(InteractiveHeader::Media(kind, source)) => {
+            let kind = kind.as_str();
+            m.insert(
+                "header".into(),
+                json!({ "type": kind, kind: media_object(source) }),
+            );
+        }
+        _ => {}
     }
     m.insert("body".into(), json!({ "text": text.body }));
     if let Some(f) = non_blank(text.footer.as_deref()) {
@@ -518,7 +539,7 @@ mod tests {
     #[test]
     fn interactive_omits_blank_header_footer() {
         let t = InteractiveText {
-            header: Some(" ".into()),
+            header: Some(InteractiveHeader::Text(" ".into())),
             body: "Pick".into(),
             footer: None,
         };
@@ -535,6 +556,23 @@ mod tests {
         assert_eq!(
             v["interactive"]["action"]["buttons"][0]["reply"]["title"],
             "Yes"
+        );
+    }
+
+    #[test]
+    fn interactive_media_header_uses_the_kind_as_its_key() {
+        let t = InteractiveText {
+            header: Some(InteractiveHeader::Media(
+                MediaKind::Document,
+                MediaSource::Link("https://x.test/a.pdf".into()),
+            )),
+            body: "Pick".into(),
+            footer: None,
+        };
+        let v = interactive_cta_url("1", &t, "Open", "https://x.test", None);
+        assert_eq!(
+            v["interactive"]["header"],
+            json!({ "type": "document", "document": { "link": "https://x.test/a.pdf" } })
         );
     }
 

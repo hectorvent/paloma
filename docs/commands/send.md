@@ -223,16 +223,50 @@ Three kinds, each taking `--body` plus optional `--header`, `--footer` and `--re
 # Reply buttons (up to 3), given as id:Title
 paloma send interactive button 15551234567 --body "Confirm your order?" \
       --button "yes:Yes" --button "no:No"
+paloma send interactive button 15551234567 --body "Confirm your order?" \
+      --header-image 1284756 --button "yes:Yes" --button "no:No"
 
 # A list picker; sections are "Title:id:Label,id2:Label2" (up to 10 rows total)
 paloma send interactive list 15551234567 --body "Pick a flavor" --button "Choose" \
-      --section "Cakes:choco:Chocolate,vanilla:Vanilla" \
+      --section "Cakes:choco:Chocolate::Dark and rich,vanilla:Vanilla" \
       --section "Drinks:morir:Morir Soñando"
 
 # A call-to-action that maps a URL to a tappable button
 paloma send interactive cta-url 15551234567 --body "See the menu" \
-      --display "Open menu" --url https://acme.do/menu
+      --display "Open menu" --url https://acme.do/menu \
+      --header-image https://acme.do/menu.jpg
 ```
+
+### Media headers
+
+`--header-image`, `--header-video` and `--header-document` replace the text `--header`. Use
+one header flag at most. What each kind takes follows Meta's page for it:
+
+| Kind | Header | Media source |
+|------|--------|--------------|
+| [`button`](https://developers.facebook.com/documentation/business-messaging/whatsapp/messages/interactive-reply-buttons-messages) | Text, image, video or document | A media ID or an `http(s)` link |
+| [`cta-url`](https://developers.facebook.com/documentation/business-messaging/whatsapp/messages/interactive-cta-url-messages) | Text, image, video or document | An `http(s)` link only; a media ID exits 5 |
+| [`list`](https://developers.facebook.com/documentation/business-messaging/whatsapp/messages/interactive-list-messages) | Text only | None |
+
+### List rows
+
+A row is `id:Label`, or `id:Label::Description` to add a description. A label can contain `:`,
+but can't contain `::` or start with `:`; use `send raw` for one that must. Rows are separated
+by commas, so write a comma in a row's text as `\,`. A section title can hold a plain comma, and
+is required, with at most 24 characters.
+
+```bash
+paloma send interactive list 15551234567 --body "Shipping?" --button "Options" \
+      --section 'Fast:express:Express::Next day\, by 5 pm,priority:Priority'
+```
+
+| Row part | Maximum characters |
+|----------|--------------------|
+| ID | 200 |
+| Label | 24 |
+| Description | 72 |
+
+Anything longer, or a blank part, exits 5 before any API call.
 
 ## `paloma send raw`
 

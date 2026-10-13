@@ -4759,6 +4759,243 @@ async fn template_apply_still_creates_when_no_page_has_it() {
     assert_eq!(graph.received_requests().await.unwrap().len(), 4);
 }
 
+// Interactive media headers.
+
+const TO: &str = "15551234567";
+
+fn dry_run_body(home: &TempDir, args: &[&str]) -> Value {
+    let out = paloma(None, home)
+        .args(["send", "interactive"])
+        .args(args)
+        .args(["--dry-run", "-o", "json"])
+        .output()
+        .unwrap();
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    stdout_json(&out)["body"]["interactive"].clone()
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn interactive_button_sends_a_media_id_header() {
+    let graph = MockServer::start().await;
+    Mock::given(method("POST"))
+        .and(path(format!("/v26.0/{PHONE}/messages")))
+        .and(body_json(json!({
+            "messaging_product": "whatsapp",
+            "recipient_type": "individual",
+            "to": TO,
+            "type": "interactive",
+            "interactive": {
+                "type": "button",
+                "header": { "type": "image", "image": { "id": "2762" } },
+                "body": { "text": "Pick" },
+                "action": { "buttons": [
+                    { "type": "reply", "reply": { "id": "y", "title": "Yes" } }
+                ] }
+            }
+        })))
+        .respond_with(
+            ResponseTemplate::new(200).set_body_json(json!({"messages":[{"id":"wamid.R"}]})),
+        )
+        .expect(1)
+        .mount(&graph)
+        .await;
+    let home = TempDir::new().unwrap();
+    paloma(Some(&graph), &home)
+        .args(["send", "interactive", "button", TO, "--body", "Pick"])
+        .args(["--button", "y:Yes", "--header-image", "2762", "-q"])
+        .assert()
+        .success()
+        .stdout("wamid.R\n");
+}
+
+#[test]
+fn interactive_button_takes_each_media_kind_by_id_or_link() {
+    let home = TempDir::new().unwrap();
+    let base = ["button", TO, "--body", "b", "--button", "y:Yes"];
+    for (flag, kind) in [
+        ("--header-image", "image"),
+        ("--header-video", "video"),
+        ("--header-document", "document"),
+    ] {
+        let mut args = base.to_vec();
+        args.extend([flag, "https://x.test/f"]);
+        assert_eq!(
+            dry_run_body(&home, &args)["header"],
+            json!({ "type": kind, kind: { "link": "https://x.test/f" } })
+        );
+        let mut args = base.to_vec();
+        args.extend([flag, "99"]);
+        assert_eq!(
+            dry_run_body(&home, &args)["header"],
+            json!({ "type": kind, kind: { "id": "99" } })
+        );
+    }
+}
+
+#[test]
+fn interactive_cta_url_takes_a_media_link_and_refuses_an_id() {
+    let home = TempDir::new().unwrap();
+    let base = [
+        "cta-url",
+        TO,
+        "--body",
+        "b",
+        "--display",
+        "Open",
+        "--url",
+        "https://x.test",
+    ];
+    let mut args = base.to_vec();
+    args.extend(["--header-video", "https://x.test/v.mp4"]);
+    assert_eq!(
+        dry_run_body(&home, &args)["header"],
+        json!({ "type": "video", "video": { "link": "https://x.test/v.mp4" } })
+    );
+    paloma(None, &home)
+        .env_remove("PALOMA_PHONE_NUMBER_ID")
+        .args(["send", "interactive"])
+        .args(base)
+        .args(["--header-image", "99"])
+        .assert()
+        .code(5)
+        .stdout(predicate::str::is_empty())
+        .stderr(predicate::str::contains("not a media id"));
+}
+
+#[test]
+fn interactive_media_header_flags_are_exclusive_and_list_has_none() {
+    let home = TempDir::new().unwrap();
+    let button = ["send", "interactive", "button", TO, "--body", "b"];
+    for extra in [
+        ["--header", "Text", "--header-image", "1"],
+        ["--header-video", "2", "--header-image", "1"],
+    ] {
+        paloma(None, &home)
+            .args(button)
+            .args(["--button", "y:Yes"])
+            .args(extra)
+            .assert()
+            .code(2);
+    }
+    paloma(None, &home)
+        .args(["send", "interactive", "list", TO, "--body", "b"])
+        .args(["--button", "Open", "--section", "S:a:A"])
+        .args(["--header-image", "1"])
+        .assert()
+        .code(2);
+}
+
+#[test]
+fn interactive_media_header_refuses_a_bad_reference_without_echoing_it() {
+    let home = TempDir::new().unwrap();
+    paloma(None, &home)
+        .env_remove("PALOMA_PHONE_NUMBER_ID")
+        .args(["send", "interactive", "button", TO, "--body", "b"])
+        .args(["--button", "y:Yes", "--header-image", "ftp://x/secret"])
+        .assert()
+        .code(5)
+        .stdout(predicate::str::is_empty())
+        .stderr(
+            predicate::str::contains("--header-image")
+                .and(predicate::str::contains("secret").not()),
+        );
+}
+
+// List row descriptions and limits.
+
+fn list_args(section: &str) -> Vec<&str> {
+    vec![
+        "list",
+        TO,
+        "--body",
+        "b",
+        "--button",
+        "Open",
+        "--section",
+        section,
+    ]
+}
+
+#[test]
+fn list_row_description_is_sent_and_the_old_syntax_still_works() {
+    let home = TempDir::new().unwrap();
+    let section = r"Ship:fast:Express::Next day\, by 5: pm,slow:Time: 10:30";
+    assert_eq!(
+        dry_run_body(&home, &list_args(section))["action"]["sections"],
+        json!([{ "title": "Ship", "rows": [
+            { "id": "fast", "title": "Express", "description": "Next day, by 5: pm" },
+            { "id": "slow", "title": "Time: 10:30" }
+        ] }])
+    );
+}
+
+#[test]
+fn list_row_limits_are_exact_and_checked_before_context() {
+    let home = TempDir::new().unwrap();
+    let cases = [
+        ("a".repeat(200), "T".to_owned(), "D".to_owned(), None),
+        (
+            "a".repeat(201),
+            "T".to_owned(),
+            "D".to_owned(),
+            Some("row id"),
+        ),
+        ("a".to_owned(), "T".repeat(24), "D".to_owned(), None),
+        (
+            "a".to_owned(),
+            "T".repeat(25),
+            "D".to_owned(),
+            Some("row title"),
+        ),
+        ("a".to_owned(), "T".to_owned(), "D".repeat(72), None),
+        (
+            "a".to_owned(),
+            "T".to_owned(),
+            "D".repeat(73),
+            Some("row description"),
+        ),
+        (
+            " ".to_owned(),
+            "T".to_owned(),
+            "D".to_owned(),
+            Some("row id"),
+        ),
+        (
+            "a".to_owned(),
+            " ".to_owned(),
+            "D".to_owned(),
+            Some("row title"),
+        ),
+        (
+            "a".to_owned(),
+            "T".to_owned(),
+            " ".to_owned(),
+            Some("row description"),
+        ),
+    ];
+    for (id, title, description, problem) in cases {
+        let section = format!("S:{id}:{title}::{description}");
+        let mut cmd = paloma(None, &home);
+        cmd.args(["send", "interactive"]).args(list_args(&section));
+        match problem {
+            None => {
+                cmd.arg("--dry-run").assert().success();
+            }
+            Some(problem) => {
+                cmd.env_remove("PALOMA_PHONE_NUMBER_ID")
+                    .assert()
+                    .code(5)
+                    .stdout(predicate::str::is_empty())
+                    .stderr(predicate::str::contains(problem));
+            }
+        }
+    }
+}
+
 // Review fixes across the v0.5 lists, lookups and validation.
 
 #[tokio::test(flavor = "multi_thread")]
@@ -4875,7 +5112,21 @@ async fn template_delete_language_refuses_a_match_with_no_id() {
 #[test]
 fn review_validation_fails_before_any_call() {
     let home = TempDir::new().unwrap();
+    let list = [
+        "send",
+        "interactive",
+        "list",
+        "15551234567",
+        "--body",
+        "b",
+        "--button",
+        "o",
+    ];
+    let long_title = format!("{}:a:A", "t".repeat(25));
     let cases: Vec<Vec<&str>> = vec![
+        [&list[..], &["--section", ":a:A"]].concat(),
+        [&list[..], &["--section", long_title.as_str()]].concat(),
+        [&list[..], &["--section", "S:a::Desc"]].concat(),
         vec!["template", "delete", "--ids", "5,5", "--yes"],
         vec!["template", "list", "--limit", "0"],
         vec![

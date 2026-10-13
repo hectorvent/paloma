@@ -65,6 +65,17 @@ pub fn not_blank(value: &str, what: &str) -> Result<()> {
     }
 }
 
+/// A length check in characters, not bytes. The error never echoes the value.
+pub fn max_chars(value: &str, max: usize, what: &str) -> Result<()> {
+    let len = value.chars().count();
+    if len > max {
+        return Err(Error::validation(format!(
+            "{what} is {len} chars; max is {max}"
+        )));
+    }
+    Ok(())
+}
+
 /// Named template parameters use lowercase ASCII letters and underscores.
 pub fn template_parameter_name(name: &str) -> Result<()> {
     if name.is_empty() || !name.bytes().all(|b| b.is_ascii_lowercase() || b == b'_') {
@@ -281,6 +292,14 @@ mod tests {
         assert!(template_name("Order").is_err());
         assert!(template_name("order ready").is_err());
         assert!(template_name(&"a".repeat(513)).is_err());
+    }
+
+    #[test]
+    fn max_chars_counts_characters_and_never_echoes_the_value() {
+        assert!(max_chars(&"😀".repeat(3), 3, "x").is_ok());
+        let err = max_chars("secret", 3, "field").unwrap_err();
+        assert_eq!(err.exit_code().code(), 5);
+        assert!(!err.to_string().contains("secret"), "{err}");
     }
 
     #[test]

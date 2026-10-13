@@ -56,6 +56,12 @@ pub const RESUMABLE_UPLOAD_TYPES: [&str; 5] = [
 pub const PROFILE_PHOTO_TYPES: [&str; 3] = ["image/jpeg", "image/jpg", "image/png"];
 /// Rows allowed across all sections of an interactive list message.
 pub const MAX_LIST_ROWS: usize = 10;
+/// Maximum characters in a list section's title.
+pub const MAX_LIST_SECTION_TITLE: usize = 24;
+/// Maximum characters in a list row's id, title and description.
+pub const MAX_LIST_ROW_ID: usize = 200;
+pub const MAX_LIST_ROW_TITLE: usize = 24;
+pub const MAX_LIST_ROW_DESCRIPTION: usize = 72;
 /// Digits in a two-step verification PIN.
 pub const PIN_DIGITS: usize = 6;
 /// Most phone numbers `GET /{waba-id}/phone_numbers` returns per page.
