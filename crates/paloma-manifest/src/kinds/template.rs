@@ -14,7 +14,7 @@ use paloma_graph::paging;
 use serde_json::{Value, json};
 
 use crate::diff;
-use crate::kind::{Cx, KindPlan, read};
+use crate::kind::{Cx, KindPlan};
 
 pub fn template() -> Value {
     json!({ "name": "", "language": "", "category": "", "components": [] })
@@ -61,11 +61,13 @@ pub async fn plan(cx: Cx<'_>, spec: &Value) -> Result<KindPlan> {
     let desired = normalize(&create_body, shorthand, None);
     let waba = cx.ctx.require_waba_id()?;
 
-    let found = read(cx, &templates::lookup(waba, &name, Some(&language))).await?;
-    let Some(current) = templates::exact_matches(&found, &name, Some(&language))
-        .first()
-        .map(|v| (*v).clone())
-    else {
+    // Follow the cursor: stopping short would plan a create for a template that exists.
+    let found = templates::find_page(cx.client, waba, &name, Some(&language)).await?;
+    let Some(current) = found.as_ref().and_then(|page| {
+        templates::exact_matches(page, &name, Some(&language))
+            .first()
+            .map(|v| (*v).clone())
+    }) else {
         let category = desired
             .get("category")
             .and_then(Value::as_str)

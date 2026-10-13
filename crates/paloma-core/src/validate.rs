@@ -3,7 +3,11 @@
 
 use std::path::{Path, PathBuf};
 
-use crate::limits::{DATA_LOCALIZATION_REGIONS, MAX_CAPTION, MAX_TEXT_BODY, PIN_DIGITS};
+use crate::limits::{
+    DATA_LOCALIZATION_REGIONS, MAX_CAPTION, MAX_TEMPLATE_DELETE_IDS, MAX_TEMPLATE_NAME,
+    MAX_TEXT_BODY, PIN_DIGITS, TEMPLATE_TTL_30_DAYS, TEMPLATE_TTL_AUTHENTICATION,
+    TEMPLATE_TTL_MARKETING, TEMPLATE_TTL_UTILITY,
+};
 use crate::{Error, Result};
 
 /// An E.164 number (optional `+`, 7–15 digits, no leading zero). Surrounding whitespace
@@ -69,6 +73,98 @@ pub fn template_parameter_name(name: &str) -> Result<()> {
         ));
     }
     Ok(())
+}
+
+/// A template id: Graph ids are digits, and bulk delete sends them unquoted.
+pub fn template_id(id: &str) -> Result<()> {
+    if id.is_empty() || !id.bytes().all(|b| b.is_ascii_digit()) {
+        return Err(Error::validation(format!(
+            "template id '{id}' must contain only digits"
+        )));
+    }
+    Ok(())
+}
+
+/// The ids of a bulk delete. Meta fails the whole request over one bad id.
+pub fn template_ids(ids: &[String]) -> Result<()> {
+    if ids.len() > MAX_TEMPLATE_DELETE_IDS {
+        return Err(Error::validation(format!(
+            "{} template ids given; max is {MAX_TEMPLATE_DELETE_IDS} per request",
+            ids.len()
+        )));
+    }
+    let mut seen = std::collections::HashSet::new();
+    if let Some(id) = ids.iter().find(|id| !seen.insert(*id)) {
+        return Err(Error::validation(format!(
+            "template id {id} is given twice"
+        )));
+    }
+    ids.iter().try_for_each(|id| template_id(id))
+}
+
+/// Template names are lowercase letters, digits and underscores.
+pub fn template_name(name: &str) -> Result<()> {
+    if name.is_empty()
+        || !name
+            .bytes()
+            .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'_')
+    {
+        return Err(Error::validation(
+            "template names must contain only lowercase letters, digits and underscores",
+        ));
+    }
+    template_text(name, MAX_TEMPLATE_NAME, "template name")
+}
+
+/// A piece of template text: not blank and within its limit, counted in characters.
+pub fn template_text(value: &str, max: usize, what: &str) -> Result<()> {
+    not_blank(value, what)?;
+    let len = value.chars().count();
+    if len > max {
+        return Err(Error::validation(format!(
+            "{what} is {len} chars; max is {max}"
+        )));
+    }
+    Ok(())
+}
+
+/// The `{{...}}` placeholders in a template string, in order of appearance.
+#[must_use]
+pub fn template_variables(text: &str) -> Vec<&str> {
+    let mut variables = Vec::new();
+    let mut rest = text;
+    while let Some((_, after_open)) = rest.split_once("{{") {
+        let Some((variable, after_close)) = after_open.split_once("}}") else {
+            break;
+        };
+        variables.push(variable.trim());
+        rest = after_close;
+    }
+    variables
+}
+
+/// A TTL within the range Meta documents for the category. Other categories have no
+/// documented range, so Meta decides.
+pub fn template_ttl(category: &str, ttl: i64) -> Result<()> {
+    let (range, thirty_days) = match category.to_ascii_uppercase().as_str() {
+        "AUTHENTICATION" => (TEMPLATE_TTL_AUTHENTICATION, true),
+        "UTILITY" => (TEMPLATE_TTL_UTILITY, true),
+        "MARKETING" => (TEMPLATE_TTL_MARKETING, false),
+        _ => return Ok(()),
+    };
+    if range.contains(&ttl) || (thirty_days && ttl == TEMPLATE_TTL_30_DAYS) {
+        return Ok(());
+    }
+    let special = if thirty_days {
+        format!(", or {TEMPLATE_TTL_30_DAYS} for 30 days")
+    } else {
+        String::new()
+    };
+    Err(Error::validation(format!(
+        "--ttl-seconds for {category} must be {} to {}{special}",
+        range.start(),
+        range.end()
+    )))
 }
 
 pub fn pin(pin: &str) -> Result<()> {
@@ -155,6 +251,36 @@ mod tests {
         assert!(caption(None).is_ok());
         assert!(caption(Some(&"a".repeat(MAX_CAPTION))).is_ok());
         assert!(caption(Some(&"a".repeat(MAX_CAPTION + 1))).is_err());
+    }
+
+    #[test]
+    fn template_variables_are_found_in_order() {
+        assert_eq!(
+            template_variables("Hi {{1}}, {{ 2 }} and {{name}}{{broken"),
+            ["1", "2", "name"]
+        );
+        assert!(template_variables("no variables").is_empty());
+    }
+
+    #[test]
+    fn template_ttl_ranges_follow_the_category() {
+        assert!(template_ttl("UTILITY", 30).is_ok());
+        assert!(template_ttl("utility", 43_200).is_ok());
+        assert!(template_ttl("UTILITY", -1).is_ok());
+        assert!(template_ttl("UTILITY", 43_201).is_err());
+        assert!(template_ttl("AUTHENTICATION", 900).is_ok());
+        assert!(template_ttl("AUTHENTICATION", 901).is_err());
+        assert!(template_ttl("MARKETING", 43_200).is_ok());
+        assert!(template_ttl("MARKETING", 120).is_err());
+        assert!(template_ttl("MARKETING", -1).is_err());
+    }
+
+    #[test]
+    fn template_names_are_lowercase_alphanumeric() {
+        assert!(template_name("order_ready_2").is_ok());
+        assert!(template_name("Order").is_err());
+        assert!(template_name("order ready").is_err());
+        assert!(template_name(&"a".repeat(513)).is_err());
     }
 
     #[test]

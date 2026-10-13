@@ -663,6 +663,23 @@ fn parse_buttons(specs: &[String]) -> Result<Vec<Button>> {
         .collect()
 }
 
+/// Split at commas, reading `\,` as a literal comma.
+pub(super) fn split_rows(rows: &str) -> Vec<String> {
+    let mut parts = vec![String::new()];
+    let mut chars = rows.chars().peekable();
+    while let Some(c) = chars.next() {
+        match c {
+            '\\' if chars.peek() == Some(&',') => {
+                chars.next();
+                parts.last_mut().expect("starts non-empty").push(',');
+            }
+            ',' => parts.push(String::new()),
+            _ => parts.last_mut().expect("starts non-empty").push(c),
+        }
+    }
+    parts
+}
+
 /// `Title:id:Label,id2:Label2`.
 fn parse_sections(specs: &[String]) -> Result<Vec<Section>> {
     let sections = specs

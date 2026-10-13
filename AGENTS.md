@@ -54,6 +54,8 @@ Each cross-cutting concern lives in exactly one place, and that is load-bearing:
 (`app.out.info/note/warn`). `-q` prints only `Output::primary_id`, so
 `MID=$(paloma send text … -q)` works. `-o table|json|yaml|raw`; json/raw pass the raw
 Graph body through. Lists set `.table("/data", COLUMNS)`.
+`template get` is the exception: it prints only exact matches as `{"data":[...]}`, because
+Graph's name filter can return other templates.
 
 **Exit codes are a contract.** `0` ok, `1` generic, `2` usage (clap), `3` auth,
 `4` rate-limited, `5` validation, `6` policy. Return the right `Error` variant; use

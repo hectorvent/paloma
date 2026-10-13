@@ -121,6 +121,36 @@ async fn walk(
     )))
 }
 
+/// Follow pages from the start until `found` accepts one, and return that page; a lookup
+/// shouldn't pay for the pages after its answer. `None` means every page was read without
+/// a match. The guards match [`collect_all`], so a broken cursor is never "not found".
+pub async fn find_page(
+    client: &Client,
+    page: impl Fn(Option<&str>) -> Request,
+    found: impl Fn(&Value) -> bool,
+) -> Result<Option<Value>> {
+    let mut seen = HashSet::new();
+    let mut cursor: Option<String> = None;
+    for _ in 0..MAX_PAGES {
+        let body = client.execute(&page(cursor.as_deref())).await?.json()?;
+        if found(&body) {
+            return Ok(Some(body));
+        }
+        match advance(&body)? {
+            None => return Ok(None),
+            Some(next) => {
+                if !seen.insert(next.clone()) {
+                    return Err(Error::other(format!(
+                        "Graph API returned cursor {next} twice; refusing to loop"
+                    )));
+                }
+                cursor = Some(next);
+            }
+        }
+    }
+    Err(Error::other(format!("gave up after {MAX_PAGES} pages")))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
