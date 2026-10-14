@@ -4,28 +4,78 @@
 use std::path::{Path, PathBuf};
 
 use crate::limits::{
-    DATA_LOCALIZATION_REGIONS, DOCUMENT_MEDIA, MAX_CAPTION, MAX_TEMPLATE_DELETE_IDS,
+    DATA_LOCALIZATION_REGIONS, DOCUMENT_MEDIA, MAX_BSUID_ID, MAX_CAPTION, MAX_TEMPLATE_DELETE_IDS,
     MAX_TEMPLATE_NAME, MAX_TEXT_BODY, MEDIA_LIMITS, MediaLimit, PIN_DIGITS, TEMPLATE_TTL_30_DAYS,
     TEMPLATE_TTL_AUTHENTICATION, TEMPLATE_TTL_MARKETING, TEMPLATE_TTL_UTILITY,
 };
 use crate::{Error, Result};
 
-/// An E.164 number (optional `+`, 7–15 digits, no leading zero). Surrounding whitespace
-/// is tolerated.
+/// The two kinds of business-scoped user ID (BSUID).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Bsuid {
+    /// `US.13491208655302741918`, scoped to one business portfolio.
+    Scoped,
+    /// `US.ENT.11815799212886844830`, shared by the portfolios of a parent BSUID account.
+    Parent,
+}
+
+/// Classify a BSUID: a two-letter country code, a period, then up to 128 alphanumerics. A
+/// phone number holds only digits and a leading `+`, so one argument can accept both.
+/// Meta fails a request whose BSUID was altered, so a lowercase country is refused rather
+/// than corrected. Surrounding whitespace is tolerated.
+pub fn bsuid(value: &str) -> Option<Bsuid> {
+    let (country, rest) = value.trim().split_once('.')?;
+    if country.len() != 2 || !country.bytes().all(|b| b.is_ascii_uppercase()) {
+        return None;
+    }
+    let (kind, id) = match rest.strip_prefix("ENT.") {
+        Some(id) => (Bsuid::Parent, id),
+        None => (Bsuid::Scoped, rest),
+    };
+    let valid =
+        (1..=MAX_BSUID_ID).contains(&id.len()) && id.bytes().all(|b| b.is_ascii_alphanumeric());
+    valid.then_some(kind)
+}
+
+/// Optional `+`, 7–15 digits, no leading zero.
+fn is_e164(value: &str) -> bool {
+    let trimmed = value.trim();
+    let digits = trimmed.strip_prefix('+').unwrap_or(trimmed);
+    (7..=15).contains(&digits.len())
+        && digits.bytes().all(|b| b.is_ascii_digit())
+        && !digits.starts_with('0')
+}
+
+/// An E.164 number or a BSUID, parent BSUIDs included. Surrounding whitespace is tolerated.
 pub fn recipient(to: &str) -> Result<()> {
-    let trimmed = to.trim();
-    if trimmed.is_empty() {
+    if to.trim().is_empty() {
         return Err(Error::validation("recipient <to> is required"));
     }
-    let digits = trimmed.strip_prefix('+').unwrap_or(trimmed);
-    let valid = (7..=15).contains(&digits.len())
-        && digits.bytes().all(|b| b.is_ascii_digit())
-        && !digits.starts_with('0');
-    if valid {
+    if is_e164(to) || bsuid(to).is_some() {
         Ok(())
     } else {
         Err(Error::validation(format!(
-            "recipient '{to}' is not a valid E.164 number"
+            "recipient '{to}' is not a valid E.164 number or business-scoped user id \
+             (such as US.13491208655302741918)"
+        )))
+    }
+}
+
+/// A user to block or unblock: like [`recipient`], except that Meta fails a parent BSUID
+/// on this endpoint.
+pub fn block_user(user: &str) -> Result<()> {
+    if bsuid(user) == Some(Bsuid::Parent) {
+        return Err(Error::validation(format!(
+            "'{user}' is a parent business-scoped user id, which can't be blocked or unblocked; \
+             use the user's phone number or their business-scoped user id"
+        )));
+    }
+    if is_e164(user) || bsuid(user).is_some() {
+        Ok(())
+    } else {
+        Err(Error::validation(format!(
+            "user '{user}' is not a valid E.164 number or business-scoped user id \
+             (such as US.13491208655302741918)"
         )))
     }
 }
@@ -324,6 +374,62 @@ mod tests {
         ] {
             let err = recipient(bad).unwrap_err();
             assert_eq!(err.exit_code().code(), 5, "{bad}");
+        }
+    }
+
+    #[test]
+    fn bsuid_shapes_are_classified_and_never_overlap_with_a_number() {
+        for scoped in ["US.13491208655302741918", " BR.aB3 ", "US.ENT"] {
+            assert_eq!(bsuid(scoped), Some(Bsuid::Scoped), "{scoped}");
+            assert!(recipient(scoped).is_ok(), "{scoped}");
+        }
+        let parent = "US.ENT.11815799212886844830";
+        assert_eq!(bsuid(parent), Some(Bsuid::Parent));
+        assert!(recipient(parent).is_ok());
+        for number in ["15551234567", "+15551234567", "1234567"] {
+            assert_eq!(bsuid(number), None, "{number}");
+        }
+    }
+
+    #[test]
+    fn a_malformed_bsuid_is_refused() {
+        let longest = format!("US.{}", "1".repeat(MAX_BSUID_ID));
+        assert_eq!(bsuid(&longest), Some(Bsuid::Scoped));
+        let parent = format!("US.ENT.{}", "1".repeat(MAX_BSUID_ID));
+        assert_eq!(bsuid(&parent), Some(Bsuid::Parent));
+        for bad in [
+            "US.",
+            "US.ENT.",
+            "us.123",
+            "USA.123",
+            "U.123",
+            "1S.123",
+            ".123",
+            "US123",
+            "US.12.34",
+            "US.ENT.12.34",
+            "US.12-34",
+            "US.12 34",
+            "US.ñ",
+            &format!("{longest}1"),
+            &format!("{parent}1"),
+        ] {
+            assert_eq!(bsuid(bad), None, "{bad}");
+            let err = recipient(bad).unwrap_err();
+            assert_eq!(err.exit_code().code(), 5, "{bad}");
+        }
+    }
+
+    #[test]
+    fn block_user_takes_a_number_or_a_bsuid_but_no_parent() {
+        for ok in ["15551234567", "+15551234567", "US.13491208655302741918"] {
+            assert!(block_user(ok).is_ok(), "{ok}");
+        }
+        let err = block_user("US.ENT.11815799212886844830").unwrap_err();
+        assert_eq!(err.exit_code().code(), 5);
+        assert!(err.to_string().contains("parent"), "{err}");
+        for bad in ["", "  ", "abc", "us.123"] {
+            assert_eq!(block_user(bad).unwrap_err().exit_code().code(), 5, "{bad}");
         }
     }
 

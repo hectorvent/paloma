@@ -2,7 +2,11 @@
 //!
 //! The builders return the full JSON envelope so `--dry-run` shows exactly what would be
 //! sent. Optional fields are omitted rather than sent as `null`.
+//!
+//! Every builder goes through [`envelope`], which is where a recipient becomes `to` or
+//! `recipient`. A new message type gets business-scoped user IDs by using it.
 
+use paloma_core::validate;
 use serde::Serialize;
 use serde_json::{Map, Value, json};
 
@@ -38,12 +42,21 @@ pub fn message_id(response: &Value) -> Option<String> {
         .map(str::to_owned)
 }
 
-/// The shared envelope: `{messaging_product, recipient_type, to, type, context?, <type>: content}`.
+/// The shared envelope: `{messaging_product, recipient_type, to | recipient, type, context?,
+/// <type>: content}`. A business-scoped user ID goes in `recipient` and a phone number in
+/// `to`. One argument can't be both, so the payload never carries the two together, a case
+/// where Meta would use `to`.
 fn envelope(to: &str, kind: &str, reply_to: Option<&str>, content: impl Serialize) -> Value {
     let mut m = Map::new();
     m.insert("messaging_product".into(), MESSAGING_PRODUCT.into());
     m.insert("recipient_type".into(), "individual".into());
-    m.insert("to".into(), to.trim().into());
+    let to = to.trim();
+    let field = if validate::bsuid(to).is_some() {
+        "recipient"
+    } else {
+        "to"
+    };
+    m.insert(field.into(), to.into());
     m.insert("type".into(), kind.into());
     if let Some(id) = non_blank(reply_to) {
         m.insert("context".into(), json!({ "message_id": id }));
@@ -482,6 +495,22 @@ mod tests {
             serde_json::to_string(&v).unwrap(),
             r#"{"messaging_product":"whatsapp","recipient_type":"individual","to":"15551234567","type":"text","context":{"message_id":"wamid.X"},"text":{"preview_url":false,"body":"hi"}}"#
         );
+    }
+
+    #[test]
+    fn a_bsuid_goes_in_recipient_and_a_number_in_to() {
+        for bsuid in ["US.13491208655302741918", "US.ENT.11815799212886844830"] {
+            let v = text(&format!(" {bsuid} "), "hi", false, None);
+            assert_eq!(
+                serde_json::to_string(&v).unwrap(),
+                format!(
+                    r#"{{"messaging_product":"whatsapp","recipient_type":"individual","recipient":"{bsuid}","type":"text","text":{{"preview_url":false,"body":"hi"}}}}"#
+                )
+            );
+        }
+        let v = text("+15551234567", "hi", false, None);
+        assert_eq!(v["to"], "+15551234567");
+        assert!(v.get("recipient").is_none());
     }
 
     #[test]

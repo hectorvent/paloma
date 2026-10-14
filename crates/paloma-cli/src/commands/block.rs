@@ -7,17 +7,20 @@ use paloma_graph::paging;
 use crate::app::{App, no_id};
 use crate::output::Output;
 
-const LIST_COLUMNS: &[&str] = &["wa_id"];
+/// `wa_id` is missing for a user whose phone number Meta can't share.
+const LIST_COLUMNS: &[&str] = &["wa_id", "user_id"];
 
 #[derive(Debug, Subcommand)]
 pub enum BlockCommand {
     /// Block one or more users.
     Add {
+        /// E.164 number or business-scoped user ID (BSUID). Parent BSUIDs aren't accepted.
         #[arg(required = true, value_name = "USER")]
         users: Vec<String>,
     },
     /// Unblock one or more users.
     Remove {
+        /// E.164 number or business-scoped user ID (BSUID). Parent BSUIDs aren't accepted.
         #[arg(required = true, value_name = "USER")]
         users: Vec<String>,
     },
@@ -40,8 +43,11 @@ pub struct ListArgs {
 
 impl BlockCommand {
     pub async fn run(self, app: &App) -> Result<()> {
-        if let Self::List(a) = &self {
-            validate::page_size(a.limit, None)?;
+        match &self {
+            Self::Add { users } | Self::Remove { users } => {
+                users.iter().try_for_each(|u| validate::block_user(u))?;
+            }
+            Self::List(a) => validate::page_size(a.limit, None)?,
         }
         let phone = app.ctx()?.require_phone_number_id()?.to_owned();
         match self {

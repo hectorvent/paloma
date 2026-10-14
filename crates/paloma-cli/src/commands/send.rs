@@ -94,7 +94,7 @@ impl Policy {
 
 #[derive(Debug, Args)]
 pub struct Text {
-    /// Recipient (E.164 number).
+    /// Recipient (E.164 number or business-scoped user ID).
     to: String,
     /// Message body.
     #[arg(required_unless_present = "body_file", conflicts_with = "body_file")]
@@ -113,7 +113,7 @@ pub struct Text {
 
 #[derive(Debug, Args)]
 pub struct Template {
-    /// Recipient.
+    /// Recipient (E.164 number or business-scoped user ID).
     to: String,
     /// Template name.
     name: String,
@@ -160,7 +160,7 @@ pub struct Template {
 #[derive(Debug, Args)]
 #[command(group(ArgGroup::new("source").required(true).args(["file", "id", "link"])))]
 pub struct Media {
-    /// Recipient.
+    /// Recipient (E.164 number or business-scoped user ID).
     to: String,
     /// Upload this local file first, then send it.
     #[arg(long)]
@@ -194,7 +194,7 @@ pub struct Audio {
 
 #[derive(Debug, Args)]
 pub struct Location {
-    /// Recipient.
+    /// Recipient (E.164 number or business-scoped user ID).
     to: String,
     #[arg(long, allow_hyphen_values = true)]
     lat: f64,
@@ -214,7 +214,7 @@ pub struct Location {
 
 #[derive(Debug, Args)]
 pub struct Contact {
-    /// Recipient.
+    /// Recipient (E.164 number or business-scoped user ID).
     to: String,
     /// JSON file holding the Cloud API `contacts` array (or `{"contacts": [...]}`).
     #[arg(long)]
@@ -227,7 +227,7 @@ pub struct Contact {
 
 #[derive(Debug, Args)]
 pub struct Reaction {
-    /// Recipient.
+    /// Recipient (E.164 number or business-scoped user ID).
     to: String,
     /// The message to react to (wamid…).
     #[arg(long)]
@@ -260,7 +260,7 @@ pub enum Interactive {
 
 #[derive(Debug, Args)]
 pub struct InteractiveCommon {
-    /// Recipient.
+    /// Recipient (E.164 number or business-scoped user ID).
     to: String,
     /// Body text.
     #[arg(long)]

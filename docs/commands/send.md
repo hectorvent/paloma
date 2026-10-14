@@ -1,8 +1,8 @@
 # `paloma send`
 
 The hot path. Send a WhatsApp message. Recipient `<to>` is an E.164 number
-(`+15551234567` or `15551234567`). To send to a business-scoped user ID (BSUID), use
-[`send raw`](#paloma-send-raw) with `recipient` in the payload.
+(`+15551234567` or `15551234567`) or a business-scoped user ID (BSUID), such as
+`US.13491208655302741918`. See [Recipients](#recipients).
 
 ```
 paloma send <type> <to> [args] [flags]
@@ -23,6 +23,37 @@ you and sends it anyway. The quote is also missing if the original message was d
 moved to long-term storage, which typically happens after 30 days unless you've enabled
 local storage, and on KaiOS when the reply is audio, an image or a video. See Meta's
 [contextual replies](https://developers.facebook.com/documentation/business-messaging/whatsapp/messages/contextual-replies).
+
+## Recipients
+
+Every type except `raw` takes a phone number or a
+[BSUID](https://developers.facebook.com/documentation/business-messaging/whatsapp/business-scoped-user-ids)
+as `<to>`. A BSUID is a two-letter country code, a period and up to 128 letters and digits,
+so it can't be mistaken for a number. Paloma writes the matching field:
+
+| `<to>` | Example | Payload field |
+|--------|---------|---------------|
+| E.164 number | `15551234567` | `to` |
+| BSUID | `US.13491208655302741918` | `recipient` |
+| Parent BSUID | `US.ENT.11815799212886844830` | `recipient` |
+
+```bash
+paloma send text US.13491208655302741918 "Your order is ready"
+```
+
+- Pass the whole value. Meta fails a request if any part of it was changed, so Paloma
+  refuses any other shape, including a lowercase country code, with exit `5`.
+- A BSUID only works from a phone number in the business portfolio it belongs to. A parent
+  BSUID works from any portfolio enrolled in its parent account.
+- Meta also accepts both fields at once, in which case `to` wins. Paloma writes one, so use
+  [`send raw`](#paloma-send-raw) if you want to send both.
+- One-tap, zero-tap and copy code authentication templates need a phone number. Paloma
+  can't see a template's category without another API call, so it sends the message and
+  Meta's error `131062` comes back with exit `1` and a hint. A marketing template sent with
+  a max price can fail the same way.
+- `-q` still prints the wamid. The rest of the response differs: `contacts[]` carries
+  `user_id` and no `wa_id` when you sent to a BSUID, and `wa_id` and no `user_id` when you
+  sent to a number. Read `.contacts[0].wa_id` only if you know which you sent.
 
 ---
 
@@ -296,7 +327,8 @@ Anything longer, or a blank part, exits 5 before any API call.
 ## `paloma send raw`
 
 Escape hatch: send an already-formed Cloud API message object verbatim, from a
-file or stdin. Useful for message shapes paloma does not model directly.
+file or stdin. Useful for message shapes paloma does not model directly. The payload
+addresses itself with `to`, `recipient` or both, and Paloma doesn't check or change them.
 
 ```bash
 paloma send raw --file payload.json

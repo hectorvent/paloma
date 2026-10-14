@@ -3660,7 +3660,7 @@ async fn block_list_single_page_says_what_paging_can_and_cannot_tell() {
         .success()
         .stdout(
             predicate::str::contains("WA ID")
-                .and(predicate::str::contains("USER").not())
+                .and(predicate::str::contains("USER ID"))
                 .and(predicate::str::contains("--after").not()),
         )
         .stderr(
@@ -5433,4 +5433,451 @@ fn template_create_example_can_hold_a_comma_and_fields_are_trimmed() {
     let url = stdout_json(&out)["url"].as_str().unwrap().to_owned();
     assert!(url.contains("status"), "{url}");
     assert!(!url.contains("%20") && !url.contains("+status"), "{url}");
+}
+
+const BSUID: &str = "US.13491208655302741918";
+const PARENT_BSUID: &str = "US.ENT.11815799212886844830";
+
+/// A send under `--dry-run`, returning the body it would POST.
+fn dry_run_send_body(home: &TempDir, args: &[&str]) -> Value {
+    let out = paloma(None, home)
+        .arg("send")
+        .args(args)
+        .args(["--dry-run", "-o", "json"])
+        .output()
+        .unwrap();
+    assert!(
+        out.status.success(),
+        "{args:?}: {}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let printed = stdout_json(&out);
+    printed.get("body").cloned().unwrap_or(printed)
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn send_to_a_bsuid_posts_recipient_and_no_to() {
+    let graph = MockServer::start().await;
+    Mock::given(method("POST"))
+        .and(path(format!("/v26.0/{PHONE}/messages")))
+        .and(body_json(json!({
+            "messaging_product": "whatsapp",
+            "recipient_type": "individual",
+            "recipient": BSUID,
+            "type": "text",
+            "text": { "preview_url": false, "body": "hello" }
+        })))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "messaging_product": "whatsapp",
+            "contacts": [{ "input": BSUID, "user_id": BSUID }],
+            "messages": [{ "id": "wamid.BSUID" }]
+        })))
+        .expect(1)
+        .mount(&graph)
+        .await;
+
+    let home = TempDir::new().unwrap();
+    paloma(Some(&graph), &home)
+        .args(["send", "text", BSUID, "hello", "-q"])
+        .assert()
+        .success()
+        .stdout("wamid.BSUID\n")
+        .stderr(predicate::str::is_empty());
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn send_to_a_parent_bsuid_posts_recipient() {
+    let graph = MockServer::start().await;
+    Mock::given(method("POST"))
+        .and(path(format!("/v26.0/{PHONE}/messages")))
+        .and(body_json(json!({
+            "messaging_product": "whatsapp",
+            "recipient_type": "individual",
+            "recipient": PARENT_BSUID,
+            "type": "text",
+            "text": { "preview_url": false, "body": "hello" }
+        })))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "contacts": [{ "input": PARENT_BSUID, "user_id": PARENT_BSUID }],
+            "messages": [{ "id": "wamid.PARENT" }]
+        })))
+        .expect(1)
+        .mount(&graph)
+        .await;
+
+    let home = TempDir::new().unwrap();
+    paloma(Some(&graph), &home)
+        .args(["send", "text", PARENT_BSUID, "hello", "-q"])
+        .assert()
+        .success()
+        .stdout("wamid.PARENT\n");
+}
+
+#[test]
+fn every_send_verb_addresses_a_bsuid_with_recipient() {
+    let home = TempDir::new().unwrap();
+    let contacts = home.path().join("contacts.json");
+    std::fs::write(&contacts, r#"[{"name":{"formatted_name":"A"}}]"#).unwrap();
+    let upload = home.path().join("photo.png");
+    std::fs::write(&upload, b"png").unwrap();
+    let contacts = contacts.to_str().unwrap();
+    let upload = upload.to_str().unwrap();
+    let cases: Vec<(&str, Vec<&str>)> = vec![
+        ("text", vec!["text", BSUID, "hi"]),
+        ("template", vec!["template", BSUID, "t", "--lang", "en"]),
+        ("image", vec!["image", BSUID, "--id", "9"]),
+        ("document", vec!["document", BSUID, "--id", "9"]),
+        ("audio", vec!["audio", BSUID, "--id", "9"]),
+        ("video", vec!["video", BSUID, "--id", "9"]),
+        ("sticker", vec!["sticker", BSUID, "--id", "9"]),
+        (
+            "location",
+            vec!["location", BSUID, "--lat", "1", "--long", "2"],
+        ),
+        ("contacts", vec!["contact", BSUID, "--file", contacts]),
+        (
+            "reaction",
+            vec!["reaction", BSUID, "--message-id", "wamid.X", "--emoji", "y"],
+        ),
+        (
+            "interactive",
+            vec![
+                "interactive",
+                "button",
+                BSUID,
+                "--body",
+                "b",
+                "--button",
+                "Y",
+            ],
+        ),
+        (
+            "interactive",
+            vec![
+                "interactive",
+                "list",
+                BSUID,
+                "--body",
+                "b",
+                "--button",
+                "B",
+                "--section",
+                "S:a:A",
+            ],
+        ),
+        (
+            "interactive",
+            vec![
+                "interactive",
+                "cta-url",
+                BSUID,
+                "--body",
+                "b",
+                "--display",
+                "D",
+                "--url",
+                "https://x.test",
+            ],
+        ),
+    ];
+    for (kind, args) in &cases {
+        let body = dry_run_send_body(&home, args);
+        assert_eq!(body["recipient"], BSUID, "{args:?}: {body}");
+        assert_eq!(body["recipient_type"], "individual", "{args:?}: {body}");
+        assert_eq!(body["type"], *kind, "{args:?}: {body}");
+        assert!(body.get("to").is_none(), "{args:?}: {body}");
+    }
+
+    // An upload prints two requests, and only the second addresses anyone.
+    let out = paloma(None, &home)
+        .args([
+            "send",
+            "image",
+            BSUID,
+            "--file",
+            upload,
+            "--dry-run",
+            "-o",
+            "json",
+        ])
+        .output()
+        .unwrap();
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(
+        stdout.contains(&format!("\"recipient\": \"{BSUID}\"")),
+        "{stdout}"
+    );
+    assert!(!stdout.contains("\"to\":"), "{stdout}");
+}
+
+#[test]
+fn a_phone_number_still_addresses_with_to() {
+    let home = TempDir::new().unwrap();
+    let body = dry_run_send_body(&home, &["text", "+15551234567", "hi"]);
+    assert_eq!(body["to"], "+15551234567");
+    assert!(body.get("recipient").is_none(), "{body}");
+}
+
+#[test]
+fn a_malformed_recipient_exits_5_before_resolving_context() {
+    let home = TempDir::new().unwrap();
+    for bad in ["us.123", "US.", "US.ENT.", "USA.123", "US.12-34", "US123"] {
+        // Without a sender, getting as far as the context would be a different error.
+        paloma(None, &home)
+            .env_remove("PALOMA_PHONE_NUMBER_ID")
+            .env("PALOMA_GRAPH_URL", "http://127.0.0.1:9")
+            .args(["send", "text", bad, "hi"])
+            .assert()
+            .code(5)
+            .stdout(predicate::str::is_empty())
+            .stderr(
+                predicate::str::contains("E.164")
+                    .and(predicate::str::contains("business-scoped user id")),
+            );
+    }
+    let too_long = format!("US.{}", "1".repeat(129));
+    paloma(None, &home)
+        .args(["send", "text", &too_long, "hi", "--dry-run"])
+        .assert()
+        .code(5)
+        .stdout(predicate::str::is_empty());
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn an_authentication_template_to_a_bsuid_surfaces_metas_refusal() {
+    let graph = MockServer::start().await;
+    Mock::given(method("POST"))
+        .and(path(format!("/v26.0/{PHONE}/messages")))
+        .respond_with(ResponseTemplate::new(400).set_body_json(json!({
+            "error": {
+                "message": "(#131062) Business-scoped User ID (BSUID) recipients are not supported for this message.",
+                "type": "OAuthException",
+                "code": 131_062
+            }
+        })))
+        .expect(1)
+        .mount(&graph)
+        .await;
+
+    let home = TempDir::new().unwrap();
+    paloma(Some(&graph), &home)
+        .args(["send", "template", BSUID, "otp", "--lang", "en", "-q"])
+        .assert()
+        .code(1)
+        .stdout(predicate::str::is_empty())
+        .stderr(predicate::str::contains("131062").and(predicate::str::contains("phone number")));
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn send_raw_keeps_its_own_addressing() {
+    let payload = json!({
+        "messaging_product": "whatsapp",
+        "to": "15551234567",
+        "recipient": BSUID,
+        "type": "text",
+        "text": { "body": "hi" }
+    });
+    let graph = MockServer::start().await;
+    Mock::given(method("POST"))
+        .and(path(format!("/v26.0/{PHONE}/messages")))
+        .and(body_json(&payload))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "contacts": [{ "input": "15551234567", "wa_id": "15551234567" }],
+            "messages": [{ "id": "wamid.RAW" }]
+        })))
+        .expect(1)
+        .mount(&graph)
+        .await;
+
+    let home = TempDir::new().unwrap();
+    let file = home.path().join("payload.json");
+    std::fs::write(&file, payload.to_string()).unwrap();
+    paloma(Some(&graph), &home)
+        .args(["send", "raw", "--file", file.to_str().unwrap(), "-q"])
+        .assert()
+        .success()
+        .stdout("wamid.RAW\n");
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn block_add_and_remove_write_user_id_for_a_bsuid() {
+    let body = json!({
+        "messaging_product": "whatsapp",
+        "block_users": [{ "user": "15551234567" }, { "user_id": BSUID }]
+    });
+    let graph = MockServer::start().await;
+    for (http_method, listed) in [("POST", "added_users"), ("DELETE", "removed_users")] {
+        Mock::given(method(http_method))
+            .and(path(format!("/v26.0/{PHONE}/block_users")))
+            .and(body_json(&body))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+                "messaging_product": "whatsapp",
+                "block_users": { listed: [
+                    { "input": "15551234567", "wa_id": "15551234567" },
+                    { "input": BSUID, "user_id": BSUID }
+                ] }
+            })))
+            .expect(1)
+            .mount(&graph)
+            .await;
+    }
+
+    let home = TempDir::new().unwrap();
+    for (verb, listed) in [("add", "added_users"), ("remove", "removed_users")] {
+        let out = paloma(Some(&graph), &home)
+            .args(["block", verb, "15551234567", BSUID, "-o", "json"])
+            .output()
+            .unwrap();
+        assert!(
+            out.status.success(),
+            "{verb}: {}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+        assert_eq!(
+            stdout_json(&out)["block_users"][listed][1]["user_id"],
+            BSUID
+        );
+    }
+}
+
+#[test]
+fn block_dry_run_prints_user_id() {
+    let home = TempDir::new().unwrap();
+    let out = paloma(None, &home)
+        .args(["block", "add", BSUID, "--dry-run", "-o", "json"])
+        .output()
+        .unwrap();
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert_eq!(
+        stdout_json(&out)["body"]["block_users"],
+        json!([{ "user_id": BSUID }])
+    );
+}
+
+#[test]
+fn block_refuses_a_parent_bsuid_and_a_malformed_user_before_resolving_context() {
+    let home = TempDir::new().unwrap();
+    for verb in ["add", "remove"] {
+        paloma(None, &home)
+            .env_remove("PALOMA_PHONE_NUMBER_ID")
+            .env("PALOMA_GRAPH_URL", "http://127.0.0.1:9")
+            .args(["block", verb, "15551234567", PARENT_BSUID])
+            .assert()
+            .code(5)
+            .stdout(predicate::str::is_empty())
+            .stderr(predicate::str::contains("parent"));
+        paloma(None, &home)
+            .env_remove("PALOMA_PHONE_NUMBER_ID")
+            .env("PALOMA_GRAPH_URL", "http://127.0.0.1:9")
+            .args(["block", verb, "us.123"])
+            .assert()
+            .code(5)
+            .stdout(predicate::str::is_empty())
+            .stderr(predicate::str::contains("us.123"));
+    }
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn block_list_shows_user_id_and_survives_a_missing_wa_id() {
+    let data = json!({
+        "data": [
+            { "messaging_product": "whatsapp", "wa_id": "15550001", "user_id": "US.111" },
+            { "messaging_product": "whatsapp", "user_id": "US.222" }
+        ]
+    });
+    let graph = MockServer::start().await;
+    Mock::given(method("GET"))
+        .and(path(format!("/v26.0/{PHONE}/block_users")))
+        .respond_with(ResponseTemplate::new(200).set_body_json(&data))
+        .mount(&graph)
+        .await;
+
+    let home = TempDir::new().unwrap();
+    let out = paloma(Some(&graph), &home)
+        .args(["block", "list"])
+        .output()
+        .unwrap();
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let stdout = String::from_utf8(out.stdout).unwrap();
+    let rows: Vec<Vec<&str>> = stdout
+        .lines()
+        .map(|line| line.split_whitespace().collect())
+        .collect();
+    assert_eq!(
+        rows,
+        [
+            vec!["WA", "ID", "USER", "ID"],
+            vec!["15550001", "US.111"],
+            vec!["-", "US.222"],
+        ],
+        "{stdout}"
+    );
+
+    let out = paloma(Some(&graph), &home)
+        .args(["block", "list", "-o", "json"])
+        .output()
+        .unwrap();
+    assert_eq!(stdout_json(&out), data);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_send_response_without_wa_id_keeps_the_wamid_contract() {
+    let responses = [
+        json!({
+            "messaging_product": "whatsapp",
+            "contacts": [{ "input": BSUID, "user_id": BSUID }],
+            "messages": [{ "id": "wamid.ONLY" }]
+        }),
+        json!({
+            "messaging_product": "whatsapp",
+            "contacts": [{ "user_id": BSUID }],
+            "messages": [{ "id": "wamid.ONLY" }]
+        }),
+        json!({
+            "messaging_product": "whatsapp",
+            "contacts": [],
+            "messages": [{ "id": "wamid.ONLY" }]
+        }),
+        json!({ "messages": [{ "id": "wamid.ONLY" }] }),
+    ];
+    for response in responses {
+        let graph = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(path(format!("/v26.0/{PHONE}/messages")))
+            .respond_with(ResponseTemplate::new(200).set_body_json(&response))
+            .mount(&graph)
+            .await;
+
+        let home = TempDir::new().unwrap();
+        paloma(Some(&graph), &home)
+            .args(["send", "text", BSUID, "hi", "-q"])
+            .assert()
+            .success()
+            .stdout("wamid.ONLY\n")
+            .stderr(predicate::str::is_empty());
+        paloma(Some(&graph), &home)
+            .args(["send", "text", BSUID, "hi"])
+            .assert()
+            .success()
+            .stdout(predicate::str::contains("wamid.ONLY"));
+        let out = paloma(Some(&graph), &home)
+            .args(["send", "text", BSUID, "hi", "-o", "json"])
+            .output()
+            .unwrap();
+        assert!(out.status.success());
+        assert_eq!(stdout_json(&out), response);
+    }
 }

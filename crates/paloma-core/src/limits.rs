@@ -148,6 +148,8 @@ pub const MEDIA_LIMITS: [MediaLimit; 5] = [
 pub const PIN_DIGITS: usize = 6;
 /// Most phone numbers `GET /{waba-id}/phone_numbers` returns per page.
 pub const MAX_PHONE_NUMBERS_PAGE: u32 = 100;
+/// Alphanumeric characters in a business-scoped user ID, after its prefix.
+pub const MAX_BSUID_ID: usize = 128;
 /// Users a business phone number's blocklist can hold.
 pub const MAX_BLOCKLIST_USERS: usize = 64_000;
 /// Countries `data_localization_region` accepts when registering a number.
