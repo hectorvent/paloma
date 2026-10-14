@@ -62,6 +62,88 @@ pub const MAX_LIST_SECTION_TITLE: usize = 24;
 pub const MAX_LIST_ROW_ID: usize = 200;
 pub const MAX_LIST_ROW_TITLE: usize = 24;
 pub const MAX_LIST_ROW_DESCRIPTION: usize = 72;
+/// Maximum characters in the business profile's text fields. Meta's profile pages only
+/// state the address limit. The rest come from its OpenAPI spec, except the description:
+/// the spec says 256 but the Embedded Signup page says 512, and the page wins.
+pub const MAX_PROFILE_ABOUT: usize = 139;
+pub const MAX_PROFILE_ADDRESS: usize = 256;
+pub const MAX_PROFILE_DESCRIPTION: usize = 512;
+pub const MAX_PROFILE_EMAIL: usize = 128;
+pub const MAX_PROFILE_WEBSITE: usize = 256;
+/// Websites a business profile can list.
+pub const MAX_PROFILE_WEBSITES: usize = 2;
+/// Meta doesn't say whether its "MB" is decimal or binary, so sizes use the larger reading
+/// and never refuse a file Meta would take.
+const KB: u64 = 1024;
+const MB: u64 = 1024 * KB;
+
+/// What Meta supports for one media type.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct MediaLimit {
+    pub kind: &'static str,
+    pub types: &'static [&'static str],
+    pub max_bytes: u64,
+    /// Whether Meta may still take a type that isn't listed.
+    pub allows_unlisted: bool,
+}
+
+pub const AUDIO_MEDIA: MediaLimit = MediaLimit {
+    kind: "audio",
+    types: &[
+        "audio/aac",
+        "audio/amr",
+        "audio/mpeg",
+        "audio/mp4",
+        "audio/ogg",
+    ],
+    max_bytes: 16 * MB,
+    allows_unlisted: false,
+};
+/// Meta's page lists these and adds that other file types "may be sent via the API", but
+/// aren't supported and may not display correctly.
+pub const DOCUMENT_MEDIA: MediaLimit = MediaLimit {
+    kind: "document",
+    types: &[
+        "text/plain",
+        "application/vnd.ms-excel",
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        "application/msword",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        "application/vnd.ms-powerpoint",
+        "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+        "application/pdf",
+    ],
+    max_bytes: 100 * MB,
+    allows_unlisted: true,
+};
+pub const IMAGE_MEDIA: MediaLimit = MediaLimit {
+    kind: "image",
+    types: &["image/jpeg", "image/png"],
+    max_bytes: 5 * MB,
+    allows_unlisted: false,
+};
+/// Animated stickers can reach 500 KB and static ones 100 KB. Telling them apart means
+/// parsing the WebP, so this is the larger limit and Meta enforces the smaller one.
+pub const STICKER_MEDIA: MediaLimit = MediaLimit {
+    kind: "sticker",
+    types: &["image/webp"],
+    max_bytes: 500 * KB,
+    allows_unlisted: false,
+};
+pub const VIDEO_MEDIA: MediaLimit = MediaLimit {
+    kind: "video",
+    types: &["video/3gpp", "video/mp4"],
+    max_bytes: 16 * MB,
+    allows_unlisted: false,
+};
+/// Every media type, for an upload that doesn't say which one it's for.
+pub const MEDIA_LIMITS: [MediaLimit; 5] = [
+    AUDIO_MEDIA,
+    DOCUMENT_MEDIA,
+    IMAGE_MEDIA,
+    STICKER_MEDIA,
+    VIDEO_MEDIA,
+];
 /// Digits in a two-step verification PIN.
 pub const PIN_DIGITS: usize = 6;
 /// Most phone numbers `GET /{waba-id}/phone_numbers` returns per page.

@@ -870,12 +870,26 @@ async fn send_media(app: &App, kind: MediaKind, a: Media, voice: bool) -> Result
         reply_to: a.reply.id()?,
     };
     let file = a.file.as_deref().map(validate::readable_file).transpose()?;
+    let mime = file.as_deref().map(media_api::guess_mime);
+    if let (Some(path), Some(mime)) = (&file, &mime) {
+        let limit = match kind {
+            MediaKind::Image => &limits::IMAGE_MEDIA,
+            MediaKind::Document => &limits::DOCUMENT_MEDIA,
+            MediaKind::Audio => &limits::AUDIO_MEDIA,
+            MediaKind::Video => &limits::VIDEO_MEDIA,
+            MediaKind::Sticker => &limits::STICKER_MEDIA,
+        };
+        if let Some(warning) = validate::media(limit, mime, validate::file_size(path)?)? {
+            app.out.warn(warning);
+        }
+    }
     a.policy.enforce(&a.to)?;
 
     let phone = app.ctx()?.require_phone_number_id()?.to_owned();
     let source = match (&file, a.id, a.link) {
         (Some(path), _, _) => {
-            let upload = media_api::upload(&phone, path, &media_api::guess_mime(path));
+            let mime = mime.as_deref().expect("set whenever there is a file");
+            let upload = media_api::upload(&phone, path, mime);
             if app.dry_run() {
                 let payload = messages::media(
                     &a.to,

@@ -4,9 +4,9 @@
 use std::path::{Path, PathBuf};
 
 use crate::limits::{
-    DATA_LOCALIZATION_REGIONS, MAX_CAPTION, MAX_TEMPLATE_DELETE_IDS, MAX_TEMPLATE_NAME,
-    MAX_TEXT_BODY, PIN_DIGITS, TEMPLATE_TTL_30_DAYS, TEMPLATE_TTL_AUTHENTICATION,
-    TEMPLATE_TTL_MARKETING, TEMPLATE_TTL_UTILITY,
+    DATA_LOCALIZATION_REGIONS, DOCUMENT_MEDIA, MAX_CAPTION, MAX_TEMPLATE_DELETE_IDS,
+    MAX_TEMPLATE_NAME, MAX_TEXT_BODY, MEDIA_LIMITS, MediaLimit, PIN_DIGITS, TEMPLATE_TTL_30_DAYS,
+    TEMPLATE_TTL_AUTHENTICATION, TEMPLATE_TTL_MARKETING, TEMPLATE_TTL_UTILITY,
 };
 use crate::{Error, Result};
 
@@ -222,6 +222,84 @@ pub fn readable_file(path: &Path) -> Result<PathBuf> {
     }
 }
 
+/// The size of a file that [`readable_file`] accepted.
+pub fn file_size(path: &Path) -> Result<u64> {
+    std::fs::metadata(path).map(|m| m.len()).map_err(|_| {
+        Error::validation(format!(
+            "file not found or not readable: {}",
+            path.display()
+        ))
+    })
+}
+
+/// The type without parameters: `audio/ogg; codecs=opus` is still `audio/ogg`.
+fn mime_essence(mime: &str) -> String {
+    mime.split(';')
+        .next()
+        .unwrap_or_default()
+        .trim()
+        .to_ascii_lowercase()
+}
+
+/// Check a file against one media type. `Ok(Some(..))` is a warning to print: Meta may take
+/// the file, but doesn't support its type.
+pub fn media(limit: &MediaLimit, mime: &str, bytes: u64) -> Result<Option<String>> {
+    let essence = mime_essence(mime);
+    let listed = limit.types.contains(&essence.as_str());
+    if !listed && !limit.allows_unlisted {
+        return Err(Error::validation(format!(
+            "{} files must be {}; this one is {mime}",
+            limit.kind,
+            limit.types.join(", ")
+        )));
+    }
+    if bytes > limit.max_bytes {
+        return Err(Error::validation(format!(
+            "{} file is {bytes} bytes; max is {}",
+            limit.kind,
+            size_label(limit.max_bytes)
+        )));
+    }
+    Ok((!listed).then(|| {
+        format!(
+            "{mime} isn't a {} type Meta supports, so it may not display correctly",
+            limit.kind
+        )
+    }))
+}
+
+/// Check a file whose use isn't known yet, so its type picks the limit. Audio, image and
+/// video types Meta doesn't list are refused. Anything else could still go out as a
+/// document, which is the one type Meta leaves open.
+pub fn media_upload(mime: &str, bytes: u64) -> Result<Option<String>> {
+    let essence = mime_essence(mime);
+    if essence.is_empty() {
+        return Err(Error::validation("--type must not be blank"));
+    }
+    if let Some(limit) = MEDIA_LIMITS
+        .iter()
+        .find(|limit| limit.types.contains(&essence.as_str()))
+    {
+        return media(limit, mime, bytes);
+    }
+    let family = essence.split('/').next().unwrap_or_default();
+    if let Some(limit) = MEDIA_LIMITS
+        .iter()
+        .find(|limit| limit.kind == family && !limit.allows_unlisted)
+    {
+        return media(limit, mime, bytes);
+    }
+    media(&DOCUMENT_MEDIA, mime, bytes)
+}
+
+fn size_label(bytes: u64) -> String {
+    if bytes >= 1024 * 1024 {
+        format!("{} MB", bytes / (1024 * 1024))
+    } else {
+        format!("{} KB", bytes / 1024)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -300,6 +378,54 @@ mod tests {
         let err = max_chars("secret", 3, "field").unwrap_err();
         assert_eq!(err.exit_code().code(), 5);
         assert!(!err.to_string().contains("secret"), "{err}");
+    }
+
+    #[test]
+    fn media_applies_the_limit_at_its_exact_boundary() {
+        use crate::limits::{IMAGE_MEDIA, STICKER_MEDIA};
+        let max = IMAGE_MEDIA.max_bytes;
+        assert_eq!(media(&IMAGE_MEDIA, "image/png", max).unwrap(), None);
+        assert!(media(&IMAGE_MEDIA, "image/png", max + 1).is_err());
+        assert!(media(&IMAGE_MEDIA, "image/webp", 1).is_err());
+        // The animated limit, since a static sticker can't be told apart here.
+        assert!(media(&STICKER_MEDIA, "image/webp", 500 * 1024).is_ok());
+        assert!(media(&STICKER_MEDIA, "image/webp", 500 * 1024 + 1).is_err());
+    }
+
+    #[test]
+    fn media_ignores_type_parameters_and_case() {
+        use crate::limits::AUDIO_MEDIA;
+        assert_eq!(
+            media(&AUDIO_MEDIA, "audio/ogg; codecs=opus", 1).unwrap(),
+            None
+        );
+        assert_eq!(media(&AUDIO_MEDIA, "AUDIO/OGG", 1).unwrap(), None);
+    }
+
+    #[test]
+    fn an_unlisted_document_warns_but_still_has_the_size_limit() {
+        let warning = media(&DOCUMENT_MEDIA, "application/zip", 1).unwrap();
+        assert!(warning.unwrap().contains("application/zip"));
+        assert!(
+            media(
+                &DOCUMENT_MEDIA,
+                "application/zip",
+                DOCUMENT_MEDIA.max_bytes + 1
+            )
+            .is_err()
+        );
+    }
+
+    #[test]
+    fn media_upload_picks_the_limit_from_the_type() {
+        assert_eq!(media_upload("video/mp4", 1).unwrap(), None);
+        assert!(media_upload("video/mp4", 16 * 1024 * 1024 + 1).is_err());
+        assert!(media_upload("image/webp", 500 * 1024 + 1).is_err());
+        for refused in ["image/gif", "video/quicktime", "audio/wav", " "] {
+            let err = media_upload(refused, 1).unwrap_err();
+            assert_eq!(err.exit_code().code(), 5, "{refused}");
+        }
+        assert!(media_upload("application/zip", 1).unwrap().is_some());
     }
 
     #[test]

@@ -19,13 +19,38 @@ paloma media upload <file> [--type <mime>] [--handle]
 | Flag | Description |
 |------|-------------|
 | `<file>` | Local file to upload (positional) |
-| `--type <mime>` | Content type, e.g. `image/jpeg`. Auto-detected if omitted. |
+| `--type <mime>` | Content type, e.g. `image/jpeg`. Auto-detected from the extension if omitted, and used for the checks below if set. |
 | `--handle` | Print a resumable upload handle instead of a media id |
 
 ```bash
 ID=$(paloma media upload ./flyer.jpg -q)
 paloma send image 15551234567 --id "$ID" --caption "Specials"
 ```
+
+### File checks
+
+Without `--handle`, before any API call, Paloma checks the file against Meta's
+[supported media types](https://developers.facebook.com/documentation/business-messaging/whatsapp/business-phone-numbers/media#supported-media-types).
+The type decides the limit, and a file over it exits 5.
+
+| MIME types | Maximum size |
+|------------|--------------|
+| `image/jpeg`, `image/png` | 5 MB |
+| `video/mp4`, `video/3gpp` | 16 MB |
+| `audio/aac`, `audio/amr`, `audio/mpeg`, `audio/mp4`, `audio/ogg` | 16 MB |
+| `image/webp` (stickers) | 500 KB |
+| `text/plain`, `application/pdf`, and the Word, Excel and PowerPoint types | 100 MB |
+
+- **Other `image/`, `video/` or `audio/` types** exit 5, for example `image/gif`.
+- **Any other type** could still go out as a document, because Meta says other file types may
+  be sent but aren't supported. Paloma warns on stderr and uploads it, up to 100 MB.
+- **Parameters and case** are ignored in the check and sent as you wrote them, so
+  `--type "audio/ogg; codecs=opus"` counts as `audio/ogg`.
+- **Sizes** count 1 MB as 1,048,576 bytes and allow 500 KB for any sticker. Meta can still
+  refuse a file within these limits, such as a static sticker over 100 KB or an OGG file that
+  isn't OPUS.
+
+Paloma judges the file by its extension, or by `--type` if you set it, not by its contents.
 
 ### Upload handles
 

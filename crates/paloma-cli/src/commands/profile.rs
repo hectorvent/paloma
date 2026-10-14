@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 
-use clap::{Args, Subcommand};
-use paloma_core::{Error, Result, limits};
+use clap::{Args, Subcommand, ValueEnum};
+use paloma_core::{Error, Result, limits, validate};
 use paloma_graph::api::profile;
 use serde_json::{Map, Value};
 
@@ -31,11 +31,81 @@ pub struct Set {
     websites: Vec<String>,
     #[arg(long)]
     address: Option<String>,
-    /// Business category, e.g. RETAIL, PROF_SERVICES.
-    #[arg(long)]
-    vertical: Option<String>,
+    /// Business category.
+    #[arg(long, ignore_case = true)]
+    vertical: Option<Vertical>,
     #[arg(long)]
     description: Option<String>,
+}
+
+impl Set {
+    fn validate(&self) -> Result<()> {
+        if self.about.as_deref() == Some("") {
+            return Err(Error::validation("--about must not be empty"));
+        }
+        for (value, max, flag) in [
+            (&self.about, limits::MAX_PROFILE_ABOUT, "--about"),
+            (&self.email, limits::MAX_PROFILE_EMAIL, "--email"),
+            (&self.address, limits::MAX_PROFILE_ADDRESS, "--address"),
+            (
+                &self.description,
+                limits::MAX_PROFILE_DESCRIPTION,
+                "--description",
+            ),
+        ] {
+            if let Some(value) = value {
+                validate::max_chars(value, max, flag)?;
+            }
+        }
+        if self.websites.len() > limits::MAX_PROFILE_WEBSITES {
+            return Err(Error::validation(format!(
+                "pass at most {} --website values",
+                limits::MAX_PROFILE_WEBSITES
+            )));
+        }
+        for website in &self.websites {
+            validate::max_chars(website, limits::MAX_PROFILE_WEBSITE, "--website")?;
+        }
+        Ok(())
+    }
+}
+
+/// The values Meta documents. `UNDEFINED` and `NOT_A_BIZ` can't be set. Only one of Meta's
+/// two reference pages lists `MATRIMONY_SERVICE`, and it's kept so a valid value still works.
+#[derive(Debug, Clone, Copy, ValueEnum)]
+#[value(rename_all = "SCREAMING_SNAKE_CASE")]
+enum Vertical {
+    Alcohol,
+    Apparel,
+    Auto,
+    Beauty,
+    Edu,
+    Entertain,
+    EventPlan,
+    Finance,
+    Govt,
+    Grocery,
+    Health,
+    Hotel,
+    MatrimonyService,
+    Nonprofit,
+    OnlineGambling,
+    Other,
+    OtcDrugs,
+    PhysicalGambling,
+    ProfServices,
+    Restaurant,
+    Retail,
+    Travel,
+}
+
+impl Vertical {
+    fn as_api_value(self) -> String {
+        self.to_possible_value()
+            .expect("no variant is skipped")
+            .get_name()
+            .to_owned()
+    }
 }
 
 #[derive(Debug, Args)]
@@ -65,12 +135,13 @@ impl ProfileCommand {
                 Ok(())
             }
             Self::Set(a) => {
+                a.validate()?;
                 let mut fields = Map::new();
                 for (k, v) in [
                     ("about", a.about),
                     ("email", a.email),
                     ("address", a.address),
-                    ("vertical", a.vertical),
+                    ("vertical", a.vertical.map(Vertical::as_api_value)),
                     ("description", a.description),
                 ] {
                     if let Some(v) = v {

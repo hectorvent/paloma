@@ -24,8 +24,25 @@ prints the request body without sending. Repeat `--website` for more than one.
 ```bash
 paloma profile set --about "Bakery & catering" \
       --email hola@acme.do --website https://acme.do \
-      --address "Santo Domingo" --vertical FOOD --description "..."
+      --address "Santo Domingo" --vertical RESTAURANT --description "..."
 ```
+
+Paloma checks these limits before any API call and exits 5 if one is exceeded:
+
+| Flag | Limit |
+|------|-------|
+| `--about` | 1 to 139 characters |
+| `--address` | 256 characters |
+| `--description` | 512 characters |
+| `--email` | 128 characters |
+| `--website` | 256 characters each, two websites at most |
+
+`--vertical` takes one of the following, in either case; anything else exits 2. `ALCOHOL`,
+`APPAREL`, `AUTO`, `BEAUTY`, `EDU`, `ENTERTAIN`, `EVENT_PLAN`, `FINANCE`, `GOVT`, `GROCERY`,
+`HEALTH`, `HOTEL`, `MATRIMONY_SERVICE`, `NONPROFIT`, `ONLINE_GAMBLING`, `OTHER`, `OTC_DRUGS`,
+`PHYSICAL_GAMBLING`, `PROF_SERVICES`, `RESTAURANT`, `RETAIL`, `TRAVEL`.
+
+See Meta's [business profile fields](https://developers.facebook.com/documentation/business-messaging/whatsapp/reference/whatsapp-business-phone-number/whatsapp-business-profile-api).
 
 ## `paloma profile photo`
 

@@ -164,6 +164,30 @@ paloma send image 15551234567 --link https://example.com/promo.jpg
 With `--dry-run`, a local `--file` is **not** uploaded; the body shows a
 placeholder media id so you can inspect the request offline.
 
+### Local file checks
+
+Before any API call, Paloma checks a `--file` against Meta's
+[supported media types](https://developers.facebook.com/documentation/business-messaging/whatsapp/business-phone-numbers/media#supported-media-types)
+and exits 5 if it doesn't fit. It judges the type by the file's extension, not its contents,
+and doesn't check codecs. `--id` and `--link` aren't checked, because Paloma can't see the file.
+
+| Send type | File types | Maximum size |
+|-----------|------------|--------------|
+| `image` | JPEG, PNG | 5 MB |
+| `video` | MP4, 3GPP | 16 MB |
+| `audio` | AAC, AMR, MP3, M4A, OGG | 16 MB |
+| `sticker` | WebP | 500 KB |
+| `document` | TXT, XLS, XLSX, DOC, DOCX, PPT, PPTX, PDF | 100 MB |
+
+- **Sizes** count 1 MB as 1,048,576 bytes, because Meta doesn't say which it means. A file
+  just under that limit can still be refused by Meta.
+- **Stickers:** Meta allows 500 KB for an animated sticker but only 100 KB for a static one.
+  Paloma can't tell them apart, so it applies 500 KB and leaves the rest to Meta.
+- **Documents:** Meta says other file types may be sent but aren't supported and may not
+  display correctly. Paloma warns on stderr and sends them, up to the same size.
+- **A file with the wrong extension:** these commands have no `--type` flag, so run
+  `paloma media upload <file> --type <mime>` and send the result with `--id`.
+
 ---
 
 ## `paloma send document` / `audio` / `video` / `sticker`

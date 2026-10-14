@@ -4996,6 +4996,266 @@ fn list_row_limits_are_exact_and_checked_before_context() {
     }
 }
 
+// Media type and size checks.
+
+const MIB: u64 = 1024 * 1024;
+
+fn sized_file(home: &TempDir, name: &str, bytes: u64) -> std::path::PathBuf {
+    let file = home.path().join(name);
+    std::fs::File::create(&file)
+        .unwrap()
+        .set_len(bytes)
+        .unwrap();
+    file
+}
+
+#[test]
+fn send_file_checks_type_and_size_per_kind_before_context() {
+    let home = TempDir::new().unwrap();
+    let cases = [
+        ("image", "a.jpg", 5 * MIB, true),
+        ("image", "a.png", 5 * MIB + 1, false),
+        ("image", "a.webp", 1, false),
+        ("image", "a.pdf", 1, false),
+        ("video", "a.mp4", 16 * MIB, true),
+        ("video", "a.3gp", 16 * MIB + 1, false),
+        ("video", "a.mov", 1, false),
+        ("audio", "a.m4a", 16 * MIB, true),
+        ("audio", "a.amr", 1, true),
+        ("audio", "a.ogg", 16 * MIB + 1, false),
+        ("audio", "a.wav", 1, false),
+        ("sticker", "a.webp", 500 * 1024, true),
+        ("sticker", "a.webp", 500 * 1024 + 1, false),
+        ("sticker", "a.png", 1, false),
+        ("document", "a.pdf", 100 * MIB, true),
+        ("document", "a.docx", 100 * MIB + 1, false),
+    ];
+    for (kind, name, bytes, fits) in cases {
+        let file = sized_file(&home, name, bytes);
+        let mut cmd = paloma(None, &home);
+        cmd.args(["send", kind, TO, "--file"]).arg(&file);
+        if fits {
+            cmd.args(["--dry-run", "-o", "json"]).assert().success();
+        } else {
+            cmd.env_remove("PALOMA_PHONE_NUMBER_ID")
+                .assert()
+                .code(5)
+                .stdout(predicate::str::is_empty())
+                .stderr(predicate::str::contains(kind));
+        }
+    }
+}
+
+#[test]
+fn send_document_warns_about_a_type_meta_does_not_support_and_sends_it() {
+    let home = TempDir::new().unwrap();
+    let file = sized_file(&home, "a.zip", 1);
+    let out = paloma(None, &home)
+        .args(["send", "document", TO, "--dry-run", "-o", "json", "--file"])
+        .arg(&file)
+        .output()
+        .unwrap();
+    assert!(out.status.success());
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(stderr.contains("warning: application/zip"), "{stderr}");
+    assert_eq!(stdout_json(&out).as_array().map(Vec::len), Some(2));
+}
+
+#[test]
+fn send_upload_guesses_the_type_meta_lists_for_m4a() {
+    let home = TempDir::new().unwrap();
+    let file = sized_file(&home, "a.m4a", 1);
+    let out = paloma(None, &home)
+        .args(["send", "audio", TO, "--dry-run", "-o", "json", "--file"])
+        .arg(&file)
+        .output()
+        .unwrap();
+    assert!(out.status.success());
+    assert!(stdout_json(&out)[0].to_string().contains("audio/mp4"));
+}
+
+#[test]
+fn media_upload_checks_the_type_and_its_size_before_context() {
+    let home = TempDir::new().unwrap();
+    let cases: [(&str, u64, Option<&str>, bool); 8] = [
+        ("a.jpg", 5 * MIB, None, true),
+        ("a.jpg", 5 * MIB + 1, None, false),
+        ("a.mp4", 16 * MIB + 1, None, false),
+        ("a.webp", 500 * 1024 + 1, None, false),
+        ("a.gif", 1, None, false),
+        // The flag wins over the extension, both ways.
+        ("a.jpg", 5 * MIB + 1, Some("video/mp4"), true),
+        ("a.bin", 1, Some("image/png"), true),
+        ("a.png", 1, Some("image/gif"), false),
+    ];
+    for (name, bytes, mime, fits) in cases {
+        let file = sized_file(&home, name, bytes);
+        let mut cmd = paloma(None, &home);
+        cmd.args(["media", "upload"]).arg(&file);
+        if let Some(mime) = mime {
+            cmd.args(["--type", mime]);
+        }
+        if fits {
+            cmd.arg("--dry-run")
+                .assert()
+                .success()
+                .stderr(predicate::str::contains("warning:").not());
+        } else {
+            cmd.env_remove("PALOMA_PHONE_NUMBER_ID")
+                .assert()
+                .code(5)
+                .stdout(predicate::str::is_empty());
+        }
+    }
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn media_upload_warns_about_an_unlisted_type_and_still_uploads() {
+    let graph = MockServer::start().await;
+    Mock::given(method("POST"))
+        .and(path(format!("/v26.0/{PHONE}/media")))
+        .and(body_string_contains("application/zip"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({ "id": "MEDIA1" })))
+        .expect(1)
+        .mount(&graph)
+        .await;
+    let home = TempDir::new().unwrap();
+    let file = sized_file(&home, "a.zip", 4);
+    paloma(Some(&graph), &home)
+        .args(["media", "upload", "-q"])
+        .arg(&file)
+        .assert()
+        .success()
+        .stdout("MEDIA1\n")
+        .stderr(predicate::str::contains("warning: application/zip"));
+}
+
+#[test]
+fn media_upload_keeps_type_parameters_in_the_request() {
+    let home = TempDir::new().unwrap();
+    let file = sized_file(&home, "a.ogg", 1);
+    let out = paloma(None, &home)
+        .args(["media", "upload", "--dry-run", "-o", "json"])
+        .args(["--type", "audio/ogg; codecs=opus"])
+        .arg(&file)
+        .output()
+        .unwrap();
+    assert!(out.status.success());
+    assert!(
+        stdout_json(&out)
+            .to_string()
+            .contains("audio/ogg; codecs=opus")
+    );
+}
+
+#[test]
+fn media_upload_handle_keeps_its_own_type_list() {
+    let home = TempDir::new().unwrap();
+    // Over the 5 MB message limit, which doesn't apply to a resumable upload.
+    let file = sized_file(&home, "a.png", 5 * MIB + 1);
+    paloma(None, &home)
+        .args([
+            "media",
+            "upload",
+            "--handle",
+            "--app-id",
+            "999",
+            "--dry-run",
+        ])
+        .arg(&file)
+        .assert()
+        .success();
+}
+
+// Business profile checks.
+
+#[tokio::test(flavor = "multi_thread")]
+async fn profile_set_sends_fields_at_their_limits() {
+    let graph = MockServer::start().await;
+    let (about, address) = ("a".repeat(139), "b".repeat(256));
+    let (description, email) = ("c".repeat(512), "d".repeat(128));
+    let website = "e".repeat(256);
+    Mock::given(method("POST"))
+        .and(path(format!("/v26.0/{PHONE}/whatsapp_business_profile")))
+        .and(body_json(json!({
+            "messaging_product": "whatsapp",
+            "about": about,
+            "address": address,
+            "description": description,
+            "email": email,
+            "vertical": "PROF_SERVICES",
+            "websites": [website, "https://x.test"]
+        })))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({ "success": true })))
+        .expect(1)
+        .mount(&graph)
+        .await;
+    let home = TempDir::new().unwrap();
+    paloma(Some(&graph), &home)
+        .args(["profile", "set", "--vertical", "prof_services"])
+        .args(["--about", &about, "--address", &address])
+        .args(["--description", &description, "--email", &email])
+        .args(["--website", &website, "--website", "https://x.test"])
+        .assert()
+        .success();
+}
+
+#[test]
+fn profile_set_refuses_values_over_the_limits_before_context() {
+    let home = TempDir::new().unwrap();
+    let cases = [
+        ("--about", String::new()),
+        ("--about", "a".repeat(140)),
+        ("--address", "a".repeat(257)),
+        ("--description", "a".repeat(513)),
+        ("--email", "a".repeat(129)),
+        ("--website", "a".repeat(257)),
+    ];
+    for (flag, value) in cases {
+        paloma(None, &home)
+            .env_remove("PALOMA_PHONE_NUMBER_ID")
+            .args(["profile", "set", flag, &value])
+            .assert()
+            .code(5)
+            .stdout(predicate::str::is_empty())
+            .stderr(predicate::str::contains(flag));
+    }
+}
+
+#[test]
+fn profile_set_refuses_a_third_website() {
+    let home = TempDir::new().unwrap();
+    paloma(None, &home)
+        .env_remove("PALOMA_PHONE_NUMBER_ID")
+        .args(["profile", "set", "--website", "a", "--website", "b"])
+        .args(["--website", "c"])
+        .assert()
+        .code(5)
+        .stderr(predicate::str::contains("at most 2"));
+}
+
+#[test]
+fn profile_set_vertical_is_a_closed_set() {
+    let home = TempDir::new().unwrap();
+    for refused in ["FOOD", "UNDEFINED", "NOT_A_BIZ"] {
+        paloma(None, &home)
+            .args(["profile", "set", "--vertical", refused])
+            .assert()
+            .code(2)
+            .stdout(predicate::str::is_empty());
+    }
+    let out = paloma(None, &home)
+        .args(["profile", "set", "--vertical", "MATRIMONY_SERVICE"])
+        .args(["--dry-run", "-o", "json"])
+        .output()
+        .unwrap();
+    assert!(out.status.success());
+    assert_eq!(
+        stdout_json(&out)["body"]["vertical"],
+        json!("MATRIMONY_SERVICE")
+    );
+}
+
 // Review fixes across the v0.5 lists, lookups and validation.
 
 #[tokio::test(flavor = "multi_thread")]

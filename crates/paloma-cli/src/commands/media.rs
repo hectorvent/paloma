@@ -65,6 +65,10 @@ impl MediaCommand {
             Self::Upload(a) => {
                 let path = validate::readable_file(&a.file)?;
                 let mime = a.mime.unwrap_or_else(|| media::guess_mime(&path));
+                let size = validate::file_size(&path)?;
+                if let Some(warning) = validate::media_upload(&mime, size)? {
+                    app.out.warn(warning);
+                }
                 let phone = app.ctx()?.require_phone_number_id()?.to_owned();
                 app.send_and_emit(&media::upload(&phone, &path, &mime), field_id)
                     .await
