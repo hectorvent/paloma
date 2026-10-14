@@ -26,7 +26,8 @@ List templates on the active WABA, with optional filters.
 
 Results are paged. Without `--all`, a listing that has more pages says so on stderr and names
 the cursor to resume from, so a partial result never looks complete. See
-[Paging](flow.md#paging) for the details — the behavior is identical across list commands.
+[Paging](flow.md#paging) for the details — the behavior is identical across list commands, except
+[`block list`](block.md#paloma-block-list).
 
 ```bash
 paloma template list
@@ -56,8 +57,8 @@ paloma template status order_ready
 paloma template status order_ready -o json
 ```
 
-Output includes `name`, `language`, `category`, `status`, and, when present,
-`rejected_reason`. Exits non-zero if no template by that name exists on the WABA.
+Output includes `name`, `language`, `category`, `status`, and `rejected_reason` (null if
+Meta returned none). Exits non-zero if no template by that name exists on the WABA.
 
 The lookup follows paging until it reaches a template with exactly that name, and fetches
 nothing after that page.
@@ -104,6 +105,7 @@ Use `--dry-run` to print the exact request body without submitting.
 
 | Flag | Description |
 |------|-------------|
+| `--file <path>` | The full template definition as JSON; can't be combined with the other flags |
 | `--name <name>` | Lowercase letters, digits and underscores, up to 512 characters |
 | `--category <c>` | `MARKETING`, `UTILITY`, or `AUTHENTICATION` |
 | `--language <code>` | Language code, e.g. `en_US` |

@@ -9,8 +9,8 @@ paloma webhook <verb> [flags]
 
 `get`, `subscribe`, and `unsubscribe` manage the **per-WABA override callback**
 (`POST/GET/DELETE /{waba-id}/subscribed_apps`), using your existing token. No app
-secret is needed. The receive-side bridge (`listen`, `verify-url`, `simulate`) and
-app-level field subscriptions are planned for v1.0 and currently print a notice.
+secret is needed. The receive-side bridge (`listen`, `verify-url`, `simulate`) is
+planned for v1.0; those verbs exit non-zero with a not-implemented error.
 
 ## `paloma webhook get`
 

@@ -30,11 +30,12 @@ New here? Start with [Installation](installation.md) → [Getting started](getti
 | `paloma number` | list · get · register · deregister · set-pin · quality | [commands/number.md](commands/number.md) |
 | `paloma profile` | get · set · photo | [commands/profile.md](commands/profile.md) |
 | `paloma calling` | status · enable · disable · set · sip · codecs | [commands/calling.md](commands/calling.md) |
-| `paloma webhook` | get · subscribe · unsubscribe · fields · fields set | [commands/webhook.md](commands/webhook.md) |
+| `paloma webhook` | get · subscribe · unsubscribe · fields · fields available · fields set | [commands/webhook.md](commands/webhook.md) |
 | `paloma flow` | list · get · create · update · publish · deprecate · delete · assets | [commands/flow.md](commands/flow.md) |
 | `paloma block` | add · remove · list | [commands/block.md](commands/block.md) |
 | `paloma auth` | login · status · whoami · logout | [commands/auth.md](commands/auth.md) |
-| `paloma config` | init · list · get · set · unset · use · path | [commands/config.md](commands/config.md) |
+| `paloma config`, `paloma configure` | init · list · get · set · unset · use · path; guided setup | [commands/config.md](commands/config.md) |
+| `paloma version` | the installed version | |
 | `paloma link` | create (offline) | [commands/link.md](commands/link.md) |
 | `paloma export` · `apply` · `diff` | your WhatsApp setup as code (declarative YAML: Calling, Profile, Number, Commerce, ConversationalAutomation, Template, Webhook) | [commands/manifests.md](commands/manifests.md) |
 | `paloma completion` | bash · zsh · fish · powershell · elvish | [commands/completion.md](commands/completion.md) |

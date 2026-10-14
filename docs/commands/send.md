@@ -39,7 +39,7 @@ paloma send text <to> [<body>] [flags]
 | `--preview-url` | Enable link preview for URLs in the body |
 | `--reply-to <wamid>` | Reply in the thread of this message id (Cloud API `context`) |
 | `--force` | Send even if outside the 24-hour customer-service window |
-| `--strict` | Block free-form sends outside the 24-hour window |
+| `--strict` | Block free-form sends unless the 24-hour window is known to be open. Nothing tracks the window yet, so today it blocks all of them. Conflicts with `--force` |
 
 ```bash
 paloma send text 15551234567 "Your order is ready 🎉"
@@ -64,7 +64,7 @@ paloma send template <to> <name> --lang <code> [flags]
 | `<name>` | Template name (positional) |
 | `--lang <code>` | **Required.** Template language, e.g. `en_US`, `es` |
 | `--body-var <value>` | Positional body text variable; repeat in order |
-| `--var <name=value>` | Named body text variable; repeat with unique names; names contain lowercase letters and underscores |
+| `--var <name=value>` | Named body text variable; repeat with unique names; names contain lowercase letters and underscores; conflicts with `--body-var` |
 | `--header-text <text>` | Text value for a positional header variable; combines with `--body-var`; conflicts with `--var` |
 | `--header-image <id\|url>` | Image header: a media ID or an `http(s)` link |
 | `--header-video <id\|url>` | Video header: a media ID or an `http(s)` link |
@@ -214,7 +214,7 @@ shows a download icon.
 ## `paloma send location`
 
 ```
-paloma send location <to> --lat <n> --long <n> [--name ...] [--address ...] [--reply-to <wamid>]
+paloma send location <to> --lat <n> --long <n> [--name ...] [--address ...] [--reply-to <wamid>] [--force | --strict]
 ```
 
 ```bash
@@ -225,7 +225,7 @@ paloma send location 15551234567 --lat 18.4861 --long -69.9312 \
 ## `paloma send contact`
 
 Send contacts from a JSON file holding the Cloud API contacts array (or an object
-with a `contacts` array).
+with a `contacts` array). It takes `--reply-to`, and `--force` or `--strict`.
 
 ```bash
 paloma send contact 15551234567 --file contacts.json
@@ -241,10 +241,11 @@ paloma send reaction 15551234567 --message-id wamid.XXX --emoji 👍
 
 ## `paloma send interactive`
 
-Three kinds, each taking `--body` plus optional `--header`, `--footer` and `--reply-to`.
+Three kinds, each taking `--body` plus optional `--header`, `--footer`, `--reply-to`, and
+`--force` or `--strict`.
 
 ```bash
-# Reply buttons (up to 3), given as id:Title
+# Reply buttons (up to 3), given as id:Title, or just Title
 paloma send interactive button 15551234567 --body "Confirm your order?" \
       --button "yes:Yes" --button "no:No"
 paloma send interactive button 15551234567 --body "Confirm your order?" \
@@ -316,8 +317,9 @@ guardrail:
 
 - **Default mode:** permitted (a warning will be added once window tracking
   lands).
-- **`--strict`:** free-form sends are blocked with exit code `6` unless you pass
-  `--force`.
+- **`--strict`:** free-form sends are blocked with exit code `6` unless the window is
+  known to be open. Nothing tracks it yet, so today that's all of them. Use `--force`
+  instead to send anyway; combining the two exits 2.
 - **`--force`:** always permitted.
 - **Templates:** always permitted.
 

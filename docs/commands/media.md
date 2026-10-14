@@ -62,7 +62,8 @@ Put it in the header's `example.header_handle`:
 HANDLE=$(paloma media upload ./flyer.jpg --handle -q)
 ```
 
-- **File types:** PDF, JPEG, PNG and MP4. Anything else exits 5 before any API call.
+- **File types:** PDF, JPEG, PNG and MP4. Anything else exits 5 before any API call, and
+  `--type` must match exactly. An empty file also exits 5. No size limit is checked.
 - **App id:** the session belongs to a Meta app. Set `--app-id` or `PALOMA_APP_ID`.
   Otherwise Paloma looks up the first app subscribed to your WABA, even under `--dry-run`,
   and tells you which one it used. It warns if there are several.

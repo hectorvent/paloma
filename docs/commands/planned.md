@@ -3,7 +3,7 @@
 These resource groups are wired into the command tree (they appear in
 `paloma --help` and `paloma <group> --help`) but the verbs are not implemented yet.
 Each exits non-zero with a clear `not yet implemented (planned for vX.Y)` message,
-so the published surface stays discoverable and honest.
+so the published surface stays discoverable and honest. All are planned for v1.0.
 
 | Group | Verbs | Purpose |
 |-------|-------|---------|
@@ -17,16 +17,16 @@ Also planned within implemented groups:
   managing the flow itself already ships, see [flow](flow.md). The rest of the send
   surface, including `interactive` (button/list/cta-url), is implemented.
 - **`paloma template`**: only `namespace` remains. The rest of the lifecycle
-  (get/create/submit/watch/edit/delete) is implemented.
+  (list/status/get/create/submit/watch/edit/delete) is implemented.
 
 ## The differentiators on the way
 
 The features that make this more than "curl with flags," in order of value:
 
 1. **`webhook listen` + `simulate`**: turn the hardest part of Cloud API
-   development (receiving) into one command, including a local tunnel and signed
+   development (receiving) into one command, including signed
    payloads that exercise your endpoint's signature check.
-2. **Compliance guardrails**: full 24-hour window tracking, rate limiting.
+2. **Compliance guardrails**: full 24-hour window tracking.
 
 The **template lifecycle** (`create → watch → send`) is implemented. Template sends
 support positional/named body text, text and media headers, button parameters, and a

@@ -40,8 +40,9 @@ Most flags also read an environment variable: `PALOMA_PROFILE`, `PALOMA_TOKEN`,
 `--dry-run` never **writes**. Commands that must read live state to build the real
 request still read it: `apply --dry-run` compares against live config, and
 `webhook fields set --dry-run`, `media upload --handle --dry-run` and
-`profile photo --dry-run` look up the app id unless you set it. Everything else prints the request
-without any network call. Multi-step commands (`send image --file`, `flow update`
+`profile photo --dry-run` look up the app id unless you set it, and `template status` and
+`template watch` read the template, since reading is all they do. Everything else prints the
+request without any network call. Multi-step commands (`send image --file`, `flow update`
 with metadata and Flow JSON) print every request as a JSON array.
 
 Dry-run output in every format, including `raw`, masks PINs, authorization values,

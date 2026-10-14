@@ -40,7 +40,7 @@ paloma send image 15551234567 --file ./flyer.jpg --caption "This week's specials
 
 # Templates, end to end: create it, wait for Meta's approval, then send it
 paloma template create --name order_ready --category UTILITY --language en_US \
-      --body "Hi {{1}}, order {{2}} is ready"
+      --body "Hi {{1}}, order {{2}} is ready" --example "Hector,#4821"
 paloma template watch order_ready      # exits 0 on APPROVED, non-zero on REJECTED
 
 # Your WhatsApp setup, as code
@@ -272,17 +272,21 @@ error: text body is 5000 chars; max is 4096        # exit 5
 | Group | Commands |
 |-------|----------|
 | `send` | text · template · image · document · audio · video · sticker · location · contact · interactive (button, list, cta-url) · reaction · raw |
-| `template` | list · status · get · create · watch · edit · delete |
+| `template` | list · status · get · create · submit · watch · edit · delete |
 | `media` | upload · get · download · delete |
 | `message` | read · typing |
 | `calling` | status · enable · disable · set · sip · codecs |
 | `flow` | list · get · create · update · publish · deprecate · delete · assets |
 | `webhook` | get · subscribe · unsubscribe · fields |
-| `number` · `profile` · `block` | phone numbers, PIN and quality · business profile · block list |
+| `number` | list · get · register · deregister · set-pin · quality |
+| `profile` | get · set · photo |
+| `block` | add · remove · list |
 | `export` · `apply` · `diff` | your setup as code: declarative YAML for the seven kinds above |
-| `auth` · `config` · `configure` | tokens, profiles, settings |
+| `auth` | login · status · whoami · logout |
+| `config` · `configure` | profiles and settings |
 | `link` | `wa.me` click-to-chat links, offline, no token needed |
 | `completion` | bash · zsh · fish · powershell · elvish |
+| `version` | the installed version |
 
 **Coming next:** `webhook listen` and `simulate` (receive real events locally, and
 send signed test payloads to your endpoint), `account` analytics, and QR codes. Those

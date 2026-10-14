@@ -82,7 +82,7 @@ module under `kinds/` with `template()` (camelCase writable fields), `export()` 
 
 One current-thread tokio runtime, built in `main`. The CLI is I/O-bound and runs one
 request at a time, so a thread pool would only cost startup time; the same runtime will
-host `webhook listen` (axum) and rate-limited bulk sends later.
+host `webhook listen` (axum) later.
 
 ## Release build
 
