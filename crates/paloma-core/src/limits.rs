@@ -54,6 +54,8 @@ pub const RESUMABLE_UPLOAD_TYPES: [&str; 5] = [
 ];
 /// The image types among those, which is what a profile photo can be.
 pub const PROFILE_PHOTO_TYPES: [&str; 3] = ["image/jpeg", "image/jpg", "image/png"];
+/// Contacts one contacts message can carry.
+pub const MAX_CONTACTS: usize = 257;
 /// Rows allowed across all sections of an interactive list message.
 pub const MAX_LIST_ROWS: usize = 10;
 /// Maximum characters in a list section's title.

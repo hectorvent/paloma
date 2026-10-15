@@ -5881,3 +5881,109 @@ async fn a_send_response_without_wa_id_keeps_the_wamid_contract() {
         assert_eq!(stdout_json(&out), response);
     }
 }
+
+#[tokio::test]
+async fn send_contact_typed_flags_post_the_exact_contact() {
+    let graph = MockServer::start().await;
+    Mock::given(method("POST"))
+        .and(path(format!("/v26.0/{PHONE}/messages")))
+        .and(body_json(json!({
+            "messaging_product": "whatsapp",
+            "recipient_type": "individual",
+            "to": "15551234567",
+            "type": "contacts",
+            "contacts": [{
+                "name": {
+                    "formatted_name": "Ana Diaz",
+                    "first_name": "Ana",
+                    "last_name": "Diaz",
+                },
+                "phones": [
+                    { "phone": "+16505559999", "wa_id": "16505559999" },
+                    { "phone": "+16505550000" },
+                ],
+                "emails": [{ "email": "ana@example.com" }],
+            }],
+        })))
+        .respond_with(
+            ResponseTemplate::new(200).set_body_json(json!({ "messages": [{ "id": "wamid.C" }] })),
+        )
+        .expect(1)
+        .mount(&graph)
+        .await;
+    let home = TempDir::new().unwrap();
+    paloma(Some(&graph), &home)
+        .args(["send", "contact", "15551234567", "--name", "Ana Diaz"])
+        .args(["--first-name", "Ana", "--last-name", "Diaz"])
+        .args(["--phone", "+16505559999", "--wa-id", "16505559999"])
+        .args(["--phone", "+16505550000", "--email", "ana@example.com"])
+        .args(["-q", "--force"])
+        .assert()
+        .success()
+        .stdout("wamid.C\n");
+}
+
+#[test]
+fn send_contact_name_alone_is_enough() {
+    let home = TempDir::new().unwrap();
+    let out = paloma(None, &home)
+        .args(["send", "contact", "15551234567", "--name", "Ana"])
+        .args(["--force", "--dry-run", "-o", "raw"])
+        .output()
+        .unwrap();
+    assert!(out.status.success());
+    assert_eq!(
+        stdout_json(&out)["contacts"],
+        json!([{ "name": { "formatted_name": "Ana" } }])
+    );
+}
+
+#[test]
+fn send_contact_needs_one_source_and_file_conflicts_with_the_typed_flags() {
+    let home = TempDir::new().unwrap();
+    let to = "15551234567";
+    let cases: Vec<Vec<&str>> = vec![
+        vec!["send", "contact", to],
+        vec!["send", "contact", to, "--phone", "+1650"],
+        vec!["send", "contact", to, "--name", "A", "--wa-id", "1650"],
+        vec!["send", "contact", to, "--file", "c.json", "--name", "A"],
+        vec!["send", "contact", to, "--file", "c.json", "--phone", "+1"],
+        vec!["send", "contact", to, "--file", "c.json", "--email", "a@b"],
+    ];
+    for args in cases {
+        paloma(None, &home)
+            .env("PALOMA_GRAPH_URL", "http://127.0.0.1:9")
+            .args(&args)
+            .assert()
+            .code(2)
+            .stdout(predicate::str::is_empty());
+    }
+}
+
+#[test]
+fn send_contact_blank_values_and_oversized_files_exit_5_before_any_request() {
+    let home = TempDir::new().unwrap();
+    let too_many = home.path().join("too-many.json");
+    let contacts = vec![json!({ "name": { "formatted_name": "A" } }); 258];
+    std::fs::write(&too_many, Value::Array(contacts).to_string()).unwrap();
+    let to = "15551234567";
+    let cases: Vec<Vec<&str>> = vec![
+        vec!["--name", " "],
+        vec!["--name", "A", "--first-name", " "],
+        vec!["--name", "A", "--last-name", " "],
+        vec!["--name", "A", "--phone", " "],
+        vec!["--name", "A", "--phone", "+1", "--wa-id", " "],
+        vec!["--name", "A", "--email", " "],
+        vec!["--file", too_many.to_str().unwrap()],
+    ];
+    for args in cases {
+        paloma(None, &home)
+            .env_remove("PALOMA_TOKEN")
+            .env("PALOMA_GRAPH_URL", "http://127.0.0.1:9")
+            .args(["send", "contact", to, "--force"])
+            .args(&args)
+            .assert()
+            .code(5)
+            .stdout(predicate::str::is_empty());
+    }
+}

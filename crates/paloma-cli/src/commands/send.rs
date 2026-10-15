@@ -1,5 +1,5 @@
 use std::io::Read;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use clap::{ArgGroup, Args, Subcommand};
 use paloma_core::compliance::{NoTracking, SendPolicy, enforce_session_window};
@@ -35,7 +35,7 @@ pub enum SendCommand {
     Sticker(Media),
     /// Send a location pin.
     Location(Location),
-    /// Send contact cards from a JSON file.
+    /// Send a contact card from flags, or contact cards from a JSON file.
     Contact(Contact),
     /// Send an interactive message (buttons, list, call-to-action URL).
     #[command(subcommand)]
@@ -213,12 +213,32 @@ pub struct Location {
 }
 
 #[derive(Debug, Args)]
+#[command(group(ArgGroup::new("contact_source").required(true).args(["file", "name"])))]
 pub struct Contact {
     /// Recipient (E.164 number or business-scoped user ID).
     to: String,
     /// JSON file holding the Cloud API `contacts` array (or `{"contacts": [...]}`).
+    #[arg(long, conflicts_with_all = ["first_name", "last_name", "phones", "wa_id", "emails"])]
+    file: Option<PathBuf>,
+    /// The contact's full name, shown on the message.
     #[arg(long)]
-    file: PathBuf,
+    name: Option<String>,
+    /// The contact's first name.
+    #[arg(long, requires = "name")]
+    first_name: Option<String>,
+    /// The contact's last name.
+    #[arg(long, requires = "name")]
+    last_name: Option<String>,
+    /// A phone number for the contact; repeatable.
+    #[arg(long = "phone", value_name = "NUMBER", requires = "name")]
+    phones: Vec<String>,
+    /// WhatsApp id of the first --phone. It adds the Message and Save contact buttons;
+    /// without it the message shows an Invite to WhatsApp button.
+    #[arg(long, requires = "phones")]
+    wa_id: Option<String>,
+    /// An email address for the contact; repeatable.
+    #[arg(long = "email", value_name = "ADDRESS", requires = "name")]
+    emails: Vec<String>,
     #[command(flatten)]
     reply: Reply,
     #[command(flatten)]
@@ -369,6 +389,62 @@ pub struct InteractiveCta {
     header_document: Option<String>,
 }
 
+/// The contacts array from a `--file`, passed through as authored.
+fn contacts_file(path: &Path) -> Result<Value> {
+    let doc = read_json(path)?;
+    let contacts = match doc {
+        Value::Array(_) => doc,
+        Value::Object(ref m) if m.get("contacts").is_some_and(Value::is_array) => {
+            m["contacts"].clone()
+        }
+        _ => {
+            return Err(Error::validation(
+                "contacts file must hold a JSON array or {\"contacts\": [...]}",
+            ));
+        }
+    };
+    let count = contacts.as_array().map_or(0, Vec::len);
+    if count == 0 {
+        return Err(Error::validation("contacts file has no contacts"));
+    }
+    if count > limits::MAX_CONTACTS {
+        return Err(Error::validation(format!(
+            "contacts file has {count} contacts; max is {}",
+            limits::MAX_CONTACTS
+        )));
+    }
+    Ok(contacts)
+}
+
+/// The contacts array for the typed flags. clap has already required `--name` here.
+fn typed_contact(a: &Contact) -> Result<Value> {
+    let formatted_name = a.name.as_deref().unwrap_or_default();
+    validate::not_blank(formatted_name, "--name")?;
+    for (value, flag) in [
+        (&a.first_name, "--first-name"),
+        (&a.last_name, "--last-name"),
+        (&a.wa_id, "--wa-id"),
+    ] {
+        if let Some(value) = value {
+            validate::not_blank(value, flag)?;
+        }
+    }
+    for phone in &a.phones {
+        validate::not_blank(phone, "--phone")?;
+    }
+    for email in &a.emails {
+        validate::not_blank(email, "--email")?;
+    }
+    Ok(messages::contact_card(&messages::ContactCard {
+        formatted_name,
+        first_name: a.first_name.as_deref(),
+        last_name: a.last_name.as_deref(),
+        phones: &a.phones,
+        wa_id: a.wa_id.as_deref(),
+        emails: &a.emails,
+    }))
+}
+
 impl SendCommand {
     pub async fn run(self, app: &App) -> Result<()> {
         match self {
@@ -453,21 +529,10 @@ impl SendCommand {
             }
             Self::Contact(a) => {
                 validate::recipient(&a.to)?;
-                let doc = read_json(&a.file)?;
-                let contacts = match doc {
-                    Value::Array(_) => doc,
-                    Value::Object(ref m) if m.get("contacts").is_some_and(Value::is_array) => {
-                        m["contacts"].clone()
-                    }
-                    _ => {
-                        return Err(Error::validation(
-                            "contacts file must hold a JSON array or {\"contacts\": [...]}",
-                        ));
-                    }
+                let contacts = match &a.file {
+                    Some(path) => contacts_file(path)?,
+                    None => typed_contact(&a)?,
                 };
-                if contacts.as_array().is_none_or(Vec::is_empty) {
-                    return Err(Error::validation("contacts file has no contacts"));
-                }
                 let reply_to = a.reply.id()?;
                 a.policy.enforce(&a.to)?;
                 dispatch(app, messages::contacts(&a.to, contacts, reply_to)).await

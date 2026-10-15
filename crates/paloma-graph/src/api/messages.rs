@@ -324,6 +324,49 @@ pub fn contacts(to: &str, contacts: Value, reply_to: Option<&str>) -> Value {
     envelope(to, "contacts", reply_to, contacts)
 }
 
+/// One contact from typed fields. Meta requires only `formatted_name`, the name shown on
+/// the message.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct ContactCard<'a> {
+    pub formatted_name: &'a str,
+    pub first_name: Option<&'a str>,
+    pub last_name: Option<&'a str>,
+    pub phones: &'a [String],
+    /// Goes on the first phone. Without it, the message shows an Invite to WhatsApp button
+    /// rather than the Message and Save contact buttons.
+    pub wa_id: Option<&'a str>,
+    pub emails: &'a [String],
+}
+
+/// The Cloud API contacts array holding one card, for [`contacts`]. Empty parts are
+/// omitted.
+pub fn contact_card(card: &ContactCard) -> Value {
+    let mut name = Map::new();
+    name.insert("formatted_name".into(), card.formatted_name.into());
+    if let Some(first) = non_blank(card.first_name) {
+        name.insert("first_name".into(), first.into());
+    }
+    if let Some(last) = non_blank(card.last_name) {
+        name.insert("last_name".into(), last.into());
+    }
+    let mut contact = Map::new();
+    contact.insert("name".into(), name.into());
+    if !card.phones.is_empty() {
+        let phones = card.phones.iter().enumerate().map(|(i, phone)| {
+            match non_blank(card.wa_id).filter(|_| i == 0) {
+                Some(wa_id) => json!({ "phone": phone, "wa_id": wa_id }),
+                None => json!({ "phone": phone }),
+            }
+        });
+        contact.insert("phones".into(), phones.collect());
+    }
+    if !card.emails.is_empty() {
+        let emails = card.emails.iter().map(|email| json!({ "email": email }));
+        contact.insert("emails".into(), emails.collect());
+    }
+    json!([contact])
+}
+
 /// React to a message; an empty emoji removes the reaction. Meta doesn't allow a reaction
 /// to be a contextual reply, so this one takes no `reply_to`.
 pub fn reaction(to: &str, message_id: &str, emoji: &str) -> Value {
@@ -487,6 +530,36 @@ fn non_blank(s: Option<&str>) -> Option<&str> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn contact_card_sends_only_what_was_given() {
+        let bare = ContactCard {
+            formatted_name: "Ana",
+            ..ContactCard::default()
+        };
+        assert_eq!(
+            contact_card(&bare),
+            json!([{ "name": { "formatted_name": "Ana" } }])
+        );
+        let phones = ["+1650".to_owned(), "+1917".to_owned()];
+        let emails = ["a@b.test".to_owned()];
+        let full = ContactCard {
+            formatted_name: "Ana Diaz",
+            first_name: Some("Ana"),
+            last_name: Some("Diaz"),
+            phones: &phones,
+            wa_id: Some("1650"),
+            emails: &emails,
+        };
+        assert_eq!(
+            contact_card(&full),
+            json!([{
+                "name": { "formatted_name": "Ana Diaz", "first_name": "Ana", "last_name": "Diaz" },
+                "phones": [{ "phone": "+1650", "wa_id": "1650" }, { "phone": "+1917" }],
+                "emails": [{ "email": "a@b.test" }],
+            }])
+        );
+    }
 
     #[test]
     fn text_envelope_shape_and_order() {

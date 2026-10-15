@@ -255,12 +255,29 @@ paloma send location 15551234567 --lat 18.4861 --long -69.9312 \
 
 ## `paloma send contact`
 
-Send contacts from a JSON file holding the Cloud API contacts array (or an object
-with a `contacts` array). It takes `--reply-to`, and `--force` or `--strict`.
+Send one contact from flags, or any number from a file. Give either `--name` or
+`--file`; they can't be combined and one is required (exit 2). It takes `--reply-to`,
+and `--force` or `--strict`.
 
 ```bash
+paloma send contact 15551234567 --name "Ana Diaz" --first-name Ana --last-name Diaz \
+  --phone +16505559999 --wa-id 16505559999 --email ana@example.com
+
 paloma send contact 15551234567 --file contacts.json
 ```
+
+| Flag | Meaning |
+|------|---------|
+| `--name` | Full name, shown on the message (Meta's `formatted_name`, the one required field) |
+| `--first-name`, `--last-name` | The name's parts, sent only if you give them |
+| `--phone` | Phone number; repeatable |
+| `--wa-id` | WhatsApp id of the first `--phone`, so it needs `--phone`. It adds the **Message** and **Save contact** buttons; without it the message shows an **Invite to WhatsApp** button |
+| `--email` | Email address; repeatable |
+| `--file` | JSON file holding the Cloud API contacts array, or an object with a `contacts` array, up to 257 contacts. Use it for addresses, birthdays, organizations, URLs and phone or email types |
+
+Blank values, or a file with no contacts or too many, exit 5 before any request. See
+Meta's [contacts messages](https://developers.facebook.com/documentation/business-messaging/whatsapp/messages/contacts-messages)
+page.
 
 ## `paloma send reaction`
 
