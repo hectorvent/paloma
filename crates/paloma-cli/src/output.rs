@@ -197,7 +197,8 @@ fn render_table(data: &Value, view: View) -> String {
     }
 }
 
-/// kubectl-style columns: uppercase headers, no borders, missing values as `-`.
+/// kubectl-style columns: uppercase headers, no borders, missing values as `-`. A column
+/// is a field of the row, or a JSON pointer into it, titled by its last segment.
 fn columns_table(items: &[Value], columns: &[&str]) -> String {
     if items.is_empty() {
         return "(none)".into();
@@ -207,16 +208,32 @@ fn columns_table(items: &[Value], columns: &[&str]) -> String {
     table.set_header(
         columns
             .iter()
-            .map(|c| Cell::new(c.replace('_', " ").to_uppercase())),
+            .map(|c| Cell::new(column_title(c).replace('_', " ").to_uppercase())),
     );
     for item in items {
-        table.add_row(columns.iter().map(|c| Cell::new(cell(item.get(*c)))));
+        table.add_row(
+            columns
+                .iter()
+                .map(|c| Cell::new(cell(column_value(item, c)))),
+        );
     }
     table
         .lines()
         .map(|l| l.trim().to_owned())
         .collect::<Vec<_>>()
         .join("\n")
+}
+
+fn column_title(column: &str) -> &str {
+    column.rsplit('/').next().unwrap_or(column)
+}
+
+fn column_value<'a>(item: &'a Value, column: &str) -> Option<&'a Value> {
+    if column.starts_with('/') {
+        item.pointer(column)
+    } else {
+        item.get(column)
+    }
 }
 
 fn cell(v: Option<&Value>) -> String {
@@ -323,5 +340,15 @@ mod tests {
         assert!(lines[0].contains("STATUS"));
         assert!(lines[2].contains('-'));
         assert_eq!(columns_table(&[], &["x"]), "(none)");
+    }
+
+    #[test]
+    fn a_pointer_column_reads_a_nested_field_under_its_last_segment() {
+        let rows = vec![json!({"node": {"delivery_status": "SENT"}}), json!({})];
+        let t = columns_table(&rows, &["/node/delivery_status"]);
+        let lines: Vec<&str> = t.lines().collect();
+        assert_eq!(lines[0], "DELIVERY STATUS");
+        assert_eq!(lines[1], "SENT");
+        assert_eq!(lines[2], "-");
     }
 }

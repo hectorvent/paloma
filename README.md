@@ -274,7 +274,7 @@ error: text body is 5000 chars; max is 4096        # exit 5
 | `send` | text · template · image · document · audio · video · sticker · location · contact · interactive (button, list, cta-url) · reaction · raw |
 | `template` | list · status · get · create · submit · watch · edit · delete |
 | `media` | upload · get · download · delete |
-| `message` | read · typing |
+| `message` | read · typing · history |
 | `calling` | status · enable · disable · set · sip · codecs |
 | `flow` | list · get · create · update · publish · deprecate · delete · assets |
 | `webhook` | get · subscribe · unsubscribe · fields |

@@ -8,6 +8,7 @@ pub mod commerce;
 pub mod conversational_automation;
 pub mod flows;
 pub mod media;
+pub mod message_history;
 pub mod messages;
 pub mod phone_numbers;
 pub mod profile;

@@ -36,7 +36,7 @@ pub enum Command {
     /// Send a message (text, template, media, interactive, ...).
     #[command(subcommand)]
     Send(send::SendCommand),
-    /// Act on received messages (read receipts, typing indicator).
+    /// Act on messages (read receipts, typing indicator, delivery history).
     #[command(subcommand)]
     Message(message::MessageCommand),
     /// Upload, inspect, download and delete media.

@@ -133,6 +133,9 @@ pub async fn find_page(
     let mut cursor: Option<String> = None;
     for _ in 0..MAX_PAGES {
         let body = client.execute(&page(cursor.as_deref())).await?.json()?;
+        if !body.get("data").is_some_and(Value::is_array) {
+            return Err(Error::other("the Graph API returned a page with no data"));
+        }
         if found(&body) {
             return Ok(Some(body));
         }

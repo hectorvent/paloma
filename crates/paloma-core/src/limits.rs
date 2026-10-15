@@ -56,6 +56,8 @@ pub const RESUMABLE_UPLOAD_TYPES: [&str; 5] = [
 pub const PROFILE_PHOTO_TYPES: [&str; 3] = ["image/jpeg", "image/jpg", "image/png"];
 /// Contacts one contacts message can carry.
 pub const MAX_CONTACTS: usize = 257;
+/// Most delivery status events `GET /{message-history-id}/events` returns per page.
+pub const MAX_MESSAGE_HISTORY_EVENTS_PAGE: u32 = 100;
 /// Rows allowed across all sections of an interactive list message.
 pub const MAX_LIST_ROWS: usize = 10;
 /// Maximum characters in a list section's title.

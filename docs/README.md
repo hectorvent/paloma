@@ -26,7 +26,7 @@ New here? Start with [Installation](installation.md) → [Getting started](getti
 | `paloma send` | text · template (named variables, text and media headers, buttons, components file) · image · document · audio · video · sticker · location · contact · interactive · reaction · raw | [commands/send.md](commands/send.md) |
 | `paloma template` | list · status · get · create · submit · watch · edit · delete | [commands/template.md](commands/template.md) |
 | `paloma media` | upload · get · download · delete | [commands/media.md](commands/media.md) |
-| `paloma message` | read · typing | [commands/message.md](commands/message.md) |
+| `paloma message` | read · typing · history | [commands/message.md](commands/message.md) |
 | `paloma number` | list · get · register · deregister · set-pin · quality | [commands/number.md](commands/number.md) |
 | `paloma profile` | get · set · photo | [commands/profile.md](commands/profile.md) |
 | `paloma calling` | status · enable · disable · set · sip · codecs | [commands/calling.md](commands/calling.md) |
