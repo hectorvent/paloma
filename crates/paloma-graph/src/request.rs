@@ -315,6 +315,8 @@ pub fn redact_json(value: &Value) -> Value {
                 .map(|(key, value)| {
                     let value = if sensitive_key(key) {
                         Value::String("<redacted>".into())
+                    } else if key == "flow_action_payload" {
+                        redact_flow_payload(value)
                     } else {
                         redact_json(value)
                     };
@@ -331,6 +333,20 @@ pub fn redact_json(value: &Value) -> Value {
         }
         _ => value.clone(),
     }
+}
+
+/// Meta takes a Flow's `data` as serialized JSON, which would hide its keys and links from
+/// [`redact_json`]. What can't be parsed can't be checked, so it isn't shown at all.
+fn redact_flow_payload(payload: &Value) -> Value {
+    let mut redacted = redact_json(payload);
+    if let (Some(Value::String(data)), Some(fields)) =
+        (payload.get("data"), redacted.as_object_mut())
+    {
+        let data = serde_json::from_str::<Value>(data)
+            .map_or_else(|_| "<redacted>".to_owned(), |v| redact_json(&v).to_string());
+        fields.insert("data".into(), Value::String(data));
+    }
+    redacted
 }
 
 /// Whether text starts with an http or https scheme. Schemes are case-insensitive, and a
@@ -465,6 +481,27 @@ mod tests {
 #[cfg(test)]
 mod redaction_tests {
     use super::*;
+
+    #[test]
+    fn a_flow_token_and_secrets_in_serialized_flow_data_stay_masked() {
+        let body = json!({
+            "flow_token": "FLOW_SENTINEL",
+            "flow_action_payload": {
+                "screen": "START",
+                "data": "{\"api_token\":\"TOKEN_SENTINEL\",\"u\":\"https://x.test/?access_token=LINK_SENTINEL\",\"city\":\"SD\"}",
+            },
+        });
+        let redacted = redact_json(&body).to_string();
+        for sentinel in ["FLOW_SENTINEL", "TOKEN_SENTINEL", "LINK_SENTINEL"] {
+            assert!(!redacted.contains(sentinel), "{redacted}");
+        }
+        assert!(
+            redacted.contains("START") && redacted.contains("SD"),
+            "{redacted}"
+        );
+        let unparsable = json!({ "flow_action_payload": { "data": "not json SENTINEL" } });
+        assert!(!redact_json(&unparsable).to_string().contains("SENTINEL"));
+    }
 
     #[test]
     fn descriptions_mask_nested_secrets_without_mutating_requests() {

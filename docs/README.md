@@ -23,7 +23,7 @@ New here? Start with [Installation](installation.md) → [Getting started](getti
 
 | Group | Status | Reference |
 |-------|--------|-----------|
-| `paloma send` | text · template (named variables, text and media headers, buttons, components file) · image · document · audio · video · sticker · location · contact · interactive · reaction · raw | [commands/send.md](commands/send.md) |
+| `paloma send` | text · template (named variables, text and media headers, buttons, components file) · image · document · audio · video · sticker · location · contact · interactive (button, list, cta-url, location-request, address, carousel, call, request-contact) · flow · call-permission · product · product-list · catalog · reaction · raw | [commands/send.md](commands/send.md) |
 | `paloma template` | list · status · get · create · submit · watch · edit · delete | [commands/template.md](commands/template.md) |
 | `paloma media` | upload · get · download · delete | [commands/media.md](commands/media.md) |
 | `paloma message` | read · typing · history | [commands/message.md](commands/message.md) |

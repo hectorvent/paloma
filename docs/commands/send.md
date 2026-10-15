@@ -10,8 +10,9 @@ paloma send <type> <to> [args] [flags]
 
 Implemented types: **text**, **template**, **image**, **document**, **audio**,
 **video**, **sticker**, **location**, **contact**, **interactive**
-(button / list / cta-url), **reaction**, and **raw**. Still planned: **flow**
-(visible in `--help`).
+(button / list / cta-url / location-request / address / carousel / call /
+request-contact), **flow**, **call-permission**, **product**, **product-list**,
+**catalog**, **reaction**, and **raw**.
 
 All sends honor the global `--dry-run` (print the request, don't send),
 `--output`, and `--quiet` flags. See [Global flags](../global-flags.md).
@@ -289,8 +290,20 @@ paloma send reaction 15551234567 --message-id wamid.XXX --emoji 👍
 
 ## `paloma send interactive`
 
-Three kinds, each taking `--body` plus optional `--header`, `--footer`, `--reply-to`, and
-`--force` or `--strict`.
+Every kind takes `--body`, `--reply-to`, and `--force` or `--strict`. `button`, `list`,
+`cta-url` and `address` also take `--header` and `--footer`. Meta's pages don't show either
+on `location-request`, `call` or `request-contact`, and rule them out on `carousel`.
+
+| Kind | What it sends | Needs |
+|------|---------------|-------|
+| `button` | Up to 3 reply buttons | |
+| `list` | A list of sectioned rows | |
+| `cta-url` | A button that opens a URL | |
+| [`location-request`](#location-request) | A button that asks for the user's location | |
+| [`address`](#address) | A form that asks for a shipping address | A business and customers in India |
+| [`carousel`](#carousel) | 2 to 10 media or product cards | A catalog, for product cards |
+| [`call`](#call) | A button that calls your business | Calling enabled on the number |
+| [`request-contact`](#request-contact) | A button that asks for the user's phone number | |
 
 ```bash
 # Reply buttons (up to 3), given as id:Title, or just Title
@@ -341,6 +354,235 @@ paloma send interactive list 15551234567 --body "Shipping?" --button "Options" \
 
 Anything longer, or a blank part, exits 5 before any API call.
 
+### `location-request`
+
+A button that opens WhatsApp's location sharing screen. The location comes back in a
+`messages` webhook. The body is at most 1024 characters. See Meta's
+[location request messages](https://developers.facebook.com/documentation/business-messaging/whatsapp/messages/location-request-messages).
+
+```bash
+paloma send interactive location-request 15551234567 --body "Where should we pick you up?"
+```
+
+### `address`
+
+A form that asks for a shipping address. The address comes back in a `messages` webhook.
+
+**India only:** Meta offers this only to businesses based in India and their customers in
+India. Paloma doesn't check the region and sends what you ask for. A recipient whose number
+doesn't match the country can't get the message, and an app that doesn't support it makes
+Meta drop the message and report error `1026` in a webhook.
+
+Meta requires a country, so pass `--country`, or use `--parameters-file` to also prefill the
+form, offer saved addresses, or report validation errors. Paloma checks that the file holds
+a `country`, and the shape of the other three, and passes it through as written.
+
+```bash
+paloma send interactive address 919876543210 --body "Where should we deliver this?" --country IN
+
+paloma send interactive address 919876543210 --body "That pin code looks wrong." \
+      --parameters-file address.json
+```
+
+```json
+{
+  "country": "IN",
+  "values": { "name": "Ana", "in_pin_code": "666666", "city": "Delhi" },
+  "validation_errors": { "in_pin_code": "We could not locate this pin code." }
+}
+```
+
+`saved_addresses` is an array of `{ "id": ..., "value": { ... } }`. See Meta's
+[address messages](https://developers.facebook.com/documentation/business-messaging/whatsapp/messages/address-messages)
+for the fields.
+
+### `carousel`
+
+2 to 10 horizontally scrolling cards under a body of at most 1024 characters. Meta doesn't
+allow a header or footer on the message itself. Pass exactly one source.
+
+**Media cards** come from `--card-file`, as a JSON array or `{"cards": [...]}` of Cloud API
+card objects, since a card is too rich for flags. `card_index` defaults to the card's
+position, and `type` to `cta_url`, which is what Meta's page uses even for quick-reply cards.
+
+```bash
+paloma send interactive carousel 15551234567 --body "Here are our new arrivals" \
+      --card-file cards.json
+```
+
+```json
+[
+  {
+    "header": { "type": "image", "image": { "link": "https://acme.do/echeveria.jpg" } },
+    "body": { "text": "*Blue Echeveria*" },
+    "action": {
+      "name": "cta_url",
+      "parameters": { "display_text": "Buy now", "url": "https://acme.do/echeveria" }
+    }
+  },
+  {
+    "header": { "type": "video", "video": { "link": "https://acme.do/haworthia.mp4" } },
+    "action": {
+      "name": "cta_url",
+      "parameters": { "display_text": "Buy now", "url": "https://acme.do/haworthia" }
+    }
+  }
+]
+```
+
+For quick replies, an `action` is instead
+`{ "buttons": [{ "type": "quick_reply", "quick_reply": { "id": "...", "title": "..." } }] }`.
+Paloma exits 5 before any API call unless each card follows Meta's rules:
+
+| Part | Rule |
+|------|------|
+| Header | Required. An image or video, as an `http(s)` link |
+| Body | Optional. At most 160 characters and 2 line breaks |
+| Buttons | One URL button, or one or more quick-reply buttons, the same type and number on every card |
+| URL button label, quick-reply title | At most 20 characters |
+| Quick-reply ID | At most 256 characters |
+
+**Product cards** come from `--products`, with one card per SKU, and need a catalog. Meta
+requires every card to use the same one, so there is one `--catalog-id`.
+
+```bash
+paloma send interactive carousel 15551234567 --body "Our favorites" \
+      --products abc123,def456,ghi789 --catalog-id 123456789
+```
+
+See Meta's
+[media carousel](https://developers.facebook.com/documentation/business-messaging/whatsapp/messages/interactive-media-carousel-messages)
+and [product carousel](https://developers.facebook.com/documentation/business-messaging/whatsapp/catalogs/interactive-product-carousel-messages)
+messages.
+
+### `call`
+
+A button that starts a WhatsApp call to the number that sent the message. **Calling must be
+enabled** on that number; see [calling](calling.md).
+
+| Flag | Meaning | Limit | Meta's default |
+|------|---------|-------|----------------|
+| `--display` | Button label | 20 characters | `Call Now` |
+| `--ttl-minutes` | How long the button lasts | 1 to 43200 (30 days) | 10080 (7 days) |
+| `--payload` | A string returned as `cta_payload` in the `calls` webhook, for tracking; needs WhatsApp 2.25.27 or later | 512 characters | |
+
+```bash
+paloma send interactive call 15551234567 --body "Call us now for faster service" \
+      --display "Call on WhatsApp" --ttl-minutes 1440 --payload campaign-7
+```
+
+An app too old for the button makes Meta report error `131026` in a webhook. See Meta's
+[call button messages](https://developers.facebook.com/documentation/business-messaging/whatsapp/calling/call-button-messages-deep-links).
+
+### `request-contact`
+
+A button that asks the user to share their phone number. Meta doesn't let you customize the
+button. Useful with a business-scoped user ID, when you don't have the number. It comes back
+in a `contacts` webhook with `origin` set to `contact_request`. See Meta's
+[requesting phone numbers](https://developers.facebook.com/documentation/business-messaging/whatsapp/business-scoped-user-ids#requesting-phone-numbers-from-users).
+
+```bash
+paloma send interactive request-contact US.13491208655302741918 \
+      --body "Can we have your number for delivery updates?"
+```
+
+## `paloma send flow`
+
+Send a [Flow](flow.md) inside the customer service window, opened from a button on the
+message. To start a conversation with a Flow, send a [template](#paloma-send-template) with a
+Flow button instead. Name the Flow with exactly one of `--flow-id` or `--flow-name`.
+
+```bash
+paloma send flow 15551234567 --body "Book your table" --flow-name booking_v1 --cta "Book!"
+
+paloma send flow 15551234567 --body "Book your table" --flow-id 123456 --cta "Book!" \
+      --flow-token order-7 --screen START --data '{"plan":"gold"}'
+```
+
+| Flag | Meaning | Meta's default |
+|------|---------|----------------|
+| `--cta` | Required. Button text; Meta advises 30 characters or less and no emoji, so a longer one warns | |
+| `--flow-token` | Your ID for this send. Meta treats it like a session id, so dry runs mask it. As a flag it can land in your shell history, so don't pass a value that must stay secret | `unused` |
+| `--action` | `navigate`, or `data_exchange` to get the first screen from your endpoint | `navigate` |
+| `--mode` | `draft` or `published`. An edited Flow's draft needs `draft` | `published` |
+| `--screen` | ID of the first screen, which must be an entry screen | `FIRST_ENTRY_SCREEN` |
+| `--data`, `--data-file` | Input for the first screen, as a non-empty JSON object | |
+
+`--screen`, `--data` and `--data-file` only apply to `navigate`, since Meta says to leave them
+out otherwise: with `--action data_exchange` they exit 5. Paloma sends `--data` as a serialized string, as
+Meta's page specifies. Dry runs mask secrets inside it, as they do in any other field.
+
+Also takes `--body`, `--footer`, `--reply-to`, and `--force` or `--strict`. The header is one
+of `--header`, or `--header-image`, `--header-video` or `--header-document`, each taking a media
+ID or an `http(s)` link. The body is at most 1024 characters, and the header text and footer at
+most 60. See Meta's
+[Send a Flow message](https://developers.facebook.com/documentation/business-messaging/whatsapp/flows/guides/sendingaflow).
+
+## `paloma send call-permission`
+
+Ask the user for permission to call them, inside the customer service window. To ask outside
+it, use a [call permission template](https://developers.facebook.com/documentation/business-messaging/whatsapp/calling/user-call-permissions#create-and-send-call-permission-request-template-messages).
+The answer comes back in a `messages` webhook.
+
+```bash
+paloma send call-permission 15551234567 --body "May we call you about order ON-12853?"
+```
+
+`--body` is optional, though Meta recommends it, to give the user context. Meta doesn't allow a
+header or footer. Also takes `--reply-to`, and `--force` or `--strict`.
+
+**Calling must be enabled** on the number; see [calling](calling.md). This only works in
+[regions with business-initiated calling](https://developers.facebook.com/documentation/business-messaging/whatsapp/calling#availability),
+which leaves out business numbers in the United States, Canada, Egypt, Vietnam and Nigeria.
+
+Meta allows 1 request in 24 hours and 2 in 7 days to each user, counting templates, and a
+connected call resets both. Meta charges for these messages. See Meta's
+[user call permissions](https://developers.facebook.com/documentation/business-messaging/whatsapp/calling/user-call-permissions).
+
+## `paloma send product`
+
+One product from your catalog. **Needs a catalog** connected to your WhatsApp account, as do
+`product-list` and `catalog`; see Meta's
+[upload inventory](https://developers.facebook.com/documentation/business-messaging/whatsapp/catalogs/upload-inventory).
+The body is optional, and Meta doesn't allow a header. Also takes `--footer`, `--reply-to`, and
+`--force` or `--strict`.
+
+```bash
+paloma send product 15551234567 --catalog-id 123456789 --product SKU1 --body "This one's back"
+```
+
+`--product` is the retailer ID: the SKU, labeled Content ID in Commerce Manager. Meta returns
+an error if the product isn't in the catalog. See Meta's
+[single-product messages](https://developers.facebook.com/documentation/business-messaging/whatsapp/catalogs/single-product-messages).
+
+## `paloma send product-list`
+
+Up to 30 products from your catalog, in up to 10 sections. `--header` and `--body` are required,
+and the header can only be text. Also takes `--footer`, `--reply-to`, and `--force` or `--strict`.
+
+```bash
+paloma send product-list 15551234567 --catalog-id 123456789 \
+      --header "Our picks" --body "Have a look" \
+      --section "Cakes:choco-1,vanilla-2" --section "Drinks:morir-3"
+```
+
+A section is `Title:sku1,sku2`, with a title of at most 24 characters, and no `:` in the title.
+Write a comma in a SKU as `\,`. If some products aren't in the catalog, Meta drops them and
+sends the rest, and reports an error if none match. See Meta's
+[multi-product messages](https://developers.facebook.com/documentation/business-messaging/whatsapp/catalogs/multi-product-messages).
+
+## `paloma send catalog`
+
+A **View catalog** button that opens your catalog in WhatsApp. `--body` is required. `--thumbnail` names the SKU whose
+image heads the message; without it, Meta uses the first item in the catalog. Also takes
+`--footer`, `--reply-to`, and `--force` or `--strict`. See Meta's
+[catalog messages](https://developers.facebook.com/documentation/business-messaging/whatsapp/catalogs/catalog-messages).
+
+```bash
+paloma send catalog 15551234567 --body "Ordering is easy: browse and add to your cart" \
+      --thumbnail 2lc20305pt --footer "Best deals on WhatsApp"
+```
+
 ## `paloma send raw`
 
 Escape hatch: send an already-formed Cloud API message object verbatim, from a
@@ -374,9 +616,3 @@ guardrail:
 
 Full window tracking (derived from events seen by `paloma webhook listen`) is
 [planned](planned.md) for v1.0.
-
----
-
-## Planned send types
-
-Visible in `--help`, not yet implemented: `flow`. See the [planned commands](planned.md).

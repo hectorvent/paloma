@@ -1,7 +1,7 @@
 use std::io::Read;
 use std::path::{Path, PathBuf};
 
-use clap::{ArgGroup, Args, Subcommand};
+use clap::{ArgGroup, Args, Subcommand, ValueEnum};
 use paloma_core::compliance::{NoTracking, SendPolicy, enforce_session_window};
 use paloma_core::limits::{self, MAX_LIST_ROWS, MAX_REPLY_BUTTONS};
 use paloma_core::{Error, Result, validate};
@@ -13,7 +13,7 @@ use paloma_graph::api::messages::{
 use paloma_graph::request::has_http_scheme;
 use serde_json::Value;
 
-use super::{planned, read_file, read_json};
+use super::{read_file, read_json};
 use crate::app::App;
 use crate::output::Output;
 
@@ -37,15 +37,23 @@ pub enum SendCommand {
     Location(Location),
     /// Send a contact card from flags, or contact cards from a JSON file.
     Contact(Contact),
-    /// Send an interactive message (buttons, list, call-to-action URL).
+    /// Send an interactive message (buttons, list, call-to-action URL, carousel and more).
     #[command(subcommand)]
     Interactive(Interactive),
     /// React to a message with an emoji.
     Reaction(Reaction),
     /// Send an arbitrary message object as-is.
     Raw(Raw),
-    /// Send a Flow into a chat (planned v1.0).
-    Flow,
+    /// Send a WhatsApp Flow, opened from a button on the message.
+    Flow(FlowMessage),
+    /// Ask the user for permission to call them. Needs calling enabled on the number.
+    CallPermission(CallPermission),
+    /// Send one product from your catalog.
+    Product(ProductMessage),
+    /// Send up to 30 products from your catalog, in sections.
+    ProductList(ProductList),
+    /// Send a button that opens your catalog.
+    Catalog(Catalog),
 }
 
 /// The flag on every send type that Meta lets quote an earlier message.
@@ -268,6 +276,178 @@ pub struct Raw {
     stdin: bool,
 }
 
+/// Where a Flow starts: `data_exchange` asks your endpoint for the first screen.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
+pub enum FlowAction {
+    Navigate,
+    #[value(name = "data_exchange")]
+    DataExchange,
+}
+
+impl FlowAction {
+    const fn as_str(self) -> &'static str {
+        match self {
+            Self::Navigate => "navigate",
+            Self::DataExchange => "data_exchange",
+        }
+    }
+}
+
+/// Which version of a Flow to send.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
+pub enum FlowMode {
+    Draft,
+    Published,
+}
+
+impl FlowMode {
+    const fn as_str(self) -> &'static str {
+        match self {
+            Self::Draft => "draft",
+            Self::Published => "published",
+        }
+    }
+}
+
+#[derive(Debug, Args)]
+#[command(group(ArgGroup::new("flow_ref").required(true).args(["flow_id", "flow_name"])))]
+pub struct FlowMessage {
+    #[command(flatten)]
+    common: InteractiveCommon,
+    /// The Flow's id.
+    #[arg(long)]
+    flow_id: Option<String>,
+    /// The Flow's name.
+    #[arg(long)]
+    flow_name: Option<String>,
+    /// Text on the button that opens the Flow. Meta advises 30 characters or less, no emoji.
+    #[arg(long)]
+    cta: String,
+    /// Your own id for this send, returned when the Flow completes. Meta defaults it to
+    /// "unused".
+    #[arg(long, value_name = "ID")]
+    flow_token: Option<String>,
+    /// How the Flow starts. Meta defaults to navigate.
+    #[arg(long, value_enum)]
+    action: Option<FlowAction>,
+    /// Send the draft or the published version. Meta defaults to published.
+    #[arg(long, value_enum)]
+    mode: Option<FlowMode>,
+    /// Id of the first screen (navigate only). Meta defaults to FIRST_ENTRY_SCREEN.
+    #[arg(long, value_name = "ID")]
+    screen: Option<String>,
+    /// Input for the first screen, as a non-empty JSON object (navigate only).
+    #[arg(long, value_name = "JSON", conflicts_with = "data_file")]
+    data: Option<String>,
+    /// Read the first screen's input from a JSON file: a non-empty object (navigate only).
+    #[arg(long, value_name = "PATH")]
+    data_file: Option<PathBuf>,
+    /// Image for the header: a media id or an http(s) link.
+    #[arg(
+        long,
+        value_name = "ID|URL",
+        group = "header_media",
+        conflicts_with = "header"
+    )]
+    header_image: Option<String>,
+    /// Video for the header: a media id or an http(s) link.
+    #[arg(
+        long,
+        value_name = "ID|URL",
+        group = "header_media",
+        conflicts_with = "header"
+    )]
+    header_video: Option<String>,
+    /// Document for the header: a media id or an http(s) link.
+    #[arg(
+        long,
+        value_name = "ID|URL",
+        group = "header_media",
+        conflicts_with = "header"
+    )]
+    header_document: Option<String>,
+}
+
+#[derive(Debug, Args)]
+pub struct CallPermission {
+    /// Recipient (E.164 number or business-scoped user ID).
+    to: String,
+    /// Why you want to call. Optional, but Meta recommends giving the user context.
+    #[arg(long)]
+    body: Option<String>,
+    #[command(flatten)]
+    reply: Reply,
+    #[command(flatten)]
+    policy: Policy,
+}
+
+#[derive(Debug, Args)]
+pub struct ProductMessage {
+    /// Recipient (E.164 number or business-scoped user ID).
+    to: String,
+    /// The catalog holding the product.
+    #[arg(long)]
+    catalog_id: String,
+    /// The product's retailer id (its SKU; Content ID in Commerce Manager).
+    #[arg(long, value_name = "SKU")]
+    product: String,
+    /// Body text.
+    #[arg(long)]
+    body: Option<String>,
+    /// Footer text.
+    #[arg(long)]
+    footer: Option<String>,
+    #[command(flatten)]
+    reply: Reply,
+    #[command(flatten)]
+    policy: Policy,
+}
+
+#[derive(Debug, Args)]
+pub struct ProductList {
+    /// Recipient (E.164 number or business-scoped user ID).
+    to: String,
+    /// The catalog holding the products.
+    #[arg(long)]
+    catalog_id: String,
+    /// Header text.
+    #[arg(long)]
+    header: String,
+    /// Body text.
+    #[arg(long)]
+    body: String,
+    /// Footer text.
+    #[arg(long)]
+    footer: Option<String>,
+    /// A section as `Title:sku1,sku2`; repeatable. Write a comma in a SKU as `\,`.
+    #[arg(long = "section", value_name = "SECTION", required = true)]
+    sections: Vec<String>,
+    #[command(flatten)]
+    reply: Reply,
+    #[command(flatten)]
+    policy: Policy,
+}
+
+#[derive(Debug, Args)]
+pub struct Catalog {
+    /// Recipient (E.164 number or business-scoped user ID).
+    to: String,
+    /// Body text.
+    #[arg(long)]
+    body: String,
+    /// Footer text.
+    #[arg(long)]
+    footer: Option<String>,
+    /// SKU of the product whose image heads the message. Meta defaults to the first item
+    /// in the catalog.
+    #[arg(long, value_name = "SKU")]
+    thumbnail: Option<String>,
+    #[command(flatten)]
+    reply: Reply,
+    #[command(flatten)]
+    policy: Policy,
+}
+
 #[derive(Debug, Subcommand)]
 pub enum Interactive {
     /// Up to three reply buttons.
@@ -276,6 +456,16 @@ pub enum Interactive {
     List(InteractiveList),
     /// A button that opens a URL.
     CtaUrl(InteractiveCta),
+    /// A button that asks the user to share their location.
+    LocationRequest(InteractiveBody),
+    /// A form that asks for a shipping address (India only).
+    Address(InteractiveAddress),
+    /// 2 to 10 scrollable cards: media from a file, or products from a catalog.
+    Carousel(InteractiveCarousel),
+    /// A button that calls your business. Needs calling enabled on the number.
+    Call(InteractiveCall),
+    /// A button that asks the user to share their phone number.
+    RequestContact(InteractiveBody),
 }
 
 #[derive(Debug, Args)]
@@ -305,6 +495,70 @@ impl InteractiveCommon {
             footer: self.footer.clone(),
         }
     }
+}
+
+/// The flags of a kind where Meta allows no header or footer.
+#[derive(Debug, Args)]
+pub struct InteractiveBody {
+    /// Recipient (E.164 number or business-scoped user ID).
+    to: String,
+    /// Body text.
+    #[arg(long)]
+    body: String,
+    #[command(flatten)]
+    reply: Reply,
+    #[command(flatten)]
+    policy: Policy,
+}
+
+#[derive(Debug, Args)]
+#[command(group(ArgGroup::new("address_source").required(true).args(["country", "parameters_file"])))]
+pub struct InteractiveAddress {
+    #[command(flatten)]
+    common: InteractiveCommon,
+    /// The address form's country, as an ISO code. Meta supports IN.
+    #[arg(long, value_name = "CODE")]
+    country: Option<String>,
+    /// JSON file with the action parameters: `country`, plus optional `values`,
+    /// `saved_addresses` and `validation_errors`.
+    #[arg(long, value_name = "PATH")]
+    parameters_file: Option<PathBuf>,
+}
+
+#[derive(Debug, Args)]
+#[command(group(ArgGroup::new("carousel_cards").required(true).args(["card_file", "products"])))]
+pub struct InteractiveCarousel {
+    #[command(flatten)]
+    base: InteractiveBody,
+    /// JSON file with the media cards: an array, or {"cards": [...]}.
+    #[arg(long, value_name = "PATH")]
+    card_file: Option<PathBuf>,
+    /// Product retailer ids (SKUs), one card each, separated by commas.
+    #[arg(
+        long,
+        value_name = "SKU,SKU",
+        value_delimiter = ',',
+        requires = "catalog_id"
+    )]
+    products: Vec<String>,
+    /// The catalog holding every product.
+    #[arg(long, requires = "products")]
+    catalog_id: Option<String>,
+}
+
+#[derive(Debug, Args)]
+pub struct InteractiveCall {
+    #[command(flatten)]
+    base: InteractiveBody,
+    /// Button label. Meta defaults to "Call Now".
+    #[arg(long)]
+    display: Option<String>,
+    /// How long the button lasts, in minutes (1 to 43200). Meta defaults to 7 days.
+    #[arg(long, value_name = "MINUTES")]
+    ttl_minutes: Option<u32>,
+    /// A string returned in the `calls` webhook as `cta_payload`, for tracking.
+    #[arg(long)]
+    payload: Option<String>,
 }
 
 #[derive(Debug, Args)]
@@ -558,7 +812,79 @@ impl SendCommand {
                     .map_err(|e| Error::validation(format!("message is not valid JSON: {e}")))?;
                 dispatch(app, payload).await
             }
-            Self::Flow => planned("send flow", "v1.0"),
+            Self::Flow(a) => send_flow(app, &a).await,
+            Self::CallPermission(a) => {
+                validate::recipient(&a.to)?;
+                if let Some(body) = &a.body {
+                    check_body(body)?;
+                }
+                let reply_to = a.reply.id()?;
+                a.policy.enforce(&a.to)?;
+                let payload = messages::call_permission_request(&a.to, a.body.as_deref(), reply_to);
+                dispatch(app, payload).await
+            }
+            Self::Product(a) => {
+                validate::recipient(&a.to)?;
+                validate::not_blank(&a.catalog_id, "--catalog-id")?;
+                validate::not_blank(&a.product, "--product")?;
+                if let Some(body) = &a.body {
+                    check_body(body)?;
+                }
+                check_footer(a.footer.as_deref())?;
+                let reply_to = a.reply.id()?;
+                a.policy.enforce(&a.to)?;
+                let payload = messages::interactive_product(
+                    &a.to,
+                    &a.catalog_id,
+                    &a.product,
+                    a.body.as_deref(),
+                    a.footer.as_deref(),
+                    reply_to,
+                );
+                dispatch(app, payload).await
+            }
+            Self::ProductList(a) => {
+                validate::recipient(&a.to)?;
+                validate::not_blank(&a.catalog_id, "--catalog-id")?;
+                validate::not_blank(&a.header, "--header")?;
+                validate::max_chars(&a.header, limits::MAX_INTERACTIVE_HEADER, "--header")?;
+                check_body(&a.body)?;
+                check_footer(a.footer.as_deref())?;
+                let sections = parse_product_sections(&a.sections)?;
+                let reply_to = a.reply.id()?;
+                a.policy.enforce(&a.to)?;
+                let text = InteractiveText {
+                    header: Some(InteractiveHeader::Text(a.header.clone())),
+                    body: a.body.clone(),
+                    footer: a.footer.clone(),
+                };
+                let payload = messages::interactive_product_list(
+                    &a.to,
+                    &text,
+                    &a.catalog_id,
+                    &sections,
+                    reply_to,
+                );
+                dispatch(app, payload).await
+            }
+            Self::Catalog(a) => {
+                validate::recipient(&a.to)?;
+                check_body(&a.body)?;
+                check_footer(a.footer.as_deref())?;
+                if let Some(thumbnail) = &a.thumbnail {
+                    validate::not_blank(thumbnail, "--thumbnail")?;
+                }
+                let reply_to = a.reply.id()?;
+                a.policy.enforce(&a.to)?;
+                let payload = messages::interactive_catalog(
+                    &a.to,
+                    &a.body,
+                    a.footer.as_deref(),
+                    a.thumbnail.as_deref(),
+                    reply_to,
+                );
+                dispatch(app, payload).await
+            }
         }
     }
 }
@@ -723,22 +1049,30 @@ fn template_components_file(path: &std::path::Path) -> Result<Vec<Value>> {
 }
 
 impl Interactive {
-    fn common(&self) -> &InteractiveCommon {
+    /// The recipient, body, reply and policy flags every kind has.
+    fn parts(&self) -> (&str, &str, &Reply, Policy) {
         match self {
-            Self::Button(a) => &a.common,
-            Self::List(a) => &a.common,
-            Self::CtaUrl(a) => &a.common,
+            Self::Button(InteractiveButton { common: c, .. })
+            | Self::List(InteractiveList { common: c, .. })
+            | Self::CtaUrl(InteractiveCta { common: c, .. })
+            | Self::Address(InteractiveAddress { common: c, .. }) => {
+                (&c.to, &c.body, &c.reply, c.policy)
+            }
+            Self::LocationRequest(b)
+            | Self::RequestContact(b)
+            | Self::Carousel(InteractiveCarousel { base: b, .. })
+            | Self::Call(InteractiveCall { base: b, .. }) => (&b.to, &b.body, &b.reply, b.policy),
         }
     }
 
     async fn run(self, app: &App) -> Result<()> {
-        let c = self.common();
-        validate::recipient(&c.to)?;
-        validate::not_blank(&c.body, "--body")?;
-        let reply_to = c.reply.id()?;
-        let (to, mut text) = (c.to.clone(), c.text());
+        let (to, body, reply, policy) = self.parts();
+        validate::recipient(to)?;
+        validate::not_blank(body, "--body")?;
+        let reply_to = reply.id()?;
         let payload = match &self {
             Self::Button(a) => {
+                let mut text = a.common.text();
                 let header = interactive_media_header(
                     a.header_image.as_deref(),
                     a.header_video.as_deref(),
@@ -747,14 +1081,15 @@ impl Interactive {
                 if header.is_some() {
                     text.header = header;
                 }
-                messages::interactive_buttons(&to, &text, &parse_buttons(&a.buttons)?, reply_to)
+                messages::interactive_buttons(to, &text, &parse_buttons(&a.buttons)?, reply_to)
             }
             Self::List(a) => {
                 validate::not_blank(&a.button, "--button")?;
                 let sections = parse_sections(&a.sections)?;
-                messages::interactive_list(&to, &text, &a.button, &sections, reply_to)
+                messages::interactive_list(to, &a.common.text(), &a.button, &sections, reply_to)
             }
             Self::CtaUrl(a) => {
+                let mut text = a.common.text();
                 validate::not_blank(&a.display, "--display")?;
                 validate::not_blank(&a.url, "--url")?;
                 let header = interactive_media_header(
@@ -770,11 +1105,441 @@ impl Interactive {
                 if header.is_some() {
                     text.header = header;
                 }
-                messages::interactive_cta_url(&to, &text, &a.display, &a.url, reply_to)
+                messages::interactive_cta_url(to, &text, &a.display, &a.url, reply_to)
+            }
+            Self::LocationRequest(_) => {
+                check_body(body)?;
+                messages::interactive_location_request(to, body, reply_to)
+            }
+            Self::Address(a) => {
+                check_common(&a.common)?;
+                let parameters = match (&a.country, &a.parameters_file) {
+                    (Some(country), _) => {
+                        validate::not_blank(country, "--country")?;
+                        messages::address_parameters(country.trim())
+                    }
+                    (None, Some(path)) => address_parameters_file(path)?,
+                    (None, None) => unreachable!("clap enforces one address source"),
+                };
+                messages::interactive_address(to, &a.common.text(), &parameters, reply_to)
+            }
+            Self::Carousel(a) => {
+                check_body(body)?;
+                let cards = match (&a.card_file, &a.catalog_id) {
+                    (Some(path), _) => media_cards_file(path)?,
+                    (None, Some(catalog_id)) => {
+                        validate::not_blank(catalog_id, "--catalog-id")?;
+                        check_card_count(a.products.len())?;
+                        let products: Vec<String> =
+                            a.products.iter().map(|p| p.trim().to_owned()).collect();
+                        for product in &products {
+                            validate::not_blank(product, "--products")?;
+                        }
+                        messages::product_cards(catalog_id, &products)
+                    }
+                    (None, None) => unreachable!("clap enforces one card source"),
+                };
+                messages::interactive_carousel(to, body, &cards, reply_to)
+            }
+            Self::Call(a) => {
+                check_body(body)?;
+                if let Some(display) = &a.display {
+                    validate::not_blank(display, "--display")?;
+                    validate::max_chars(display, limits::MAX_CALL_BUTTON_TEXT, "--display")?;
+                }
+                if let Some(ttl) = a.ttl_minutes
+                    && !limits::CALL_BUTTON_TTL_MINUTES.contains(&ttl)
+                {
+                    return Err(Error::validation(format!(
+                        "--ttl-minutes must be between {} and {}",
+                        limits::CALL_BUTTON_TTL_MINUTES.start(),
+                        limits::CALL_BUTTON_TTL_MINUTES.end()
+                    )));
+                }
+                if let Some(payload) = &a.payload {
+                    validate::not_blank(payload, "--payload")?;
+                    validate::max_chars(payload, limits::MAX_CALL_BUTTON_PAYLOAD, "--payload")?;
+                }
+                let button = messages::CallButton {
+                    display_text: a.display.as_deref(),
+                    ttl_minutes: a.ttl_minutes,
+                    payload: a.payload.as_deref(),
+                };
+                messages::interactive_call(to, body, &button, reply_to)
+            }
+            Self::RequestContact(_) => {
+                check_body(body)?;
+                messages::interactive_request_contact(to, body, reply_to)
             }
         };
-        self.common().policy.enforce(&to)?;
+        policy.enforce(to)?;
         dispatch(app, payload).await
+    }
+}
+
+fn check_body(body: &str) -> Result<()> {
+    validate::not_blank(body, "--body")?;
+    validate::max_chars(body, limits::MAX_INTERACTIVE_BODY, "--body")
+}
+
+fn check_footer(footer: Option<&str>) -> Result<()> {
+    footer.map_or(Ok(()), |footer| {
+        validate::max_chars(footer, limits::MAX_INTERACTIVE_FOOTER, "--footer")
+    })
+}
+
+fn check_common(c: &InteractiveCommon) -> Result<()> {
+    check_body(&c.body)?;
+    if let Some(header) = &c.header {
+        validate::max_chars(header, limits::MAX_INTERACTIVE_HEADER, "--header")?;
+    }
+    check_footer(c.footer.as_deref())
+}
+
+async fn send_flow(app: &App, a: &FlowMessage) -> Result<()> {
+    let c = &a.common;
+    validate::recipient(&c.to)?;
+    check_common(c)?;
+    let reply_to = c.reply.id()?;
+    let flow = match (&a.flow_id, &a.flow_name) {
+        (Some(id), _) => {
+            validate::not_blank(id, "--flow-id")?;
+            messages::FlowRef::Id(id)
+        }
+        (None, Some(name)) => {
+            validate::not_blank(name, "--flow-name")?;
+            messages::FlowRef::Name(name)
+        }
+        (None, None) => unreachable!("clap enforces one flow reference"),
+    };
+    validate::not_blank(&a.cta, "--cta")?;
+    for (value, flag) in [(&a.flow_token, "--flow-token"), (&a.screen, "--screen")] {
+        if let Some(value) = value {
+            validate::not_blank(value, flag)?;
+        }
+    }
+    let data = flow_data(a)?;
+    if a.action == Some(FlowAction::DataExchange) && (a.screen.is_some() || data.is_some()) {
+        return Err(Error::validation(
+            "--screen and --data only apply when --action is navigate",
+        ));
+    }
+    let mut text = c.text();
+    if let Some(header) = interactive_media_header(
+        a.header_image.as_deref(),
+        a.header_video.as_deref(),
+        a.header_document.as_deref(),
+    )? {
+        text.header = Some(header);
+    }
+    if a.cta.chars().count() > limits::ADVISED_FLOW_CTA {
+        app.out.warn(format!(
+            "--cta is over the {} characters Meta advises",
+            limits::ADVISED_FLOW_CTA
+        ));
+    }
+    c.policy.enforce(&c.to)?;
+    let params = messages::FlowParams {
+        flow,
+        cta: &a.cta,
+        token: a.flow_token.as_deref(),
+        action: a.action.map(FlowAction::as_str),
+        mode: a.mode.map(FlowMode::as_str),
+        screen: a.screen.as_deref(),
+        data: data.as_ref(),
+    };
+    dispatch(
+        app,
+        messages::interactive_flow(&c.to, &text, &params, reply_to),
+    )
+    .await
+}
+
+/// The first screen's input. Meta requires a non-empty object when there is one. Errors
+/// never echo the input, which is often personal data.
+fn flow_data(a: &FlowMessage) -> Result<Option<Value>> {
+    let (data, what) = match (&a.data, &a.data_file) {
+        (Some(text), _) => (
+            serde_json::from_str(text)
+                .map_err(|e| Error::validation(format!("--data is not valid JSON: {e}")))?,
+            "--data",
+        ),
+        (None, Some(path)) => (read_json(path)?, "--data-file"),
+        (None, None) => return Ok(None),
+    };
+    match data {
+        Value::Object(fields) if !fields.is_empty() => Ok(Some(Value::Object(fields))),
+        _ => Err(Error::validation(format!(
+            "{what} must hold a non-empty JSON object"
+        ))),
+    }
+}
+
+/// `Title:sku1,sku2`. Meta counts products across every section.
+fn parse_product_sections(specs: &[String]) -> Result<Vec<messages::ProductSection>> {
+    if specs.len() > limits::MAX_PRODUCT_LIST_SECTIONS {
+        return Err(Error::validation(format!(
+            "a product list holds at most {} sections (got {})",
+            limits::MAX_PRODUCT_LIST_SECTIONS,
+            specs.len()
+        )));
+    }
+    let sections = specs
+        .iter()
+        .map(|spec| {
+            let (title, products) = spec.split_once(':').ok_or_else(|| {
+                Error::validation(format!("--section '{spec}' must look like Title:sku1,sku2"))
+            })?;
+            validate::not_blank(title, "section title")?;
+            validate::max_chars(
+                title.trim(),
+                limits::MAX_PRODUCT_LIST_SECTION_TITLE,
+                "section title",
+            )?;
+            let products: Vec<String> = split_rows(products)
+                .iter()
+                .map(|product| product.trim().to_owned())
+                .filter(|product| !product.is_empty())
+                .collect();
+            if products.is_empty() {
+                return Err(Error::validation(format!(
+                    "--section '{title}' has no products"
+                )));
+            }
+            Ok(messages::ProductSection {
+                title: title.trim().to_owned(),
+                products,
+            })
+        })
+        .collect::<Result<Vec<_>>>()?;
+    let total: usize = sections.iter().map(|section| section.products.len()).sum();
+    if total > limits::MAX_PRODUCT_LIST_PRODUCTS {
+        return Err(Error::validation(format!(
+            "a product list holds at most {} products in total (got {total})",
+            limits::MAX_PRODUCT_LIST_PRODUCTS
+        )));
+    }
+    Ok(sections)
+}
+
+/// An address message's parameters, passed through as authored. Meta rejects a message
+/// without a `country`.
+fn address_parameters_file(path: &Path) -> Result<Value> {
+    let parameters = read_json(path)?;
+    if !parameters.is_object() {
+        return Err(Error::validation(
+            "address parameters file must hold a JSON object",
+        ));
+    }
+    if parameters
+        .get("country")
+        .and_then(Value::as_str)
+        .is_none_or(|country| country.trim().is_empty())
+    {
+        return Err(Error::validation(
+            "address parameters file needs a non-empty 'country' string",
+        ));
+    }
+    for (key, valid) in [
+        ("values", parameters.get("values").map(Value::is_object)),
+        (
+            "saved_addresses",
+            parameters.get("saved_addresses").map(Value::is_array),
+        ),
+        (
+            "validation_errors",
+            parameters.get("validation_errors").map(Value::is_object),
+        ),
+    ] {
+        if valid == Some(false) {
+            let shape = if key == "saved_addresses" {
+                "an array"
+            } else {
+                "an object"
+            };
+            return Err(Error::validation(format!(
+                "address parameters '{key}' must be {shape}"
+            )));
+        }
+    }
+    Ok(parameters)
+}
+
+fn check_card_count(count: usize) -> Result<()> {
+    if limits::CAROUSEL_CARDS.contains(&count) {
+        return Ok(());
+    }
+    Err(Error::validation(format!(
+        "a carousel holds {} to {} cards (got {count})",
+        limits::CAROUSEL_CARDS.start(),
+        limits::CAROUSEL_CARDS.end()
+    )))
+}
+
+/// The media cards from a `--card-file`, as authored apart from what
+/// [`messages::media_cards`] fills in.
+fn media_cards_file(path: &Path) -> Result<Vec<Value>> {
+    let invalid = || Error::validation("card file must hold a JSON array or {\"cards\": [...]}");
+    let cards = match read_json(path)? {
+        Value::Array(cards) => cards,
+        Value::Object(mut fields) => match fields.remove("cards") {
+            Some(Value::Array(cards)) => cards,
+            _ => return Err(invalid()),
+        },
+        _ => return Err(invalid()),
+    };
+    check_card_count(cards.len())?;
+    let cards = messages::media_cards(cards);
+    check_media_cards(&cards)?;
+    Ok(cards)
+}
+
+/// What a card's action has to match on every other card.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum CardButtons {
+    Url,
+    QuickReplies(usize),
+}
+
+/// Errors name the card by position and never echo its text.
+fn check_media_cards(cards: &[Value]) -> Result<()> {
+    let mut indexes = Vec::with_capacity(cards.len());
+    let mut first_buttons = None;
+    for (position, card) in cards.iter().enumerate() {
+        let invalid = |problem: &str| Error::validation(format!("cards[{position}] {problem}"));
+        if !card.is_object() {
+            return Err(invalid("must be an object"));
+        }
+        if card.get("type").and_then(Value::as_str) == Some("product") {
+            return Err(invalid(
+                "is a product card; use --products and --catalog-id instead",
+            ));
+        }
+        // Meta's syntax and examples use this one value on every media card.
+        if card.get("type").is_some_and(|kind| kind != "cta_url") {
+            return Err(invalid("type must be cta_url, or left out"));
+        }
+        let index = card
+            .get("card_index")
+            .and_then(Value::as_u64)
+            .filter(|index| *index < *limits::CAROUSEL_CARDS.end() as u64)
+            .ok_or_else(|| {
+                invalid(&format!(
+                    "card_index must be a whole number from 0 to {}",
+                    limits::CAROUSEL_CARDS.end() - 1
+                ))
+            })?;
+        if indexes.contains(&index) {
+            return Err(invalid("repeats a card_index"));
+        }
+        indexes.push(index);
+        check_card_header(card, position)?;
+        if let Some(body) = card.get("body") {
+            let body = body
+                .get("text")
+                .and_then(Value::as_str)
+                .filter(|text| !text.trim().is_empty())
+                .ok_or_else(|| invalid("body needs a non-empty 'text' string"))?;
+            validate::max_chars(
+                body,
+                limits::MAX_CAROUSEL_CARD_BODY,
+                &format!("cards[{position}] body"),
+            )?;
+            if body.matches('\n').count() > limits::MAX_CAROUSEL_CARD_BODY_LINE_BREAKS {
+                return Err(invalid(&format!(
+                    "body has more than {} line breaks",
+                    limits::MAX_CAROUSEL_CARD_BODY_LINE_BREAKS
+                )));
+            }
+        }
+        let buttons = check_card_action(card, position)?;
+        if *first_buttons.get_or_insert(buttons) != buttons {
+            return Err(invalid(
+                "has different buttons from cards[0]; every card needs the same type and number",
+            ));
+        }
+    }
+    Ok(())
+}
+
+/// Meta's page only takes a card's media as a link, and only an image or a video.
+fn check_card_header(card: &Value, position: usize) -> Result<()> {
+    let invalid = |problem: &str| Error::validation(format!("cards[{position}] {problem}"));
+    let kind = card
+        .pointer("/header/type")
+        .and_then(Value::as_str)
+        .filter(|kind| matches!(*kind, "image" | "video"))
+        .ok_or_else(|| invalid("needs a header of type image or video"))?;
+    let link = card
+        .pointer(&format!("/header/{kind}/link"))
+        .and_then(Value::as_str)
+        .ok_or_else(|| invalid("header needs an http(s) link, not a media id"))?;
+    if link != link.trim() {
+        return Err(invalid("header link has spaces around it"));
+    }
+    match media_reference(link, &format!("cards[{position}] header link"))? {
+        MediaSource::Link(_) => Ok(()),
+        MediaSource::Id(_) => Err(invalid("header needs an http(s) link, not a media id")),
+    }
+}
+
+fn check_card_action(card: &Value, position: usize) -> Result<CardButtons> {
+    let invalid = |problem: &str| Error::validation(format!("cards[{position}] {problem}"));
+    let text = |pointer: &str, problem: &str| {
+        card.pointer(pointer)
+            .and_then(Value::as_str)
+            .filter(|text| !text.trim().is_empty())
+            .map(str::to_owned)
+            .ok_or_else(|| invalid(problem))
+    };
+    let label = format!("cards[{position}] button label");
+    match (
+        card.pointer("/action/buttons"),
+        card.pointer("/action/parameters"),
+    ) {
+        (Some(buttons), None) => {
+            let buttons = buttons
+                .as_array()
+                .filter(|buttons| !buttons.is_empty())
+                .ok_or_else(|| invalid("action.buttons must be a non-empty array"))?;
+            for button in buttons {
+                if button.get("type").and_then(Value::as_str) != Some("quick_reply") {
+                    return Err(invalid("action.buttons entries must be quick_reply"));
+                }
+                let reply = |field: &str| {
+                    button
+                        .pointer(&format!("/quick_reply/{field}"))
+                        .and_then(Value::as_str)
+                        .filter(|text| !text.trim().is_empty())
+                        .ok_or_else(|| invalid("quick_reply needs a non-empty id and title"))
+                };
+                validate::max_chars(
+                    reply("id")?,
+                    limits::MAX_CAROUSEL_REPLY_ID,
+                    &format!("cards[{position}] button id"),
+                )?;
+                validate::max_chars(reply("title")?, limits::MAX_CAROUSEL_BUTTON_LABEL, &label)?;
+            }
+            Ok(CardButtons::QuickReplies(buttons.len()))
+        }
+        (None, Some(_)) => {
+            if card.pointer("/action/name").and_then(Value::as_str) != Some("cta_url") {
+                return Err(invalid("a URL button's action.name must be cta_url"));
+            }
+            let display = text(
+                "/action/parameters/display_text",
+                "URL button needs a non-empty display_text",
+            )?;
+            validate::max_chars(&display, limits::MAX_CAROUSEL_BUTTON_LABEL, &label)?;
+            let url = text("/action/parameters/url", "URL button needs a non-empty url")?;
+            if !paloma_graph::request::has_http_scheme(&url) || url != url.trim() {
+                return Err(invalid("URL button's url must be an http(s) link"));
+            }
+            Ok(CardButtons::Url)
+        }
+        _ => Err(invalid(
+            "action needs either one URL button or quick-reply buttons",
+        )),
     }
 }
 
@@ -1040,6 +1805,91 @@ mod tests {
         assert_eq!(s[0].rows[0].description, None);
         assert_eq!(s[0].rows[1].title, "Soon");
         assert_eq!(s[0].rows[1].description.as_deref(), Some("Next day: by 5"));
+    }
+
+    #[test]
+    fn product_sections_parse_and_cap_their_totals() {
+        let s = parse_product_sections(&["Top:a,b".into(), r"Sale:c\,d:1".into()]).unwrap();
+        assert_eq!(s[0].products, ["a", "b"]);
+        assert_eq!(s[1].products, ["c,d:1"]);
+        assert!(parse_product_sections(&["Empty:".into()]).is_err());
+        assert!(parse_product_sections(&["NoProducts".into()]).is_err());
+        let thirty = ["s"; 30].join(",");
+        assert!(parse_product_sections(&[format!("A:{thirty}")]).is_ok());
+        assert!(parse_product_sections(&[format!("A:{thirty},s")]).is_err());
+        let eleven = vec!["A:s".to_owned(); 11];
+        assert!(parse_product_sections(&eleven).is_err());
+    }
+
+    fn card(action: &Value) -> Value {
+        serde_json::json!({
+            "header": { "type": "image", "image": { "link": "https://x.test/a.png" } },
+            "action": action,
+        })
+    }
+
+    fn url_action() -> Value {
+        serde_json::json!({
+            "name": "cta_url",
+            "parameters": { "display_text": "Buy", "url": "https://x.test" }
+        })
+    }
+
+    fn replies(count: usize) -> Value {
+        let buttons: Vec<Value> = (0..count)
+            .map(|i| {
+                serde_json::json!({
+                    "type": "quick_reply",
+                    "quick_reply": { "id": format!("b{i}"), "title": "Go" }
+                })
+            })
+            .collect();
+        serde_json::json!({ "buttons": buttons })
+    }
+
+    fn checked(cards: Vec<Value>) -> Result<()> {
+        check_media_cards(&messages::media_cards(cards))
+    }
+
+    #[test]
+    fn media_cards_must_have_matching_buttons() {
+        assert!(checked(vec![card(&url_action()), card(&url_action())]).is_ok());
+        assert!(checked(vec![card(&replies(2)), card(&replies(2))]).is_ok());
+        assert!(checked(vec![card(&replies(2)), card(&replies(1))]).is_err());
+        assert!(checked(vec![card(&url_action()), card(&replies(1))]).is_err());
+    }
+
+    #[test]
+    fn a_media_card_needs_a_linked_image_or_video() {
+        let mut by_id = card(&url_action());
+        by_id["header"] = serde_json::json!({ "type": "image", "image": { "id": "9" } });
+        assert!(checked(vec![by_id, card(&url_action())]).is_err());
+        let mut document = card(&url_action());
+        document["header"] =
+            serde_json::json!({ "type": "document", "document": { "link": "https://x.test" } });
+        assert!(checked(vec![document, card(&url_action())]).is_err());
+    }
+
+    #[test]
+    fn a_media_card_body_has_a_length_and_line_limit() {
+        let with_body = |text: &str| {
+            let mut c = card(&url_action());
+            c["body"] = serde_json::json!({ "text": text });
+            c
+        };
+        assert!(checked(vec![with_body("a\nb\nc"), card(&url_action())]).is_ok());
+        assert!(checked(vec![with_body("a\nb\nc\nd"), card(&url_action())]).is_err());
+        assert!(checked(vec![with_body(&"x".repeat(160)), card(&url_action())]).is_ok());
+        assert!(checked(vec![with_body(&"x".repeat(161)), card(&url_action())]).is_err());
+    }
+
+    #[test]
+    fn card_indexes_stay_in_range_and_unique() {
+        let mut first = card(&url_action());
+        first["card_index"] = 1.into();
+        assert!(checked(vec![first.clone(), card(&url_action())]).is_err());
+        first["card_index"] = 10.into();
+        assert!(checked(vec![first, card(&url_action())]).is_err());
     }
 
     #[test]

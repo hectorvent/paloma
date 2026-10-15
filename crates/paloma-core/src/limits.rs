@@ -66,6 +66,35 @@ pub const MAX_LIST_SECTION_TITLE: usize = 24;
 pub const MAX_LIST_ROW_ID: usize = 200;
 pub const MAX_LIST_ROW_TITLE: usize = 24;
 pub const MAX_LIST_ROW_DESCRIPTION: usize = 72;
+/// Characters in an interactive body. Meta's location request, catalog and carousel pages
+/// state this. Other kinds fall back to its OpenAPI schema, which says the same, except a
+/// list, whose page allows more.
+pub const MAX_INTERACTIVE_BODY: usize = 1024;
+/// Characters in an interactive text header and footer.
+pub const MAX_INTERACTIVE_HEADER: usize = 60;
+pub const MAX_INTERACTIVE_FOOTER: usize = 60;
+/// Characters Meta advises for a Flow's button. Its page advises rather than requires
+/// this, though its OpenAPI schema says maximum, so going over only warns.
+pub const ADVISED_FLOW_CTA: usize = 30;
+/// Cards one carousel must have, media or product.
+pub const CAROUSEL_CARDS: RangeInclusive<usize> = 2..=10;
+/// A carousel card's optional body text.
+pub const MAX_CAROUSEL_CARD_BODY: usize = 160;
+pub const MAX_CAROUSEL_CARD_BODY_LINE_BREAKS: usize = 2;
+/// A carousel card's quick-reply button, and the label of its URL button.
+pub const MAX_CAROUSEL_REPLY_ID: usize = 256;
+pub const MAX_CAROUSEL_BUTTON_LABEL: usize = 20;
+/// Characters in a call button's label.
+pub const MAX_CALL_BUTTON_TEXT: usize = 20;
+/// Characters in a call button's tracking payload.
+pub const MAX_CALL_BUTTON_PAYLOAD: usize = 512;
+/// How long a call button lasts, in minutes: up to 30 days.
+pub const CALL_BUTTON_TTL_MINUTES: RangeInclusive<u32> = 1..=43_200;
+/// Products across all sections of a multi-product message.
+pub const MAX_PRODUCT_LIST_PRODUCTS: usize = 30;
+/// Sections in a multi-product message, each with a title of at most this many characters.
+pub const MAX_PRODUCT_LIST_SECTIONS: usize = 10;
+pub const MAX_PRODUCT_LIST_SECTION_TITLE: usize = 24;
 /// Maximum characters in the business profile's text fields. Meta's profile pages only
 /// state the address limit. The rest come from its OpenAPI spec, except the description:
 /// the spec says 256 but the Embedded Signup page says 512, and the page wins.

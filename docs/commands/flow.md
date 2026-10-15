@@ -10,8 +10,8 @@ Flows live on the **WhatsApp Business Account**, and this is the Business Manage
 side of the Graph API: the token needs `whatsapp_business_management`, not just the
 messaging scope. A system-user token is the usual choice.
 
-Sending a flow to a recipient is a separate, still-planned command (`paloma send flow`,
-see [planned](planned.md)). This group builds and manages the flow itself.
+Sending a flow to a recipient is a separate command, [`paloma send flow`](send.md#paloma-send-flow).
+This group builds and manages the flow itself.
 
 ## The lifecycle
 

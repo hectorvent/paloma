@@ -13,9 +13,6 @@ so the published surface stays discoverable and honest. All are planned for v1.0
 
 Also planned within implemented groups:
 
-- **`paloma send`**: only `flow` remains — sending a flow into a chat. Building and
-  managing the flow itself already ships, see [flow](flow.md). The rest of the send
-  surface, including `interactive` (button/list/cta-url), is implemented.
 - **`paloma template`**: only `namespace` remains. The rest of the lifecycle
   (list/status/get/create/submit/watch/edit/delete) is implemented.
 

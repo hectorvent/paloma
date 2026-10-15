@@ -6184,6 +6184,266 @@ fn message_history_blank_wamid_exits_5_before_any_context() {
         .stdout(predicate::str::is_empty());
 }
 
+/// Stub the send endpoint so that only this exact body gets a wamid.
+async fn expect_exact_send(graph: &MockServer, body: Value) {
+    Mock::given(method("POST"))
+        .and(path(format!("/v26.0/{PHONE}/messages")))
+        .and(header("authorization", format!("Bearer {TOKEN}").as_str()))
+        .and(body_json(body))
+        .respond_with(
+            ResponseTemplate::new(200).set_body_json(json!({"messages":[{"id":"wamid.NEW"}]})),
+        )
+        .expect(1)
+        .mount(graph)
+        .await;
+}
+
+/// The whole message around an interactive object, as sent to a phone number.
+fn interactive_message(interactive: &Value) -> Value {
+    json!({
+        "messaging_product": "whatsapp",
+        "recipient_type": "individual",
+        "to": TO,
+        "type": "interactive",
+        "interactive": interactive,
+    })
+}
+
+/// Run a send with `-q`: stdout must be only the wamid, and stderr must be quiet.
+fn assert_quiet_send(graph: &MockServer, args: &[&str]) {
+    let home = TempDir::new().unwrap();
+    paloma(Some(graph), &home)
+        .args(args)
+        .arg("-q")
+        .assert()
+        .success()
+        .stdout("wamid.NEW\n")
+        .stderr(predicate::str::is_empty());
+}
+
+/// A bad value exits 5 with nothing on stdout, before context resolves or a request goes.
+fn assert_refused_locally(args: &[&str]) {
+    let home = TempDir::new().unwrap();
+    paloma(None, &home)
+        .env_remove("PALOMA_PHONE_NUMBER_ID")
+        .env_remove("PALOMA_TOKEN")
+        .env("PALOMA_GRAPH_URL", "http://127.0.0.1:9")
+        .args(args)
+        .assert()
+        .code(5)
+        .stdout(predicate::str::is_empty());
+}
+
+/// The body a dry run would send.
+fn sent_dry_run_body(args: &[&str]) -> Value {
+    let home = TempDir::new().unwrap();
+    let out = paloma(None, &home)
+        .env("PALOMA_GRAPH_URL", "http://127.0.0.1:9")
+        .args(args)
+        .args(["--dry-run", "-o", "json"])
+        .output()
+        .unwrap();
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert!(String::from_utf8_lossy(&out.stderr).contains("dry-run"));
+    stdout_json(&out)["body"].clone()
+}
+
+#[tokio::test]
+async fn send_flow_sends_every_part_and_quiet_prints_the_wamid() {
+    let graph = MockServer::start().await;
+    let mut body = interactive_message(&json!({
+        "type": "flow",
+        "header": { "type": "text", "text": "Booking" },
+        "body": { "text": "Book a table" },
+        "footer": { "text": "Acme" },
+        "action": {
+            "name": "flow",
+            "parameters": {
+                "flow_message_version": "3",
+                "flow_id": "123456",
+                "flow_cta": "Book!",
+                "flow_token": "order-7",
+                "flow_action": "navigate",
+                "mode": "draft",
+                "flow_action_payload": {
+                    "screen": "START",
+                    "data": "{\"plan\":\"gold\"}"
+                }
+            }
+        }
+    }));
+    body["context"] = json!({ "message_id": "wamid.Q" });
+    expect_exact_send(&graph, body).await;
+    assert_quiet_send(
+        &graph,
+        &[
+            "send",
+            "flow",
+            TO,
+            "--body",
+            "Book a table",
+            "--header",
+            "Booking",
+            "--footer",
+            "Acme",
+            "--flow-id",
+            "123456",
+            "--cta",
+            "Book!",
+            "--flow-token",
+            "order-7",
+            "--action",
+            "navigate",
+            "--mode",
+            "draft",
+            "--screen",
+            "START",
+            "--data",
+            r#"{"plan":"gold"}"#,
+            "--reply-to",
+            "wamid.Q",
+        ],
+    );
+}
+
+#[tokio::test]
+async fn send_flow_by_name_leaves_the_rest_to_meta() {
+    let graph = MockServer::start().await;
+    expect_exact_send(
+        &graph,
+        interactive_message(&json!({
+            "type": "flow",
+            "body": { "text": "Book" },
+            "action": {
+                "name": "flow",
+                "parameters": {
+                    "flow_message_version": "3",
+                    "flow_name": "booking_v1",
+                    "flow_cta": "Open"
+                }
+            }
+        })),
+    )
+    .await;
+    assert_quiet_send(
+        &graph,
+        &[
+            "send",
+            "flow",
+            TO,
+            "--body",
+            "Book",
+            "--flow-name",
+            "booking_v1",
+            "--cta",
+            "Open",
+        ],
+    );
+}
+
+#[test]
+fn send_flow_takes_data_from_a_file_and_a_media_header() {
+    let home = TempDir::new().unwrap();
+    let file = home.path().join("data.json");
+    std::fs::write(&file, r#"{"plan":"gold"}"#).unwrap();
+    let body = sent_dry_run_body(&[
+        "send",
+        "flow",
+        TO,
+        "--body",
+        "Book",
+        "--flow-id",
+        "1",
+        "--cta",
+        "Open",
+        "--header-image",
+        "2762",
+        "--data-file",
+        file.to_str().unwrap(),
+    ]);
+    assert_eq!(
+        body["interactive"]["header"],
+        json!({ "type": "image", "image": { "id": "2762" } })
+    );
+    assert_eq!(
+        body["interactive"]["action"]["parameters"]["flow_action_payload"],
+        json!({ "data": "{\"plan\":\"gold\"}" })
+    );
+}
+
+#[test]
+fn send_flow_dry_run_masks_the_flow_token_and_secrets_in_its_data() {
+    let body = sent_dry_run_body(&[
+        "send",
+        "flow",
+        TO,
+        "--body",
+        "Book",
+        "--flow-id",
+        "1",
+        "--cta",
+        "Open",
+        "--flow-token",
+        "TOKEN_SENTINEL",
+        "--data",
+        r#"{"api_token":"DATA_SENTINEL","u":"https://x.test/?access_token=LINK_SENTINEL","city":"SD"}"#,
+    ]);
+    let printed = body.to_string();
+    for sentinel in ["TOKEN_SENTINEL", "DATA_SENTINEL", "LINK_SENTINEL"] {
+        assert!(!printed.contains(sentinel), "{printed}");
+    }
+    assert!(printed.contains("SD"), "{printed}");
+}
+
+#[test]
+fn send_interactive_carousel_refuses_a_bad_card_type_url_or_link() {
+    let home = TempDir::new().unwrap();
+    let card = |kind: &str, link: &str, url: &str| {
+        json!({
+            "card_index": 0,
+            "type": kind,
+            "header": { "type": "image", "image": { "link": link } },
+            "action": {
+                "name": "cta_url",
+                "parameters": { "display_text": "Open", "url": url }
+            }
+        })
+    };
+    let good = "https://x.test/a.png";
+    let bad = [
+        card("bogus", good, "https://x.test"),
+        card("cta_url", &format!(" {good}"), "https://x.test"),
+        card("cta_url", good, "not a url"),
+    ];
+    for bad_card in bad {
+        let file = home.path().join("cards.json");
+        std::fs::write(
+            &file,
+            json!([bad_card, card("cta_url", good, "https://x.test")]).to_string(),
+        )
+        .unwrap();
+        paloma(None, &home)
+            .env_remove("PALOMA_PHONE_NUMBER_ID")
+            .args([
+                "send",
+                "interactive",
+                "carousel",
+                "15551234567",
+                "--body",
+                "b",
+            ])
+            .arg("--card-file")
+            .arg(&file)
+            .assert()
+            .code(5)
+            .stdout(predicate::str::is_empty());
+    }
+}
+
 #[test]
 fn message_history_trims_the_wamid() {
     let home = TempDir::new().unwrap();
@@ -6196,4 +6456,929 @@ fn message_history_trims_the_wamid() {
     let lookup = requests[0]["url"].as_str().unwrap();
     assert!(lookup.contains("message_id=wamid.X"), "{lookup}");
     assert!(!lookup.contains("%20"), "{lookup}");
+}
+
+#[test]
+fn send_flow_refuses_bad_values_before_any_context() {
+    let base = [
+        "send",
+        "flow",
+        TO,
+        "--body",
+        "Book",
+        "--flow-id",
+        "1",
+        "--cta",
+        "Open",
+    ];
+    for extra in [
+        vec!["--data", "not json"],
+        vec!["--data", "[1]"],
+        vec!["--data", "{}"],
+        vec!["--action", "data_exchange", "--screen", "START"],
+        vec!["--action", "data_exchange", "--data", r#"{"a":1}"#],
+        vec!["--flow-token", " "],
+        vec!["--screen", " "],
+        vec!["--reply-to", " "],
+        vec!["--header-image", "ftp://x"],
+    ] {
+        let mut args = base.to_vec();
+        args.extend(extra);
+        assert_refused_locally(&args);
+    }
+    assert_refused_locally(&[
+        "send",
+        "flow",
+        TO,
+        "--body",
+        " ",
+        "--flow-id",
+        "1",
+        "--cta",
+        "Open",
+    ]);
+    assert_refused_locally(&[
+        "send",
+        "flow",
+        TO,
+        "--body",
+        "Book",
+        "--flow-id",
+        " ",
+        "--cta",
+        "Open",
+    ]);
+    assert_refused_locally(&[
+        "send",
+        "flow",
+        TO,
+        "--body",
+        "Book",
+        "--flow-id",
+        "1",
+        "--cta",
+        " ",
+    ]);
+    assert_refused_locally(&[
+        "send",
+        "flow",
+        "abc",
+        "--body",
+        "Book",
+        "--flow-id",
+        "1",
+        "--cta",
+        "Open",
+    ]);
+}
+
+#[test]
+fn send_flow_closed_sets_and_exclusive_flags_are_usage_errors() {
+    let home = TempDir::new().unwrap();
+    for args in [
+        vec!["--body", "B", "--cta", "C"],
+        vec![
+            "--body",
+            "B",
+            "--cta",
+            "C",
+            "--flow-id",
+            "1",
+            "--flow-name",
+            "n",
+        ],
+        vec![
+            "--body",
+            "B",
+            "--cta",
+            "C",
+            "--flow-id",
+            "1",
+            "--action",
+            "jump",
+        ],
+        vec![
+            "--body",
+            "B",
+            "--cta",
+            "C",
+            "--flow-id",
+            "1",
+            "--mode",
+            "live",
+        ],
+        vec![
+            "--body",
+            "B",
+            "--cta",
+            "C",
+            "--flow-id",
+            "1",
+            "--data",
+            "{}",
+            "--data-file",
+            "x",
+        ],
+        vec![
+            "--body",
+            "B",
+            "--cta",
+            "C",
+            "--flow-id",
+            "1",
+            "--header",
+            "H",
+            "--header-image",
+            "1",
+        ],
+    ] {
+        paloma(None, &home)
+            .args(["send", "flow", TO])
+            .args(args)
+            .assert()
+            .code(2);
+    }
+}
+
+#[test]
+fn send_flow_warns_on_a_long_cta_but_sends_it() {
+    let home = TempDir::new().unwrap();
+    let cta = "x".repeat(31);
+    paloma(None, &home)
+        .args(["send", "flow", TO, "--body", "B", "--flow-id", "1"])
+        .args(["--cta", cta.as_str(), "--dry-run", "-o", "json"])
+        .assert()
+        .success()
+        .stderr(predicate::str::contains("warning: --cta"));
+}
+
+#[tokio::test]
+async fn location_request_sends_the_send_location_action() {
+    let graph = MockServer::start().await;
+    let mut body = interactive_message(&json!({
+        "type": "location_request_message",
+        "body": { "text": "Where to?" },
+        "action": { "name": "send_location" }
+    }));
+    body["context"] = json!({ "message_id": "wamid.Q" });
+    expect_exact_send(&graph, body).await;
+    assert_quiet_send(
+        &graph,
+        &[
+            "send",
+            "interactive",
+            "location-request",
+            TO,
+            "--body",
+            "Where to?",
+            "--reply-to",
+            "wamid.Q",
+        ],
+    );
+}
+
+#[test]
+fn location_request_checks_its_body_and_allows_no_header() {
+    let long = "x".repeat(1025);
+    let fine = "x".repeat(1024);
+    let cmd = ["send", "interactive", "location-request", TO, "--body"];
+    let with = |body: &'static str| {
+        let mut args = cmd.to_vec();
+        args.push(body);
+        args
+    };
+    assert_refused_locally(&with(" "));
+    let mut too_long = cmd.to_vec();
+    too_long.push(&long);
+    assert_refused_locally(&too_long);
+    let mut at_limit = cmd.to_vec();
+    at_limit.push(&fine);
+    sent_dry_run_body(&at_limit);
+    let home = TempDir::new().unwrap();
+    paloma(None, &home)
+        .args(with("Where?"))
+        .args(["--header", "H"])
+        .assert()
+        .code(2);
+}
+
+#[tokio::test]
+async fn address_sends_a_country_with_optional_text() {
+    let graph = MockServer::start().await;
+    expect_exact_send(
+        &graph,
+        interactive_message(&json!({
+            "type": "address_message",
+            "header": { "type": "text", "text": "Delivery" },
+            "body": { "text": "Where should it go?" },
+            "footer": { "text": "Acme" },
+            "action": { "name": "address_message", "parameters": { "country": "IN" } }
+        })),
+    )
+    .await;
+    assert_quiet_send(
+        &graph,
+        &[
+            "send",
+            "interactive",
+            "address",
+            TO,
+            "--body",
+            "Where should it go?",
+            "--header",
+            "Delivery",
+            "--footer",
+            "Acme",
+            "--country",
+            "IN",
+        ],
+    );
+}
+
+#[test]
+fn address_doesnt_block_other_regions_and_takes_a_parameters_file() {
+    let body = sent_dry_run_body(&[
+        "send",
+        "interactive",
+        "address",
+        TO,
+        "--body",
+        "Where?",
+        "--country",
+        "SG",
+    ]);
+    assert_eq!(
+        body["interactive"]["action"]["parameters"],
+        json!({ "country": "SG" })
+    );
+    let home = TempDir::new().unwrap();
+    let file = home.path().join("address.json");
+    let parameters = json!({
+        "country": "IN",
+        "values": { "name": "Ana", "in_pin_code": "666666" },
+        "validation_errors": { "in_pin_code": "We could not locate this pin code." },
+        "saved_addresses": [{ "id": "a1", "value": { "city": "Mumbai" } }],
+    });
+    std::fs::write(&file, parameters.to_string()).unwrap();
+    let body = sent_dry_run_body(&[
+        "send",
+        "interactive",
+        "address",
+        TO,
+        "--body",
+        "Where?",
+        "--parameters-file",
+        file.to_str().unwrap(),
+    ]);
+    assert_eq!(body["interactive"]["action"]["parameters"], parameters);
+}
+
+#[test]
+fn address_refuses_bad_parameters_and_needs_a_country() {
+    let home = TempDir::new().unwrap();
+    let file = home.path().join("address.json");
+    let file_str = file.to_str().unwrap();
+    for bad in [
+        json!([]),
+        json!({}),
+        json!({ "country": " " }),
+        json!({ "country": "IN", "values": [] }),
+        json!({ "country": "IN", "saved_addresses": {} }),
+        json!({ "country": "IN", "validation_errors": "x" }),
+    ] {
+        std::fs::write(&file, bad.to_string()).unwrap();
+        assert_refused_locally(&[
+            "send",
+            "interactive",
+            "address",
+            TO,
+            "--body",
+            "Where?",
+            "--parameters-file",
+            file_str,
+        ]);
+    }
+    assert_refused_locally(&[
+        "send",
+        "interactive",
+        "address",
+        TO,
+        "--body",
+        "Where?",
+        "--country",
+        " ",
+    ]);
+    paloma(None, &home)
+        .args(["send", "interactive", "address", TO, "--body", "Where?"])
+        .assert()
+        .code(2);
+}
+
+fn url_card(name: &str) -> Value {
+    json!({
+        "header": { "type": "image", "image": { "link": format!("https://x.test/{name}.png") } },
+        "body": { "text": name },
+        "action": {
+            "name": "cta_url",
+            "parameters": { "display_text": "Buy", "url": format!("https://x.test/{name}") }
+        }
+    })
+}
+
+#[tokio::test]
+async fn carousel_card_file_fills_index_and_type_and_keeps_the_rest() {
+    let graph = MockServer::start().await;
+    let filled = |index: usize, name: &str| {
+        let mut card = url_card(name);
+        card["card_index"] = index.into();
+        card["type"] = "cta_url".into();
+        card
+    };
+    let mut body = interactive_message(&json!({
+        "type": "carousel",
+        "body": { "text": "New in" },
+        "action": { "cards": [filled(0, "a"), filled(1, "b")] }
+    }));
+    body["context"] = json!({ "message_id": "wamid.Q" });
+    expect_exact_send(&graph, body).await;
+    let home = TempDir::new().unwrap();
+    let file = home.path().join("cards.json");
+    std::fs::write(
+        &file,
+        json!({ "cards": [url_card("a"), url_card("b")] }).to_string(),
+    )
+    .unwrap();
+    assert_quiet_send(
+        &graph,
+        &[
+            "send",
+            "interactive",
+            "carousel",
+            TO,
+            "--body",
+            "New in",
+            "--card-file",
+            file.to_str().unwrap(),
+            "--reply-to",
+            "wamid.Q",
+        ],
+    );
+}
+
+#[test]
+fn carousel_card_file_keeps_quick_replies_and_a_bare_array() {
+    let home = TempDir::new().unwrap();
+    let file = home.path().join("cards.json");
+    let replies = |name: &str| {
+        json!({
+            "card_index": 0,
+            "type": "cta_url",
+            "header": { "type": "video", "video": { "link": "https://x.test/v.mp4" } },
+            "action": { "buttons": [
+                { "type": "quick_reply", "quick_reply": { "id": name, "title": "More" } }
+            ] }
+        })
+    };
+    let mut second = replies("b");
+    second["card_index"] = 1.into();
+    let cards = json!([replies("a"), second]);
+    std::fs::write(&file, cards.to_string()).unwrap();
+    let body = sent_dry_run_body(&[
+        "send",
+        "interactive",
+        "carousel",
+        TO,
+        "--body",
+        "New in",
+        "--card-file",
+        file.to_str().unwrap(),
+    ]);
+    assert_eq!(body["interactive"]["action"]["cards"], cards);
+}
+
+#[test]
+fn carousel_card_file_refuses_what_meta_would_without_echoing_it() {
+    let home = TempDir::new().unwrap();
+    let file = home.path().join("cards.json");
+    let file_str = file.to_str().unwrap().to_owned();
+    let refused = |cards: &Value| {
+        std::fs::write(&file, cards.to_string()).unwrap();
+        let out = paloma(None, &home)
+            .env_remove("PALOMA_PHONE_NUMBER_ID")
+            .env_remove("PALOMA_TOKEN")
+            .args(["send", "interactive", "carousel", TO, "--body", "B"])
+            .args(["--card-file", file_str.as_str()])
+            .output()
+            .unwrap();
+        assert_eq!(out.status.code(), Some(5), "{cards}");
+        assert!(out.stdout.is_empty());
+        assert!(!String::from_utf8_lossy(&out.stderr).contains("SENTINEL"));
+    };
+    refused(&json!({ "other": [] }));
+    refused(&json!([url_card("a")]));
+    refused(&Value::Array(vec![url_card("a"); 11]));
+    let mut no_header = url_card("a");
+    no_header.as_object_mut().unwrap().remove("header");
+    refused(&json!([no_header, url_card("b")]));
+    let mut long_body = url_card("a");
+    long_body["body"]["text"] = format!("SENTINEL{}", "x".repeat(160)).into();
+    refused(&json!([long_body, url_card("b")]));
+    let mut product = url_card("a");
+    product["type"] = "product".into();
+    refused(&json!([product, url_card("b")]));
+    let mut replies = url_card("a");
+    replies["action"] = json!({ "buttons": [
+        { "type": "quick_reply", "quick_reply": { "id": "x", "title": "More" } }
+    ] });
+    refused(&json!([replies, url_card("b")]));
+}
+
+#[tokio::test]
+async fn product_carousel_makes_one_card_per_product() {
+    let graph = MockServer::start().await;
+    let card = |index: usize, sku: &str| {
+        json!({
+            "card_index": index,
+            "type": "product",
+            "action": { "product_retailer_id": sku, "catalog_id": "CAT" }
+        })
+    };
+    expect_exact_send(
+        &graph,
+        interactive_message(&json!({
+            "type": "carousel",
+            "body": { "text": "Featured" },
+            "action": { "cards": [card(0, "abc"), card(1, "def")] }
+        })),
+    )
+    .await;
+    assert_quiet_send(
+        &graph,
+        &[
+            "send",
+            "interactive",
+            "carousel",
+            TO,
+            "--body",
+            "Featured",
+            "--products",
+            "abc,def",
+            "--catalog-id",
+            "CAT",
+        ],
+    );
+}
+
+#[test]
+fn product_carousel_checks_its_count_and_its_flags() {
+    let cmd = ["send", "interactive", "carousel", TO, "--body", "B"];
+    let many = ["s"; 11].join(",");
+    for products in ["a", many.as_str(), "a,,b"] {
+        let mut args = cmd.to_vec();
+        args.extend(["--products", products, "--catalog-id", "CAT"]);
+        assert_refused_locally(&args);
+    }
+    let mut blank_catalog = cmd.to_vec();
+    blank_catalog.extend(["--products", "a,b", "--catalog-id", " "]);
+    assert_refused_locally(&blank_catalog);
+    let home = TempDir::new().unwrap();
+    for extra in [
+        vec![],
+        vec!["--products", "a,b"],
+        vec!["--catalog-id", "CAT"],
+        vec!["--products", "a,b", "--catalog-id", "C", "--card-file", "x"],
+        vec!["--products", "a,b", "--catalog-id", "C", "--footer", "F"],
+    ] {
+        paloma(None, &home).args(cmd).args(extra).assert().code(2);
+    }
+}
+
+#[tokio::test]
+async fn call_button_sends_its_parameters() {
+    let graph = MockServer::start().await;
+    let mut body = interactive_message(&json!({
+        "type": "voice_call",
+        "body": { "text": "Call us" },
+        "action": {
+            "name": "voice_call",
+            "parameters": {
+                "display_text": "Call on WhatsApp",
+                "ttl_minutes": 100,
+                "payload": "campaign-7"
+            }
+        }
+    }));
+    body["context"] = json!({ "message_id": "wamid.Q" });
+    expect_exact_send(&graph, body).await;
+    assert_quiet_send(
+        &graph,
+        &[
+            "send",
+            "interactive",
+            "call",
+            TO,
+            "--body",
+            "Call us",
+            "--display",
+            "Call on WhatsApp",
+            "--ttl-minutes",
+            "100",
+            "--payload",
+            "campaign-7",
+            "--reply-to",
+            "wamid.Q",
+        ],
+    );
+}
+
+#[test]
+fn call_button_leaves_parameters_out_and_checks_its_limits() {
+    let cmd = ["send", "interactive", "call", TO, "--body", "Call"];
+    assert_eq!(
+        sent_dry_run_body(&cmd)["interactive"]["action"],
+        json!({ "name": "voice_call" })
+    );
+    let long_label = "x".repeat(21);
+    let long_payload = "x".repeat(513);
+    for extra in [
+        vec!["--ttl-minutes", "0"],
+        vec!["--ttl-minutes", "43201"],
+        vec!["--display", long_label.as_str()],
+        vec!["--display", " "],
+        vec!["--payload", long_payload.as_str()],
+    ] {
+        let mut args = cmd.to_vec();
+        args.extend(extra);
+        assert_refused_locally(&args);
+    }
+    let mut at_limit = cmd.to_vec();
+    at_limit.extend(["--ttl-minutes", "43200"]);
+    assert_eq!(
+        sent_dry_run_body(&at_limit)["interactive"]["action"]["parameters"]["ttl_minutes"],
+        43200
+    );
+}
+
+#[tokio::test]
+async fn request_contact_sends_the_request_contact_info_action() {
+    let graph = MockServer::start().await;
+    let mut body = interactive_message(&json!({
+        "type": "request_contact_info",
+        "body": { "text": "Share your number?" },
+        "action": { "name": "request_contact_info" }
+    }));
+    body["context"] = json!({ "message_id": "wamid.Q" });
+    expect_exact_send(&graph, body).await;
+    assert_quiet_send(
+        &graph,
+        &[
+            "send",
+            "interactive",
+            "request-contact",
+            TO,
+            "--body",
+            "Share your number?",
+            "--reply-to",
+            "wamid.Q",
+        ],
+    );
+}
+
+#[test]
+fn request_contact_goes_to_a_bsuid_and_refuses_a_blank_body() {
+    let body = sent_dry_run_body(&[
+        "send",
+        "interactive",
+        "request-contact",
+        BSUID,
+        "--body",
+        "Share?",
+    ]);
+    assert_eq!(body["recipient"], BSUID);
+    assert!(body.get("to").is_none());
+    assert_refused_locally(&["send", "interactive", "request-contact", TO, "--body", " "]);
+}
+
+#[tokio::test]
+async fn call_permission_sends_a_body_to_a_bsuid() {
+    let graph = MockServer::start().await;
+    expect_exact_send(
+        &graph,
+        json!({
+            "messaging_product": "whatsapp",
+            "recipient_type": "individual",
+            "recipient": BSUID,
+            "type": "interactive",
+            "context": { "message_id": "wamid.Q" },
+            "interactive": {
+                "type": "call_permission_request",
+                "body": { "text": "May we call about your order?" },
+                "action": { "name": "call_permission_request" }
+            }
+        }),
+    )
+    .await;
+    assert_quiet_send(
+        &graph,
+        &[
+            "send",
+            "call-permission",
+            BSUID,
+            "--body",
+            "May we call about your order?",
+            "--reply-to",
+            "wamid.Q",
+        ],
+    );
+}
+
+#[test]
+fn call_permission_body_is_optional_and_it_has_no_header_or_footer() {
+    assert_eq!(
+        sent_dry_run_body(&["send", "call-permission", TO])["interactive"],
+        json!({
+            "type": "call_permission_request",
+            "action": { "name": "call_permission_request" }
+        })
+    );
+    assert_refused_locally(&["send", "call-permission", TO, "--body", " "]);
+    let home = TempDir::new().unwrap();
+    for flag in ["--header", "--footer"] {
+        paloma(None, &home)
+            .args(["send", "call-permission", TO, flag, "x"])
+            .assert()
+            .code(2);
+    }
+}
+
+#[tokio::test]
+async fn product_sends_the_catalog_and_retailer_ids() {
+    let graph = MockServer::start().await;
+    let mut body = interactive_message(&json!({
+        "type": "product",
+        "body": { "text": "This one" },
+        "footer": { "text": "Acme" },
+        "action": { "catalog_id": "CAT", "product_retailer_id": "SKU1" }
+    }));
+    body["context"] = json!({ "message_id": "wamid.Q" });
+    expect_exact_send(&graph, body).await;
+    assert_quiet_send(
+        &graph,
+        &[
+            "send",
+            "product",
+            TO,
+            "--catalog-id",
+            "CAT",
+            "--product",
+            "SKU1",
+            "--body",
+            "This one",
+            "--footer",
+            "Acme",
+            "--reply-to",
+            "wamid.Q",
+        ],
+    );
+}
+
+#[test]
+fn product_body_is_optional_and_a_header_isnt_allowed() {
+    let cmd = [
+        "send",
+        "product",
+        TO,
+        "--catalog-id",
+        "CAT",
+        "--product",
+        "SKU1",
+    ];
+    assert_eq!(
+        sent_dry_run_body(&cmd)["interactive"],
+        json!({
+            "type": "product",
+            "action": { "catalog_id": "CAT", "product_retailer_id": "SKU1" }
+        })
+    );
+    let long_footer = "x".repeat(61);
+    for extra in [vec!["--body", " "], vec!["--footer", long_footer.as_str()]] {
+        let mut args = cmd.to_vec();
+        args.extend(extra);
+        assert_refused_locally(&args);
+    }
+    assert_refused_locally(&["send", "product", TO, "--catalog-id", " ", "--product", "S"]);
+    assert_refused_locally(&["send", "product", TO, "--catalog-id", "C", "--product", " "]);
+    let home = TempDir::new().unwrap();
+    paloma(None, &home)
+        .args(cmd)
+        .args(["--header", "H"])
+        .assert()
+        .code(2);
+}
+
+#[tokio::test]
+async fn product_list_sends_its_sections() {
+    let graph = MockServer::start().await;
+    let mut body = interactive_message(&json!({
+        "type": "product_list",
+        "header": { "type": "text", "text": "Our picks" },
+        "body": { "text": "Have a look" },
+        "footer": { "text": "Acme" },
+        "action": {
+            "catalog_id": "CAT",
+            "sections": [
+                { "title": "Cakes", "product_items": [
+                    { "product_retailer_id": "c1" },
+                    { "product_retailer_id": "c,2" }
+                ] },
+                { "title": "Drinks", "product_items": [
+                    { "product_retailer_id": "d1" }
+                ] }
+            ]
+        }
+    }));
+    body["context"] = json!({ "message_id": "wamid.Q" });
+    expect_exact_send(&graph, body).await;
+    assert_quiet_send(
+        &graph,
+        &[
+            "send",
+            "product-list",
+            TO,
+            "--catalog-id",
+            "CAT",
+            "--header",
+            "Our picks",
+            "--body",
+            "Have a look",
+            "--footer",
+            "Acme",
+            "--section",
+            r"Cakes:c1,c\,2",
+            "--section",
+            "Drinks:d1",
+            "--reply-to",
+            "wamid.Q",
+        ],
+    );
+}
+
+#[test]
+fn product_list_checks_its_limits_and_requires_a_header() {
+    let cmd = [
+        "send",
+        "product-list",
+        TO,
+        "--catalog-id",
+        "CAT",
+        "--header",
+        "H",
+        "--body",
+        "B",
+    ];
+    let mut valid = cmd.to_vec();
+    valid.extend(["--section", "A:s"]);
+    assert_eq!(
+        sent_dry_run_body(&valid)["interactive"]["action"]["sections"],
+        json!([{ "title": "A", "product_items": [{ "product_retailer_id": "s" }] }])
+    );
+    let thirty_one = format!("A:{}", ["s"; 31].join(","));
+    let long_title = format!("{}:s", "x".repeat(25));
+    for section in [
+        "NoColon",
+        "Empty:",
+        ":s",
+        thirty_one.as_str(),
+        long_title.as_str(),
+    ] {
+        let mut args = cmd.to_vec();
+        args.extend(["--section", section]);
+        assert_refused_locally(&args);
+    }
+    let mut eleven = cmd.to_vec();
+    for _ in 0..11 {
+        eleven.extend(["--section", "A:s"]);
+    }
+    assert_refused_locally(&eleven);
+    let long_header = "x".repeat(61);
+    assert_refused_locally(&[
+        "send",
+        "product-list",
+        TO,
+        "--catalog-id",
+        "CAT",
+        "--header",
+        &long_header,
+        "--body",
+        "B",
+        "--section",
+        "A:s",
+    ]);
+    let home = TempDir::new().unwrap();
+    paloma(None, &home)
+        .args(["send", "product-list", TO, "--catalog-id", "C"])
+        .args(["--body", "B", "--section", "A:s"])
+        .assert()
+        .code(2);
+}
+
+#[tokio::test]
+async fn catalog_sends_a_thumbnail_and_footer() {
+    let graph = MockServer::start().await;
+    let mut body = interactive_message(&json!({
+        "type": "catalog_message",
+        "body": { "text": "Browse" },
+        "footer": { "text": "Acme" },
+        "action": {
+            "name": "catalog_message",
+            "parameters": { "thumbnail_product_retailer_id": "SKU1" }
+        }
+    }));
+    body["context"] = json!({ "message_id": "wamid.Q" });
+    expect_exact_send(&graph, body).await;
+    assert_quiet_send(
+        &graph,
+        &[
+            "send",
+            "catalog",
+            TO,
+            "--body",
+            "Browse",
+            "--footer",
+            "Acme",
+            "--thumbnail",
+            "SKU1",
+            "--reply-to",
+            "wamid.Q",
+        ],
+    );
+}
+
+#[test]
+fn catalog_leaves_parameters_out_and_checks_its_limits() {
+    assert_eq!(
+        sent_dry_run_body(&["send", "catalog", TO, "--body", "Browse"])["interactive"],
+        json!({
+            "type": "catalog_message",
+            "body": { "text": "Browse" },
+            "action": { "name": "catalog_message" }
+        })
+    );
+    let long_body = "x".repeat(1025);
+    assert_refused_locally(&["send", "catalog", TO, "--body", &long_body]);
+    assert_refused_locally(&["send", "catalog", TO, "--body", " "]);
+    assert_refused_locally(&["send", "catalog", TO, "--body", "B", "--thumbnail", " "]);
+}
+
+#[test]
+fn the_new_send_verbs_honor_the_window_guardrail() {
+    let home = TempDir::new().unwrap();
+    for args in [
+        vec!["flow", TO, "--body", "B", "--flow-id", "1", "--cta", "C"],
+        vec!["call-permission", TO],
+        vec!["product", TO, "--catalog-id", "C", "--product", "S"],
+        vec!["catalog", TO, "--body", "B"],
+        vec!["interactive", "request-contact", TO, "--body", "B"],
+        vec!["interactive", "location-request", TO, "--body", "B"],
+        vec!["interactive", "call", TO, "--body", "B"],
+        vec![
+            "interactive",
+            "address",
+            TO,
+            "--body",
+            "B",
+            "--country",
+            "IN",
+        ],
+        vec![
+            "interactive",
+            "carousel",
+            TO,
+            "--body",
+            "B",
+            "--products",
+            "a,b",
+            "--catalog-id",
+            "C",
+        ],
+        vec![
+            "product-list",
+            TO,
+            "--catalog-id",
+            "C",
+            "--header",
+            "H",
+            "--body",
+            "B",
+            "--section",
+            "A:s",
+        ],
+    ] {
+        paloma(None, &home)
+            .arg("send")
+            .args(args)
+            .args(["--strict", "--dry-run"])
+            .assert()
+            .code(6);
+    }
 }
