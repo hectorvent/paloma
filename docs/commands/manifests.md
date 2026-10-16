@@ -96,6 +96,8 @@ paloma export calling --template      # full commented skeleton for authoring
 
 ## `paloma apply -f <file>`
 
+`-f` is short for `--file`, here and on `diff`.
+
 Apply one or more manifests. For each kind it reads the current config, compares,
 and **only sends a request when something differs** (idempotent). Re-applying an
 unchanged manifest does nothing.

@@ -163,7 +163,8 @@ file too. A custom TTL isn't a send option: `message_send_ttl_seconds` is set on
 template when it's created.
 
 Templates are always allowed by the 24-hour window guardrail. Dry-runs send no
-requests and redact sensitive fields; real sends preserve supplied component values.
+requests and redact sensitive fields, including a Flow button's `flow_token`; real sends
+preserve supplied component values.
 See Meta's [named parameters](https://developers.facebook.com/documentation/business-messaging/whatsapp/templates/overview#named-parameters)
 and [media template sends](https://developers.facebook.com/documentation/business-messaging/whatsapp/templates/template-media).
 
@@ -312,7 +313,7 @@ paloma send interactive button 15551234567 --body "Confirm your order?" \
 paloma send interactive button 15551234567 --body "Confirm your order?" \
       --header-image 1284756 --button "yes:Yes" --button "no:No"
 
-# A list picker; sections are "Title:id:Label,id2:Label2" (up to 10 rows total)
+# A list picker; sections are "Title:id:Label::Description,id2:Label2" (up to 10 rows total)
 paloma send interactive list 15551234567 --body "Pick a flavor" --button "Choose" \
       --section "Cakes:choco:Chocolate::Dark and rich,vanilla:Vanilla" \
       --section "Drinks:morir:Morir Soñando"
