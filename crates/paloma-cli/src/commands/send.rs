@@ -674,6 +674,12 @@ fn contacts_file(path: &Path) -> Result<Value> {
 fn typed_contact(a: &Contact) -> Result<Value> {
     let formatted_name = a.name.as_deref().unwrap_or_default();
     validate::not_blank(formatted_name, "--name")?;
+    // Meta's docs call the name's other fields optional, but the API answers 131009 without one.
+    if a.first_name.is_none() && a.last_name.is_none() {
+        return Err(Error::validation(
+            "--name also needs --first-name or --last-name, or Meta rejects the contact",
+        ));
+    }
     for (value, flag) in [
         (&a.first_name, "--first-name"),
         (&a.last_name, "--last-name"),

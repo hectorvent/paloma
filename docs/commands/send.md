@@ -270,8 +270,8 @@ paloma send contact 15551234567 --file contacts.json
 
 | Flag | Meaning |
 |------|---------|
-| `--name` | Full name, shown on the message (Meta's `formatted_name`, the one required field) |
-| `--first-name`, `--last-name` | The name's parts, sent only if you give them |
+| `--name` | Full name, shown on the message (Meta's `formatted_name`) |
+| `--first-name`, `--last-name` | The name's parts. Give at least one: Meta's docs mark them optional, but the API rejects a contact with `--name` alone (exit 5 here, before any call) |
 | `--phone` | Phone number; repeatable |
 | `--wa-id` | WhatsApp id of the first `--phone`, so it needs `--phone`. It adds the **Message** and **Save contact** buttons; without it the message shows an **Invite to WhatsApp** button |
 | `--email` | Email address; repeatable |
@@ -512,6 +512,9 @@ paloma send flow 15551234567 --body "Book your table" --flow-id 123456 --cta "Bo
 `--screen`, `--data` and `--data-file` only apply to `navigate`, since Meta says to leave them
 out otherwise: with `--action data_exchange` they exit 5. Paloma sends `--data` as a serialized string, as
 Meta's page specifies. Dry runs mask secrets inside it, as they do in any other field.
+
+The first screen has to declare the fields you pass. If it doesn't, Meta accepts the message
+but the Flow shows "Something went wrong" when opened, so check the Flow's `data` block first.
 
 Also takes `--body`, `--footer`, `--reply-to`, and `--force` or `--strict`. The header is one
 of `--header`, or `--header-image`, `--header-video` or `--header-document`, each taking a media

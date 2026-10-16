@@ -5924,17 +5924,24 @@ async fn send_contact_typed_flags_post_the_exact_contact() {
 }
 
 #[test]
-fn send_contact_name_alone_is_enough() {
+fn send_contact_name_needs_a_first_or_last_name() {
     let home = TempDir::new().unwrap();
+    paloma(None, &home)
+        .env_remove("PALOMA_PHONE_NUMBER_ID")
+        .args(["send", "contact", "15551234567", "--name", "Ana"])
+        .assert()
+        .code(5)
+        .stdout(predicate::str::is_empty())
+        .stderr(predicate::str::contains("--first-name"));
     let out = paloma(None, &home)
         .args(["send", "contact", "15551234567", "--name", "Ana"])
-        .args(["--force", "--dry-run", "-o", "raw"])
+        .args(["--first-name", "Ana", "--force", "--dry-run", "-o", "raw"])
         .output()
         .unwrap();
     assert!(out.status.success());
     assert_eq!(
         stdout_json(&out)["contacts"],
-        json!([{ "name": { "formatted_name": "Ana" } }])
+        json!([{ "name": { "formatted_name": "Ana", "first_name": "Ana" } }])
     );
 }
 
@@ -5945,7 +5952,17 @@ fn send_contact_needs_one_source_and_file_conflicts_with_the_typed_flags() {
     let cases: Vec<Vec<&str>> = vec![
         vec!["send", "contact", to],
         vec!["send", "contact", to, "--phone", "+1650"],
-        vec!["send", "contact", to, "--name", "A", "--wa-id", "1650"],
+        vec![
+            "send",
+            "contact",
+            to,
+            "--name",
+            "A",
+            "--first-name",
+            "A",
+            "--wa-id",
+            "1650",
+        ],
         vec!["send", "contact", to, "--file", "c.json", "--name", "A"],
         vec!["send", "contact", to, "--file", "c.json", "--phone", "+1"],
         vec!["send", "contact", to, "--file", "c.json", "--email", "a@b"],
