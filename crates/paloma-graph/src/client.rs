@@ -144,7 +144,7 @@ impl Client {
 
     /// Stream the response body of a GET to `dest`, returning the bytes written.
     pub async fn download(&self, req: &Request, dest: &Path) -> Result<u64> {
-        let resp = self.send(req, None).await?;
+        let resp = self.send(req, Some(self.config.timeout)).await?;
         let status = resp.status().as_u16();
         if !(200..300).contains(&status) {
             let text = resp.text().await.unwrap_or_default();

@@ -7399,3 +7399,69 @@ fn the_new_send_verbs_honor_the_window_guardrail() {
             .code(6);
     }
 }
+
+#[tokio::test(flavor = "multi_thread")]
+async fn download_timeout_applies_to_the_cdn_request_and_does_not_retry() {
+    let graph = MockServer::start().await;
+    mount_media_lookup(&graph).await;
+    Mock::given(method("GET"))
+        .and(path("/cdn/file"))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .set_delay(std::time::Duration::from_secs(2))
+                .set_body_string("late"),
+        )
+        .expect(1)
+        .mount(&graph)
+        .await;
+    let home = TempDir::new().unwrap();
+    let dest = home.path().join("late.bin");
+    paloma(Some(&graph), &home)
+        .args(["media", "download", "m1", "--timeout", "100ms", "-O"])
+        .arg(&dest)
+        .assert()
+        .code(1)
+        .stdout("")
+        .stderr(
+            predicate::str::contains("timed out").and(predicate::str::contains("retrying").not()),
+        );
+    assert!(!dest.exists());
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn download_timeout_also_bounds_a_stalled_response_body() {
+    use std::io::{Read, Write};
+    let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    let address = listener.local_addr().unwrap();
+    let server = std::thread::spawn(move || {
+        let (mut stream, _) = listener.accept().unwrap();
+        let mut request = [0u8; 4096];
+        let bytes_read = stream.read(&mut request).unwrap();
+        assert!(bytes_read > 0);
+        stream
+            .write_all(b"HTTP/1.1 200 OK\r\nContent-Length: 100\r\nConnection: close\r\n\r\nx")
+            .unwrap();
+        std::thread::sleep(std::time::Duration::from_millis(500));
+    });
+    let graph = MockServer::start().await;
+    Mock::given(method("GET"))
+        .and(path("/v26.0/m1"))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .set_body_json(json!({"url":format!("http://{address}/file")})),
+        )
+        .expect(1)
+        .mount(&graph)
+        .await;
+    let home = TempDir::new().unwrap();
+    let dest = home.path().join("partial.bin");
+    paloma(Some(&graph), &home)
+        .args(["media", "download", "m1", "--timeout", "100ms", "-O"])
+        .arg(&dest)
+        .assert()
+        .code(1)
+        .stdout("")
+        .stderr(predicate::str::contains("timed out"));
+    assert!(std::fs::read(&dest).unwrap().len() < 100);
+    server.join().unwrap();
+}

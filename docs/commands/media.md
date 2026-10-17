@@ -116,3 +116,6 @@ paloma media delete <media-id> [--yes]
 
 Deletes an uploaded media object (scoped to the active phone number). Confirms first
 unless `--yes`.
+
+Downloads honor the global `--timeout` for the request and response-body transfer. A
+transfer interrupted after data arrives may leave a partial output file.
