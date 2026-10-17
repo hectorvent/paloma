@@ -8266,6 +8266,126 @@ async fn download_timeout_applies_to_the_cdn_request_and_does_not_retry() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
+async fn webhook_can_use_default_callback_and_set_or_clear_a_number_override() {
+    let graph = MockServer::start().await;
+    let home = TempDir::new().unwrap();
+    Mock::given(method("POST"))
+        .and(path(format!("/v26.0/{WABA}/subscribed_apps")))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({"success":true})))
+        .expect(1)
+        .mount(&graph)
+        .await;
+    paloma(Some(&graph), &home)
+        .env_remove("PALOMA_VERIFY_TOKEN")
+        .args(["webhook", "subscribe", "--yes", "-q"])
+        .assert()
+        .success()
+        .stdout("")
+        .stderr("");
+    assert!(graph.received_requests().await.unwrap()[0].body.is_empty());
+    for (args, body) in [
+        (
+            vec!["--callback-url", "https://example.com/number"],
+            json!({"webhook_configuration":{"override_callback_uri":"https://example.com/number","verify_token":"secret"}}),
+        ),
+        (
+            vec![],
+            json!({"webhook_configuration":{"override_callback_uri":""}}),
+        ),
+    ] {
+        Mock::given(method("POST"))
+            .and(path(format!("/v26.0/{PHONE}")))
+            .and(body_json(&body))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({"success":true})))
+            .expect(1)
+            .mount(&graph)
+            .await;
+        paloma(Some(&graph), &home)
+            .env_remove("PALOMA_WABA_ID")
+            .env("PALOMA_VERIFY_TOKEN", "secret")
+            .args(["webhook", "subscribe", "--number", "--yes", "-q"])
+            .args(&args)
+            .assert()
+            .success()
+            .stdout("")
+            .stderr("");
+        let out = paloma(Some(&graph), &home)
+            .env("PALOMA_VERIFY_TOKEN", "secret")
+            .args([
+                "webhook",
+                "subscribe",
+                "--number",
+                "--dry-run",
+                "-o",
+                "json",
+            ])
+            .args(&args)
+            .output()
+            .unwrap();
+        assert!(out.status.success());
+        assert!(!String::from_utf8_lossy(&out.stdout).contains("secret"));
+        assert_eq!(
+            stdout_json(&out)["body"]["webhook_configuration"]["override_callback_uri"],
+            body["webhook_configuration"]["override_callback_uri"]
+        );
+    }
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn webhook_get_quiet_uses_number_override_ahead_of_waba_and_application() {
+    let graph = MockServer::start().await;
+    let home = TempDir::new().unwrap();
+    Mock::given(method("GET"))
+        .and(path(format!("/v26.0/{WABA}/subscribed_apps")))
+        .respond_with(
+            ResponseTemplate::new(200).set_body_json(
+                json!({"data":[{"override_callback_uri":"https://example.com/waba"}]}),
+            ),
+        )
+        .expect(1)
+        .mount(&graph)
+        .await;
+    Mock::given(method("GET")).and(path(format!("/v26.0/{PHONE}")))
+        .and(query_param("fields", "webhook_configuration"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({"webhook_configuration":{"phone_number":"https://example.com/number","application":"https://example.com/app"}})))
+        .expect(1).mount(&graph).await;
+    paloma(Some(&graph), &home)
+        .args(["webhook", "get", "-q"])
+        .assert()
+        .success()
+        .stdout("https://example.com/number\n")
+        .stderr("");
+}
+
+#[test]
+fn webhook_new_fields_are_offline_and_callback_validation_precedes_context() {
+    let home = TempDir::new().unwrap();
+    paloma(None, &home)
+        .env_remove("PALOMA_TOKEN")
+        .args(["webhook", "fields", "available", "-q"])
+        .assert()
+        .success()
+        .stdout(
+            predicate::str::contains("group_participants_update\n")
+                .and(predicate::str::contains("business_username_updates\n"))
+                .and(predicate::str::contains("account_settings_update\n")),
+        );
+    for args in [
+        vec!["--callback-url", ""],
+        vec!["--callback-url", &"x".repeat(201)],
+        vec!["--verify-token-stdin"],
+    ] {
+        paloma(None, &home)
+            .env_remove("PALOMA_WABA_ID")
+            .args(["webhook", "subscribe"])
+            .args(&args)
+            .assert()
+            .code(5)
+            .stdout("");
+    }
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn template_namespace_reads_the_waba_and_quiet_prints_the_namespace() {
     let graph = MockServer::start().await;
     let home = TempDir::new().unwrap();
@@ -8365,4 +8485,64 @@ async fn download_timeout_also_bounds_a_stalled_response_body() {
         .stderr(predicate::str::contains("timed out"));
     assert!(std::fs::read(&dest).unwrap().len() < 100);
     server.join().unwrap();
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn webhook_manifest_stays_waba_scoped_when_the_phone_has_an_override() {
+    let graph = MockServer::start().await;
+    let home = TempDir::new().unwrap();
+    Mock::given(method("GET"))
+        .and(path(format!("/v26.0/{WABA}/subscribed_apps")))
+        .respond_with(
+            ResponseTemplate::new(200).set_body_json(
+                json!({"data":[{"override_callback_uri":"https://example.com/waba"}]}),
+            ),
+        )
+        .expect(2)
+        .mount(&graph)
+        .await;
+    Mock::given(method("GET")).and(path(format!("/v26.0/{PHONE}")))
+        .and(query_param("fields", "webhook_configuration"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({"webhook_configuration":{"phone_number":"https://example.com/number","application":"https://example.com/app"}})))
+        .expect(0).mount(&graph).await;
+    Mock::given(method("GET"))
+        .and(path("/v26.0/333/subscriptions"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(
+            json!({"data":[{"object":"whatsapp_business_account","fields":[{"name":"messages"}]}]}),
+        ))
+        .expect(2)
+        .mount(&graph)
+        .await;
+    let out = paloma(Some(&graph), &home)
+        .env("PALOMA_APP_ID", "333")
+        .env("PALOMA_APP_SECRET", "secret")
+        .args(["export", "Webhook", "-o", "json"])
+        .output()
+        .unwrap();
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let manifest = stdout_json(&out);
+    assert_eq!(manifest["spec"]["callbackUrl"], "https://example.com/waba");
+    let file = home.path().join("webhook.json");
+    std::fs::write(&file, manifest.to_string()).unwrap();
+    paloma(Some(&graph), &home)
+        .env("PALOMA_APP_ID", "333")
+        .env("PALOMA_APP_SECRET", "secret")
+        .args(["apply", "-f"])
+        .arg(&file)
+        .assert()
+        .success()
+        .stdout("")
+        .stderr(predicate::str::contains("unchanged"));
+    assert!(
+        graph
+            .received_requests()
+            .await
+            .unwrap()
+            .iter()
+            .all(|request| request.method.as_str() == "GET")
+    );
 }

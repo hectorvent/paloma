@@ -1,15 +1,16 @@
 # `paloma webhook`
 
-Read and manage the WhatsApp webhook callback for the active WhatsApp Business
-Account (WABA), via the Cloud API `subscribed_apps` edge.
+Read and manage WhatsApp webhook delivery for the active WhatsApp Business Account
+(WABA), with optional alternate callbacks on individual phone numbers.
 
 ```
 paloma webhook <verb> [flags]
 ```
 
-`get`, `subscribe`, and `unsubscribe` manage the **per-WABA override callback**
-(`POST/GET/DELETE /{waba-id}/subscribed_apps`), using your existing token. No app
-secret is needed. The receive-side bridge (`listen`, `verify-url`, `simulate`) is
+`subscribe` and `unsubscribe` manage the WABA's app subscription and alternate callback
+(`POST/DELETE /{waba-id}/subscribed_apps`). `subscribe --number` manages the active
+number's alternate callback; `get` resolves the effective delivery URL. These use your
+existing token; no app secret is needed. The receive-side bridge (`listen`, `verify-url`, `simulate`) is
 planned for v1.0; those verbs exit non-zero with a not-implemented error.
 
 ## `paloma webhook get`
@@ -26,17 +27,20 @@ paloma webhook get -o json | jq '.effective_callback_url'
 
 ## `paloma webhook subscribe`
 
-Set or change the per-WABA override callback URL. A verify token is required too: Meta
-runs the `hub.challenge` verification handshake against the URL at set time, echoing the
+Without `--callback-url`, subscribe the app using its app-level callback and remove any
+WABA alternate callback. With a URL, set or change the per-WABA override. A verify token
+is required for a new callback: Meta runs the `hub.challenge` verification handshake against the URL at set time, echoing the
 token, so it must match what your endpoint expects.
 
 | Flag | Meaning |
 |------|---------|
 | `--callback-url <url>` | HTTPS callback URL to deliver this WABA's webhooks to |
-| `--verify-token-stdin` | Read the verify token from stdin |
+| `--verify-token-stdin` | Read the verify token from stdin (requires `--callback-url`) |
+| `--number` | Set the active number's alternate callback; without a URL, clear that override |
 
 The verify token comes from `--verify-token-stdin` or `PALOMA_VERIFY_TOKEN`, or from a
-prompt if there's a terminal. With none of them and no terminal, the command exits `5`. The
+prompt if there's a terminal. When `--callback-url` is supplied, having none of these
+sources and no terminal makes the command exit `5`. Default subscriptions need no token. The
 older `--verify-token <value>` flag still works, but it warns, because other processes can
 read a command line.
 
@@ -53,6 +57,21 @@ This re-routes the WABA's webhook delivery, so it asks for confirmation first. S
 the prompt with `--yes` (e.g. in CI). `--verify-token-stdin` always needs `--yes`, because
 piped input leaves no way to answer a prompt. A wrong token or an unreachable URL fails the
 handshake and the call returns a Graph API error (the override is not applied).
+
+### Default and per-number callbacks
+
+```bash
+paloma webhook subscribe --yes   # app default; clears the WABA alternate callback
+PALOMA_VERIFY_TOKEN=t paloma webhook subscribe --number \
+  --callback-url https://example.com/number --dry-run
+paloma webhook subscribe --number --yes  # clear only the number's alternate callback
+```
+
+A per-number override requires phone-number context, with no WABA id needed. A default
+WABA subscription needs no verify token. Explicit token flags without a callback URL
+exit `5`. Callback URLs are limited to 200 characters and blank URLs are refused before
+context resolution. `get` resolves the effective URL in order: number override, WABA
+override, app callback. `get -q` prints that effective URL.
 
 ## `paloma webhook unsubscribe`
 
@@ -92,8 +111,8 @@ paloma webhook fields set messages --dry-run -o json
 ```
 
 `paloma webhook fields available` is a static reference (the Graph API has no endpoint
-that enumerates subscribable fields); Meta may add more, and `set` passes names through
-unvalidated. Common WhatsApp Business Account fields:
+that enumerates subscribable fields); `set` accepts these known names and rejects
+unknown names locally with exit `2`. Common WhatsApp Business Account fields:
 
 | Field | Fires on |
 |-------|----------|
@@ -105,9 +124,15 @@ unvalidated. Common WhatsApp Business Account fields:
 | `phone_number_name_update` · `phone_number_quality_update` | display-name approval, quality |
 | `message_template_status_update` · `message_template_quality_update` · `template_category_update` | template approved/rejected, quality, category |
 | `messaging_handovers` · `user_preferences` | handover protocol, marketing opt-out |
+| `group_lifecycle_update` · `group_participants_update` · `group_settings_update` · `group_status_update` | group lifecycle, membership, settings and status |
+| `business_username_updates` | business username changes |
+| `message_template_components_update` | template content changes |
+| `account_settings_update` | phone-number settings changes |
+| `automatic_events` · `partner_solutions` · `payment_configuration_update` · `smb_app_state_sync` | automatic events, partner solutions, payment configuration and app sync |
 
-Field names are passed through to Meta (not validated locally), so newly added fields
-keep working; an unknown name is rejected by the API. `set` may require `--callback-url`
+The reference retains `messaging_handovers` because Meta's override guide documents it,
+even though it is absent from the general field-reference index. New fields require an
+updated Paloma reference before they can be selected. `set` may require `--callback-url`
 and a verify token to reactivate the subscription; pass them when Meta asks. The token comes
 from the same sources as for `subscribe`, and it's only used with `--callback-url`. As there,
 `--verify-token-stdin` needs `--yes`. Setting

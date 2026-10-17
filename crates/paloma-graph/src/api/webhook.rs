@@ -6,7 +6,7 @@ use serde_json::{Value, json};
 use crate::Request;
 
 /// Every `whatsapp_business_account` webhook field an app can subscribe to.
-pub const AVAILABLE_FIELDS: [&str; 17] = [
+pub const AVAILABLE_FIELDS: [&str; 28] = [
     "messages",
     "calls",
     "message_template_status_update",
@@ -24,6 +24,17 @@ pub const AVAILABLE_FIELDS: [&str; 17] = [
     "history",
     "smb_message_echoes",
     "flows",
+    "group_lifecycle_update",
+    "group_participants_update",
+    "group_settings_update",
+    "group_status_update",
+    "business_username_updates",
+    "message_template_components_update",
+    "account_settings_update",
+    "automatic_events",
+    "partner_solutions",
+    "payment_configuration_update",
+    "smb_app_state_sync",
 ];
 
 pub fn subscribed_apps(waba_id: &str) -> Request {
@@ -117,8 +128,8 @@ pub async fn resolve_app_id(
     })
 }
 
-/// The callback URL Meta will actually call: the WABA override if set, else the phone
-/// number's app-level configuration.
+/// The WABA-scoped manifest callback: WABA override, then app-level configuration.
+/// Number overrides must stay out of WABA exports and reconciliation.
 pub async fn current_callback_url(
     client: &crate::Client,
     waba_id: &str,
@@ -164,4 +175,38 @@ pub fn app_callback_url(subscriptions: &Value) -> Option<String> {
         .as_str()
         .filter(|s| !s.is_empty())
         .map(str::to_owned)
+}
+
+/// Subscribe using the app-level callback, removing a WABA alternate callback.
+pub fn subscribe_default(waba_id: &str) -> Request {
+    Request::post(format!("{waba_id}/subscribed_apps"))
+}
+
+/// A blank URL removes the number's alternate callback without unsubscribing the app.
+pub fn number_callback(phone: &str, url: &str, token: Option<&str>) -> Request {
+    let mut config = json!({"override_callback_uri":url});
+    if let Some(token) = token {
+        config["verify_token"] = json!(token);
+    }
+    Request::post(phone).json(json!({"webhook_configuration":config}))
+}
+
+/// Effective delivery prefers a number override, then the WABA override, then the app.
+pub fn effective_callback(config: &Value, waba_override: Option<&str>) -> Option<String> {
+    [
+        config
+            .pointer("/webhook_configuration/phone_number")
+            .and_then(Value::as_str),
+        config
+            .pointer("/webhook_configuration/whatsapp_business_account")
+            .and_then(Value::as_str),
+        waba_override,
+        config
+            .pointer("/webhook_configuration/application")
+            .and_then(Value::as_str),
+    ]
+    .into_iter()
+    .flatten()
+    .find(|v| !v.is_empty())
+    .map(str::to_owned)
 }

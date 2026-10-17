@@ -1,5 +1,5 @@
 use clap::{Args, Subcommand};
-use paloma_core::{Error, Result};
+use paloma_core::{Error, Result, limits, validate};
 use paloma_graph::api::webhook::{self, AVAILABLE_FIELDS};
 use secrecy::{ExposeSecret, SecretString};
 use serde_json::{Value, json};
@@ -12,11 +12,14 @@ use crate::output::Output;
 pub enum WebhookCommand {
     /// Show the effective callback URL and subscribed apps.
     Get,
-    /// Subscribe this app to the WABA with an override callback URL.
+    /// Subscribe the app, or set/remove a number-level alternate callback.
     Subscribe {
         /// HTTPS endpoint Meta will call.
         #[arg(long)]
-        callback_url: String,
+        callback_url: Option<String>,
+        /// Manage the active phone number's alternate callback instead of the WABA.
+        #[arg(long)]
+        number: bool,
         #[command(flatten)]
         verify_token: VerifyTokenInput,
     },
@@ -103,34 +106,62 @@ impl WebhookCommand {
                 }
                 let apps = app.fetch(&apps_req).await?.json()?;
                 let cfg = app.fetch(&cfg_req).await?.json()?;
-                let effective = webhook::application_callback(&cfg);
                 let override_uri = webhook::override_callback(&apps);
+                let effective = webhook::effective_callback(&cfg, override_uri.as_deref());
                 app.out.emit(
                     &Output::new(json!({
                         "effective_callback_url": effective,
                         "override_callback_uri": override_uri,
                         "subscribed_apps": apps.get("data").cloned().unwrap_or(Value::Array(vec![])),
                     }))
-                    .id(override_uri.or(effective)),
+                    .id(effective),
                 );
                 Ok(())
             }
             Self::Subscribe {
                 callback_url,
+                number,
                 verify_token,
             } => {
-                let verify_token = verify_token.read(app)?;
-                let waba = app.ctx()?.require_waba_id()?.to_owned();
-                if !app
-                    .confirm_or_abort(&format!("change the webhook callback to {callback_url}"))?
-                {
+                if let Some(url) = &callback_url {
+                    validate::not_blank(url, "callback URL")?;
+                    validate::max_chars(url, limits::MAX_WEBHOOK_CALLBACK_URL, "callback URL")?;
+                } else if verify_token.given() {
+                    return Err(Error::validation("a verify token requires --callback-url"));
+                }
+                let token = callback_url
+                    .as_ref()
+                    .map(|_| verify_token.read(app))
+                    .transpose()?;
+                let request = if number {
+                    let phone = app.ctx()?.require_phone_number_id()?;
+                    webhook::number_callback(
+                        phone,
+                        callback_url.as_deref().unwrap_or(""),
+                        token.as_ref().map(ExposeSecret::expose_secret),
+                    )
+                } else {
+                    let waba = app.ctx()?.require_waba_id()?;
+                    match &callback_url {
+                        Some(url) => webhook::subscribe(
+                            waba,
+                            url,
+                            token
+                                .as_ref()
+                                .expect("callback token was read")
+                                .expose_secret(),
+                        ),
+                        None => webhook::subscribe_default(waba),
+                    }
+                };
+                if !app.confirm_or_abort(if number {
+                    "change the phone-number webhook callback"
+                } else {
+                    "change the WABA webhook subscription and callback"
+                })? {
                     return Ok(());
                 }
-                app.send_and_emit(
-                    &webhook::subscribe(&waba, &callback_url, verify_token.expose_secret()),
-                    no_id,
-                )
-                .await
+                app.send_and_emit(&request, no_id).await
             }
             Self::Unsubscribe => {
                 let waba = app.ctx()?.require_waba_id()?.to_owned();
