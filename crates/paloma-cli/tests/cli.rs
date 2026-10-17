@@ -7944,6 +7944,196 @@ async fn account_activities_and_number_health_request_the_documented_fields() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
+async fn qr_lifecycle_uses_collection_posts_and_scoped_get_delete() {
+    let graph = MockServer::start().await;
+    let home = TempDir::new().unwrap();
+    let code = "4O4YGZEG3RIVE1";
+    for (args, body) in [
+        (
+            vec!["create", "--message", "Hello"],
+            json!({"prefilled_message":"Hello"}),
+        ),
+        (
+            vec!["update", code, "--message", "Updated"],
+            json!({"code":code,"prefilled_message":"Updated"}),
+        ),
+    ] {
+        Mock::given(method("POST"))
+            .and(path(format!("/v26.0/{PHONE}/message_qrdls")))
+            .and(body_json(body))
+            .respond_with(ResponseTemplate::new(200).set_body_json(
+                json!({"code":code,"deep_link_url":"https://wa.me/message/example"}),
+            ))
+            .expect(1)
+            .mount(&graph)
+            .await;
+        paloma(Some(&graph), &home)
+            .args(["qr"])
+            .args(&args)
+            .arg("-q")
+            .assert()
+            .success()
+            .stdout(format!("{code}\n"))
+            .stderr("");
+    }
+    Mock::given(method("GET"))
+        .and(path(format!("/v26.0/{PHONE}/message_qrdls/{code}")))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .set_body_json(json!({"data":[{"code":code,"prefilled_message":"Hello"}]})),
+        )
+        .expect(1)
+        .mount(&graph)
+        .await;
+    paloma(Some(&graph), &home)
+        .args(["qr", "get", code, "-q"])
+        .assert()
+        .success()
+        .stdout(format!("{code}\n"))
+        .stderr("");
+    Mock::given(method("DELETE"))
+        .and(path(format!("/v26.0/{PHONE}/message_qrdls/{code}")))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({"success":true})))
+        .expect(1)
+        .mount(&graph)
+        .await;
+    paloma(Some(&graph), &home)
+        .args(["qr", "delete", code, "--yes", "-q"])
+        .assert()
+        .success()
+        .stdout(format!("{code}\n"))
+        .stderr("");
+    Mock::given(method("GET"))
+        .and(path(format!("/v26.0/{PHONE}/message_qrdls")))
+        .and(query_param("limit", "25"))
+        .and(query_param("after", "cursor"))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .set_body_json(json!({"data":[{"code":code,"prefilled_message":"Hello"}]})),
+        )
+        .expect(1)
+        .mount(&graph)
+        .await;
+    paloma(Some(&graph), &home)
+        .args(["qr", "list", "--limit", "25", "--after", "cursor"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Hello"))
+        .stderr("");
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn qr_image_download_omits_authorization_and_preserves_graph_output() {
+    let graph = MockServer::start().await;
+    let cdn = MockServer::start().await;
+    let home = TempDir::new().unwrap();
+    let code = "4O4YGZEG3RIVE1";
+    let body = json!({"code":code,"qr_image_url":format!("{}/qr.svg",cdn.uri())});
+    Mock::given(method("POST"))
+        .and(path(format!("/v26.0/{PHONE}/message_qrdls")))
+        .and(body_json(
+            json!({"prefilled_message":"Hello","generate_qr_image":"SVG"}),
+        ))
+        .respond_with(ResponseTemplate::new(200).set_body_json(&body))
+        .expect(1)
+        .mount(&graph)
+        .await;
+    Mock::given(method("GET"))
+        .and(path("/qr.svg"))
+        .respond_with(ResponseTemplate::new(200).set_body_string("<svg/>"))
+        .expect(1)
+        .mount(&cdn)
+        .await;
+    let dest = home.path().join("qr.svg");
+    let out = paloma(Some(&graph), &home)
+        .args([
+            "qr",
+            "create",
+            "--message",
+            "Hello",
+            "--image",
+            "svg",
+            "--out",
+        ])
+        .arg(&dest)
+        .args(["-o", "json"])
+        .output()
+        .unwrap();
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert_eq!(stdout_json(&out), body);
+    assert!(String::from_utf8_lossy(&out.stderr).contains("wrote 6 bytes"));
+    assert_eq!(std::fs::read(&dest).unwrap(), b"<svg/>");
+    assert!(
+        !cdn.received_requests().await.unwrap()[0]
+            .headers
+            .contains_key("authorization")
+    );
+    assert!(
+        graph.received_requests().await.unwrap()[0]
+            .headers
+            .contains_key("authorization")
+    );
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn qr_dry_run_prints_both_image_steps_and_invalid_input_never_sends() {
+    let graph = MockServer::start().await;
+    let home = TempDir::new().unwrap();
+    let dest = home.path().join("qr.png");
+    let out = paloma(Some(&graph), &home)
+        .env_remove("PALOMA_TOKEN")
+        .args(["qr", "get", "4O4YGZEG3RIVE1", "--image", "png", "--out"])
+        .arg(&dest)
+        .args(["--dry-run", "-o", "json"])
+        .output()
+        .unwrap();
+    assert!(out.status.success());
+    let requests = stdout_json(&out);
+    assert_eq!(requests.as_array().unwrap().len(), 2);
+    assert!(
+        requests[0]["url"]
+            .as_str()
+            .unwrap()
+            .contains("qr_image_url.format%28PNG%29")
+    );
+    assert_eq!(requests[1]["method"], "GET");
+    assert!(!dest.exists());
+    for args in [
+        vec!["get", "../bad"],
+        vec!["create", "--message", &"x".repeat(141)],
+        vec!["list", "--limit", "26"],
+    ] {
+        paloma(Some(&graph), &home)
+            .env_remove("PALOMA_PHONE_NUMBER_ID")
+            .args(["qr"])
+            .args(&args)
+            .assert()
+            .code(5)
+            .stdout("");
+    }
+    paloma(Some(&graph), &home)
+        .args(["qr", "delete", "4O4YGZEG3RIVE1"])
+        .assert()
+        .code(5)
+        .stdout("")
+        .stderr(predicate::str::contains("--yes"));
+    std::fs::write(&dest, b"existing").unwrap();
+    paloma(Some(&graph), &home)
+        .env_remove("PALOMA_PHONE_NUMBER_ID")
+        .args(["qr", "create", "--message", "x", "--image", "png", "--out"])
+        .arg(&dest)
+        .assert()
+        .code(5)
+        .stdout("");
+    assert_eq!(std::fs::read(&dest).unwrap(), b"existing");
+    assert!(graph.received_requests().await.unwrap().is_empty());
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn download_timeout_applies_to_the_cdn_request_and_does_not_retry() {
     let graph = MockServer::start().await;
     mount_media_lookup(&graph).await;
@@ -7969,6 +8159,40 @@ async fn download_timeout_applies_to_the_cdn_request_and_does_not_retry() {
             predicate::str::contains("timed out").and(predicate::str::contains("retrying").not()),
         );
     assert!(!dest.exists());
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn qr_image_refuses_a_file_created_while_the_graph_request_runs() {
+    let graph = MockServer::start().await;
+    let cdn = MockServer::start().await;
+    let home = TempDir::new().unwrap();
+    let dest = home.path().join("race.svg");
+    let race_dest = dest.clone();
+    Mock::given(method("POST"))
+        .and(path(format!("/v26.0/{PHONE}/message_qrdls")))
+        .respond_with(ResponseTemplate::new(200).set_body_json(
+            json!({"code":"4O4YGZEG3RIVE1","qr_image_url":format!("{}/qr.svg",cdn.uri())}),
+        ))
+        .expect(1)
+        .mount(&graph)
+        .await;
+    Mock::given(method("GET"))
+        .and(path("/qr.svg"))
+        .respond_with(move |_: &wiremock::Request| {
+            std::fs::write(&race_dest, b"KEEP").unwrap();
+            ResponseTemplate::new(200).set_body_string("REPLACE")
+        })
+        .expect(1)
+        .mount(&cdn)
+        .await;
+    paloma(Some(&graph), &home)
+        .args(["qr", "create", "--message", "x", "--image", "svg", "--out"])
+        .arg(&dest)
+        .assert()
+        .code(1)
+        .stdout("")
+        .stderr(predicate::str::contains("4O4YGZEG3RIVE1 was created"));
+    assert_eq!(std::fs::read(dest).unwrap(), b"KEEP");
 }
 
 #[tokio::test(flavor = "multi_thread")]

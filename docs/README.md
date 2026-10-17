@@ -40,7 +40,7 @@ New here? Start with [Installation](installation.md) → [Getting started](getti
 | `paloma export` · `apply` · `diff` | your WhatsApp setup as code (declarative YAML: Calling, Profile, Number, Commerce, ConversationalAutomation, Template, Webhook) | [commands/manifests.md](commands/manifests.md) |
 | `paloma completion` | bash · zsh · fish · powershell · elvish | [commands/completion.md](commands/completion.md) |
 | `paloma account` | get · set · limits · health · activities · subscribed-apps · billing-currency (analytics planned) | [commands/account.md](commands/account.md) |
-| `paloma qr` | planned | [commands/planned.md](commands/planned.md) |
+| `paloma qr` | create · list · get · update · delete | [commands/qr.md](commands/qr.md) |
 
 > Anything marked **planned** is already visible in `paloma --help` and exits with a
 > clear "not yet implemented (planned for vX.Y)" message. See the

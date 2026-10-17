@@ -282,6 +282,7 @@ error: text body is 5000 chars; max is 4096        # exit 5
 | `profile` | get · set · photo |
 | `account` | get · set · limits · health · activities · subscribed-apps · billing-currency |
 | `block` | add · remove · list |
+| `qr` | create · list · get · update · delete |
 | `export` · `apply` · `diff` | your setup as code: declarative YAML for the seven kinds above |
 | `auth` | login · status · whoami · logout |
 | `config` · `configure` | profiles and settings |
@@ -290,7 +291,7 @@ error: text body is 5000 chars; max is 4096        # exit 5
 | `version` | the installed version |
 
 **Coming next:** `webhook listen` and `simulate` (receive real events locally, and
-send signed test payloads to your endpoint), `account` analytics, and QR codes. Those
+send signed test payloads to your endpoint), `account` analytics. Those
 commands already appear in `--help` and say which release they're planned for. See
 [planned commands](docs/commands/planned.md).
 

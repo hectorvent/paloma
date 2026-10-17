@@ -13,6 +13,7 @@ pub mod message_history;
 pub mod messages;
 pub mod phone_numbers;
 pub mod profile;
+pub mod qr;
 pub mod templates;
 pub mod tokens;
 pub mod uploads;

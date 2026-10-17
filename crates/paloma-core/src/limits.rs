@@ -191,3 +191,8 @@ pub const DATA_LOCALIZATION_REGIONS: [&str; 14] = [
 ];
 /// Default SIP port when `--server` omits one (SIP over TLS).
 pub const DEFAULT_SIP_PORT: u16 = 5061;
+
+/// QR prefilled-message characters and the opaque code's documented length.
+pub const MAX_QR_MESSAGE: usize = 140;
+pub const QR_CODE_LENGTH: usize = 14;
+pub const MAX_QR_PAGE: u32 = 25;

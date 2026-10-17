@@ -144,6 +144,15 @@ impl Client {
 
     /// Stream the response body of a GET to `dest`, returning the bytes written.
     pub async fn download(&self, req: &Request, dest: &Path) -> Result<u64> {
+        self.download_to(req, dest, false).await
+    }
+
+    /// Save a download only if the destination can be atomically created as a new file.
+    pub async fn download_new(&self, req: &Request, dest: &Path) -> Result<u64> {
+        self.download_to(req, dest, true).await
+    }
+
+    async fn download_to(&self, req: &Request, dest: &Path, create_new: bool) -> Result<u64> {
         let resp = self.send(req, Some(self.config.timeout)).await?;
         let status = resp.status().as_u16();
         if !(200..300).contains(&status) {
@@ -156,7 +165,15 @@ impl Client {
                 Target::Node(_) => map_error(status, &text),
             });
         }
-        let mut file = tokio::fs::File::create(dest)
+        let mut options = tokio::fs::OpenOptions::new();
+        options.write(true);
+        if create_new {
+            options.create_new(true);
+        } else {
+            options.create(true).truncate(true);
+        }
+        let mut file = options
+            .open(dest)
             .await
             .map_err(|e| Error::io(format!("cannot create {}", dest.display()), e))?;
         let mut stream = resp.bytes_stream();
@@ -230,6 +247,7 @@ impl Client {
             Method::Delete => self.http.delete(&url),
         };
         builder = match &req.auth {
+            Auth::None => builder,
             Auth::User => builder.bearer_auth(self.creds.access_token()?.expose_secret()),
             Auth::App { app_id } => builder.bearer_auth(format!(
                 "{app_id}|{}",

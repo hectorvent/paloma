@@ -31,6 +31,8 @@ impl Method {
 /// Which bearer token authorizes the call.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Auth {
+    /// Signed/public CDN URLs must not receive Graph credentials.
+    None,
     /// The profile's access token.
     User,
     /// An app access token `<app_id>|<app_secret>` (app-level webhook subscriptions).
@@ -197,6 +199,12 @@ impl Request {
     }
 
     #[must_use]
+    pub fn unauthenticated(mut self) -> Self {
+        self.auth = Auth::None;
+        self
+    }
+
+    #[must_use]
     pub fn oauth_auth(mut self) -> Self {
         self.auth = Auth::OAuth;
         self
@@ -235,7 +243,7 @@ impl Request {
         out.insert("method".into(), self.method.as_str().into());
         out.insert("url".into(), redact_url(&self.url(base, version)).into());
         match &self.auth {
-            Auth::User => {}
+            Auth::User | Auth::None => {}
             Auth::App { app_id } => {
                 out.insert(
                     "auth".into(),

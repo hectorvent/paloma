@@ -115,6 +115,19 @@ pub fn not_blank(value: &str, what: &str) -> Result<()> {
     }
 }
 
+/// QR codes are opaque alphanumeric identifiers, not Graph numeric node ids.
+pub fn qr_code(code: &str) -> Result<()> {
+    if code.len() != crate::limits::QR_CODE_LENGTH
+        || !code.bytes().all(|b| b.is_ascii_alphanumeric())
+    {
+        return Err(Error::validation(format!(
+            "QR code must contain {} ASCII letters or digits",
+            crate::limits::QR_CODE_LENGTH
+        )));
+    }
+    Ok(())
+}
+
 /// An opaque Graph node id must remain a single path segment, never a URL or query.
 pub fn graph_node_id(value: &str, what: &str) -> Result<()> {
     if value.is_empty()
