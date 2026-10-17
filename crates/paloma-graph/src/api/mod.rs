@@ -2,6 +2,7 @@
 //! [`crate::Request`]; payload shaping lives here so commands and manifest kinds share
 //! it.
 
+pub mod account;
 pub mod block;
 pub mod calling;
 pub mod commerce;

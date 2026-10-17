@@ -7401,6 +7401,549 @@ fn the_new_send_verbs_honor_the_window_guardrail() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
+async fn account_get_requests_details_and_preserves_output_contracts() {
+    let graph = MockServer::start().await;
+    let body = json!({"id": WABA, "name": "Example", "account_review_status": "APPROVED"});
+    Mock::given(method("GET"))
+        .and(path(format!("/v26.0/{WABA}")))
+        .and(header("authorization", format!("Bearer {TOKEN}")))
+        .and(query_param("fields", "id,name,timezone_id,message_template_namespace,account_review_status,business_verification_status"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(&body))
+        .expect(3)
+        .mount(&graph)
+        .await;
+    let home = TempDir::new().unwrap();
+    paloma(Some(&graph), &home)
+        .env_remove("PALOMA_PHONE_NUMBER_ID")
+        .args(["account", "get"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Example").and(predicate::str::contains("APPROVED")))
+        .stderr("");
+    paloma(Some(&graph), &home)
+        .args(["account", "get", "-q"])
+        .assert()
+        .success()
+        .stdout(format!("{WABA}\n"))
+        .stderr("");
+    let out = paloma(Some(&graph), &home)
+        .args(["account", "get", "-o", "json"])
+        .output()
+        .unwrap();
+    assert!(out.status.success());
+    assert!(out.stderr.is_empty());
+    assert_eq!(stdout_json(&out), body);
+    assert!(
+        graph
+            .received_requests()
+            .await
+            .unwrap()
+            .iter()
+            .all(|r| r.body.is_empty())
+    );
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn account_get_custom_fields_and_health_use_the_waba_flag() {
+    let graph = MockServer::start().await;
+    let home = TempDir::new().unwrap();
+    for (verb, flags, fields, body) in [
+        (
+            "get",
+            vec!["--fields", "id,name,service_pricing_policy"],
+            "id,name,service_pricing_policy",
+            json!({"id":"999", "name":"Other", "service_pricing_policy":"PAID_EXEMPT"}),
+        ),
+        (
+            "health",
+            vec![],
+            "health_status",
+            json!({"id":"999", "health_status":{"can_send_message":"BLOCKED", "entities":[{"entity_type":"WABA", "id":"999", "can_send_message":"BLOCKED", "errors":[{"error_code":141_006}]}]}}),
+        ),
+    ] {
+        Mock::given(method("GET"))
+            .and(path("/v26.0/999"))
+            .and(query_param("fields", fields))
+            .respond_with(ResponseTemplate::new(200).set_body_json(&body))
+            .expect(2)
+            .mount(&graph)
+            .await;
+        let out = paloma(Some(&graph), &home)
+            .env_remove("PALOMA_PHONE_NUMBER_ID")
+            .args(["account", verb, "--waba-id", "999", "-o", "json"])
+            .args(&flags)
+            .output()
+            .unwrap();
+        assert!(out.status.success());
+        assert!(out.stderr.is_empty());
+        assert_eq!(stdout_json(&out), body);
+        paloma(Some(&graph), &home)
+            .args(["account", verb, "--waba-id", "999", "-q"])
+            .args(&flags)
+            .assert()
+            .success()
+            .stdout("999\n")
+            .stderr("");
+    }
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn account_lists_render_nested_apps_and_limits_without_a_phone_context() {
+    let graph = MockServer::start().await;
+    let home = TempDir::new().unwrap();
+    for (verb, edge, body, expected) in [
+        (
+            "limits",
+            "phone_numbers",
+            json!({"data":[{"id":PHONE, "display_phone_number":"15551234567", "whatsapp_business_manager_messaging_limit":"TIER_250"}]}),
+            "TIER_250",
+        ),
+        (
+            "subscribed-apps",
+            "subscribed_apps",
+            json!({"data":[{"whatsapp_business_api_data":{"id":"333", "name":"Example App"}, "override_callback_uri":"https://example.com/webhook"}]}),
+            "Example App",
+        ),
+    ] {
+        let mut mock = Mock::given(method("GET"))
+            .and(path(format!("/v26.0/{WABA}/{edge}")))
+            .and(header("authorization", format!("Bearer {TOKEN}")));
+        if verb == "limits" {
+            mock = mock.and(query_param(
+                "fields",
+                "id,display_phone_number,whatsapp_business_manager_messaging_limit",
+            ));
+        }
+        mock.respond_with(ResponseTemplate::new(200).set_body_json(&body))
+            .expect(3)
+            .mount(&graph)
+            .await;
+        paloma(Some(&graph), &home)
+            .env_remove("PALOMA_PHONE_NUMBER_ID")
+            .args(["account", verb])
+            .assert()
+            .success()
+            .stdout(predicate::str::contains(expected))
+            .stderr("");
+        let out = paloma(Some(&graph), &home)
+            .args(["account", verb, "-o", "json"])
+            .output()
+            .unwrap();
+        assert!(out.status.success());
+        assert!(out.stderr.is_empty());
+        assert_eq!(stdout_json(&out), body);
+        paloma(Some(&graph), &home)
+            .args(["account", verb, "-q"])
+            .assert()
+            .success()
+            .stdout("")
+            .stderr("");
+    }
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn account_lists_warn_and_follow_cursors_with_all() {
+    let graph = MockServer::start().await;
+    let home = TempDir::new().unwrap();
+    for (verb, edge) in [
+        ("limits", "phone_numbers"),
+        ("subscribed-apps", "subscribed_apps"),
+    ] {
+        Mock::given(method("GET"))
+            .and(path(format!("/v26.0/{WABA}/{edge}")))
+            .and(query_param("after", "start"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+                "data":[{"id":"first"}],
+                "paging":{"cursors":{"after":"next"}, "next":"https://graph.facebook.com/next"}
+            })))
+            .expect(2)
+            .mount(&graph)
+            .await;
+        Mock::given(method("GET"))
+            .and(path(format!("/v26.0/{WABA}/{edge}")))
+            .and(query_param("after", "next"))
+            .respond_with(
+                ResponseTemplate::new(200).set_body_json(json!({"data":[{"id":"second"}]})),
+            )
+            .expect(1)
+            .mount(&graph)
+            .await;
+        paloma(Some(&graph), &home)
+            .args(["account", verb, "--after", "start", "-o", "json"])
+            .assert()
+            .success()
+            .stdout(predicate::str::contains("first"))
+            .stderr(predicate::str::contains("more results exist"));
+        let out = paloma(Some(&graph), &home)
+            .args(["account", verb, "--after", "start", "--all", "-o", "json"])
+            .output()
+            .unwrap();
+        assert!(out.status.success());
+        assert!(out.stderr.is_empty());
+        assert_eq!(
+            stdout_json(&out)["data"],
+            json!([{"id":"first"}, {"id":"second"}])
+        );
+    }
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn account_reads_dry_run_without_network_or_token() {
+    let graph = MockServer::start().await;
+    let home = TempDir::new().unwrap();
+    for verb in ["get", "health", "limits", "subscribed-apps"] {
+        let out = paloma(Some(&graph), &home)
+            .env_remove("PALOMA_TOKEN")
+            .env_remove("PALOMA_PHONE_NUMBER_ID")
+            .args(["account", verb, "--dry-run", "-o", "json"])
+            .output()
+            .unwrap();
+        assert!(
+            out.status.success(),
+            "{}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+        let request = stdout_json(&out);
+        assert_eq!(request["method"], "GET");
+        assert!(
+            request["url"]
+                .as_str()
+                .unwrap()
+                .contains(&format!("/v26.0/{WABA}"))
+        );
+        assert!(!request.to_string().contains(TOKEN));
+        assert!(String::from_utf8_lossy(&out.stderr).contains("dry-run: no request sent"));
+    }
+    assert!(graph.received_requests().await.unwrap().is_empty());
+}
+
+#[test]
+fn account_reads_require_waba_and_validate_fields_before_context() {
+    let home = TempDir::new().unwrap();
+    for verb in ["get", "health", "limits", "subscribed-apps"] {
+        paloma(None, &home)
+            .env_remove("PALOMA_WABA_ID")
+            .args(["account", verb, "--dry-run"])
+            .assert()
+            .code(3)
+            .stdout("")
+            .stderr(predicate::str::contains("--waba-id"));
+    }
+    paloma(None, &home)
+        .env_remove("PALOMA_WABA_ID")
+        .args(["account", "get", "--fields", "  "])
+        .assert()
+        .code(5)
+        .stdout("")
+        .stderr(predicate::str::contains("fields"));
+    paloma(None, &home)
+        .env_remove("PALOMA_WABA_ID")
+        .args(["account", "analytics"])
+        .assert()
+        .code(1)
+        .stdout("")
+        .stderr(predicate::str::contains("planned for v1.0"));
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn billing_currency_start_posts_optional_credit_and_quiet_prints_migration_id() {
+    let graph = MockServer::start().await;
+    let home = TempDir::new().unwrap();
+    for credit in [None, Some("12345")] {
+        let mut body = json!({"currency":"INR"});
+        if let Some(id) = credit {
+            body["extended_credit_id"] = json!(id);
+        }
+        Mock::given(method("POST"))
+            .and(path(format!(
+                "/v26.0/{WABA}/set_payment_method_migration_intent"
+            )))
+            .and(header("authorization", format!("Bearer {TOKEN}")))
+            .and(body_json(body))
+            .respond_with(
+                ResponseTemplate::new(200).set_body_json(
+                    json!({"migration_id":"mig_123", "migration_status":"INITIATED"}),
+                ),
+            )
+            .expect(1)
+            .mount(&graph)
+            .await;
+        let mut cmd = paloma(Some(&graph), &home);
+        cmd.args([
+            "account",
+            "billing-currency",
+            "start",
+            "--currency",
+            "INR",
+            "--yes",
+            "-q",
+        ]);
+        if let Some(id) = credit {
+            cmd.args(["--extended-credit-id", id]);
+        }
+        cmd.assert().success().stdout("mig_123\n").stderr("");
+    }
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn billing_currency_status_and_complete_use_migration_context_and_check_readiness() {
+    let graph = MockServer::start().await;
+    let home = TempDir::new().unwrap();
+    for (id, status, succeeds) in [
+        ("mig_ready", "READY_TO_COMPLETE", true),
+        ("mig_retry", "FAILED_TO_COMPLETE", true),
+        ("mig_busy", "IN_PROGRESS", false),
+    ] {
+        Mock::given(method("GET"))
+            .and(path(format!("/v26.0/{id}")))
+            .respond_with(
+                ResponseTemplate::new(200).set_body_json(
+                    json!({"id":id, "status":status, "destination_waba":{"id":"999"}}),
+                ),
+            )
+            .expect(2)
+            .mount(&graph)
+            .await;
+        Mock::given(method("POST"))
+            .and(path(format!("/v26.0/{id}/resume_migration")))
+            .respond_with(
+                ResponseTemplate::new(200).set_body_json(json!({"id":id, "status":"COMPLETED"})),
+            )
+            .expect(u64::from(succeeds))
+            .mount(&graph)
+            .await;
+        paloma(Some(&graph), &home)
+            .env_remove("PALOMA_WABA_ID")
+            .env_remove("PALOMA_PHONE_NUMBER_ID")
+            .args(["account", "billing-currency", "status", id, "-q"])
+            .assert()
+            .success()
+            .stdout(format!("{id}\n"))
+            .stderr("");
+        let mut cmd = paloma(Some(&graph), &home);
+        cmd.env_remove("PALOMA_WABA_ID")
+            .env_remove("PALOMA_PHONE_NUMBER_ID")
+            .args(["account", "billing-currency", "complete", id, "--yes", "-q"]);
+        if succeeds {
+            cmd.assert().success().stdout(format!("{id}\n")).stderr("");
+        } else {
+            cmd.assert()
+                .code(1)
+                .stdout("")
+                .stderr(predicate::str::contains("not ready to complete"));
+        }
+    }
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn billing_currency_dry_run_and_confirmation_never_send_requests() {
+    let graph = MockServer::start().await;
+    let home = TempDir::new().unwrap();
+    for args in [
+        vec!["start", "--currency", "BRL"],
+        vec!["complete", "mig_123"],
+    ] {
+        let out = paloma(Some(&graph), &home)
+            .env_remove("PALOMA_TOKEN")
+            .args(["account", "billing-currency"])
+            .args(&args)
+            .args(["--dry-run", "-o", "json"])
+            .output()
+            .unwrap();
+        assert!(
+            out.status.success(),
+            "{}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+        let request = stdout_json(&out);
+        if args[0] == "complete" {
+            assert_eq!(request[0]["method"], "GET");
+            assert_eq!(request[1]["method"], "POST");
+        } else {
+            assert_eq!(request["method"], "POST");
+        }
+        assert!(String::from_utf8_lossy(&out.stderr).contains("dry-run: no request sent"));
+        paloma(Some(&graph), &home)
+            .args(["account", "billing-currency"])
+            .args(&args)
+            .assert()
+            .code(5)
+            .stdout("")
+            .stderr(predicate::str::contains("--yes"));
+    }
+    assert!(graph.received_requests().await.unwrap().is_empty());
+}
+
+#[test]
+fn billing_currency_invalid_inputs_fail_before_context() {
+    let home = TempDir::new().unwrap();
+    for args in [
+        vec!["start", "--currency", "inr"],
+        vec!["start", "--currency", "INR", "--extended-credit-id", "../x"],
+        vec!["status", "../x"],
+        vec!["complete", "mig_123?access_token=x"],
+    ] {
+        paloma(None, &home)
+            .env_remove("PALOMA_WABA_ID")
+            .env_remove("PALOMA_TOKEN")
+            .args(["account", "billing-currency"])
+            .args(&args)
+            .assert()
+            .code(5)
+            .stdout("");
+    }
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn account_set_shapes_settings_including_false_and_supports_file() {
+    let graph = MockServer::start().await;
+    let home = TempDir::new().unwrap();
+    Mock::given(method("POST"))
+        .and(path(format!("/v26.0/{WABA}")))
+        .and(body_json(json!({"name":"New name", "timezone_id":"1", "is_enabled_for_insights":false, "disable_marketing_messages_on_cloud_api":false})))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({"success":true})))
+        .expect(1).mount(&graph).await;
+    paloma(Some(&graph), &home)
+        .args([
+            "account",
+            "set",
+            "--name",
+            "New name",
+            "--timezone-id",
+            "1",
+            "--insights",
+            "false",
+            "--disable-cloud-marketing",
+            "false",
+            "-q",
+        ])
+        .assert()
+        .success()
+        .stdout("")
+        .stderr("");
+    let file = home.path().join("account.json");
+    std::fs::write(&file, r#"{"name":"From file"}"#).unwrap();
+    Mock::given(method("POST"))
+        .and(path(format!("/v26.0/{WABA}")))
+        .and(body_json(json!({"name":"From file"})))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({"success":true})))
+        .expect(1)
+        .mount(&graph)
+        .await;
+    paloma(Some(&graph), &home)
+        .args(["account", "set", "--file"])
+        .arg(&file)
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("true"))
+        .stderr("");
+    paloma(Some(&graph), &home)
+        .args(["account", "set", "--disable-cloud-marketing", "true"])
+        .assert()
+        .code(5)
+        .stdout("")
+        .stderr(predicate::str::contains("--yes"));
+    let out = paloma(Some(&graph), &home)
+        .args([
+            "account",
+            "set",
+            "--disable-cloud-marketing",
+            "true",
+            "--dry-run",
+            "-o",
+            "json",
+        ])
+        .output()
+        .unwrap();
+    assert!(out.status.success());
+    assert_eq!(
+        stdout_json(&out)["body"],
+        json!({"disable_marketing_messages_on_cloud_api":true})
+    );
+}
+
+#[test]
+fn account_set_rejects_empty_settings_and_nonobjects_before_context() {
+    let home = TempDir::new().unwrap();
+    for args in [vec![], vec!["--name", " "], vec!["--timezone-id", ""]] {
+        paloma(None, &home)
+            .env_remove("PALOMA_WABA_ID")
+            .args(["account", "set"])
+            .args(&args)
+            .assert()
+            .code(5)
+            .stdout("");
+    }
+    let file = home.path().join("bad.json");
+    for body in [
+        "[]",
+        "{}",
+        "null",
+        r#"{"name":" "}"#,
+        r#"{"timezone_id":0}"#,
+        r#"{"disable_marketing_messages_on_cloud_api":"true"}"#,
+    ] {
+        std::fs::write(&file, body).unwrap();
+        paloma(None, &home)
+            .env_remove("PALOMA_WABA_ID")
+            .args(["account", "set", "--file"])
+            .arg(&file)
+            .assert()
+            .code(5)
+            .stdout("");
+    }
+    paloma(None, &home)
+        .args(["account", "set", "--name", "x", "--file"])
+        .arg(&file)
+        .assert()
+        .code(2);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn account_activities_and_number_health_request_the_documented_fields() {
+    let graph = MockServer::start().await;
+    let home = TempDir::new().unwrap();
+    Mock::given(method("GET"))
+        .and(path(format!("/v26.0/{WABA}/activities")))
+        .and(query_param(
+            "fields",
+            "id,actor_business_id,actor_id,category,event_type,timestamp",
+        ))
+        .and(query_param("after", "cursor"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(
+            json!({"data":[{"event_type":"ACCOUNT_UPDATE", "timestamp":"2026-11-04"}]}),
+        ))
+        .expect(1)
+        .mount(&graph)
+        .await;
+    paloma(Some(&graph), &home)
+        .env_remove("PALOMA_PHONE_NUMBER_ID")
+        .args(["account", "activities", "--after", "cursor"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("ACCOUNT_UPDATE"))
+        .stderr("");
+    Mock::given(method("GET"))
+        .and(path("/v26.0/999"))
+        .and(query_param("fields", "health_status"))
+        .respond_with(
+            ResponseTemplate::new(200).set_body_json(
+                json!({"id":"999", "health_status":{"can_send_message":"AVAILABLE"}}),
+            ),
+        )
+        .expect(1)
+        .mount(&graph)
+        .await;
+    paloma(Some(&graph), &home)
+        .env_remove("PALOMA_WABA_ID")
+        .args(["number", "health", "999", "-q"])
+        .assert()
+        .success()
+        .stdout("999\n")
+        .stderr("");
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn download_timeout_applies_to_the_cdn_request_and_does_not_retry() {
     let graph = MockServer::start().await;
     mount_media_lookup(&graph).await;

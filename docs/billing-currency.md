@@ -4,8 +4,9 @@ Meta is moving businesses in some countries to local-currency billing. A WABA's 
 can't be changed in place, so migrating creates a **new WABA with a new ID**, and Paloma
 has to be pointed at it afterwards.
 
-Paloma has no command for the migration yet, so you run it against the Graph API
-directly. Then [update Paloma](#after-the-migration-update-paloma).
+Use `paloma account billing-currency start|status|complete` for the three API steps,
+then [update Paloma](#after-the-migration-update-paloma). The raw API examples below
+show the same calls.
 
 > Meta's newer docs call a WABA a **Messaging account**. This page uses WABA, as the rest
 > of Paloma's docs do.
@@ -43,7 +44,22 @@ for the current terms.
 
 Export anything you'd lose, such as Flows no template uses, before you start.
 
-## Run the migration
+## Run with Paloma
+
+```bash
+paloma account billing-currency start --currency INR --dry-run
+paloma account billing-currency start --currency INR --yes -q
+paloma account billing-currency status <migration-id> -o json
+# Inspect destination assets, app access and payment method before this step:
+paloma account billing-currency complete <migration-id> --yes
+```
+
+`start` accepts `--extended-credit-id` for Line of Credit billing. `complete` checks
+readiness before switching billing. These commands do not change local profiles.
+See [account commands](commands/account.md#paloma-account-billing-currency) for output,
+confirmation and dry-run behavior.
+
+## Run the migration through the Graph API
 
 Set these first. Reading the token keeps it out of your shell history. The examples use
 Graph API v26.0.

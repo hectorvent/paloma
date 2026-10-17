@@ -43,6 +43,17 @@ paloma number get 1556677889900
 paloma number quality
 ```
 
+## `paloma number health`
+
+Read `health_status` for the active number, or pass another phone-number id. Returns
+Meta's messaging and calling diagnostics. A `BLOCKED` or `LIMITED` state is response
+data, so a successful read still exits `0`. With `-q`, prints the returned number id.
+
+```bash
+paloma number health
+paloma number health 1556677889900 -o json
+```
+
 ## `paloma number register` / `deregister`
 
 Register the active number for Cloud API with its six-digit PIN, or deregister it.

@@ -27,7 +27,7 @@ New here? Start with [Installation](installation.md) → [Getting started](getti
 | `paloma template` | list · status · get · create · submit · watch · edit · delete | [commands/template.md](commands/template.md) |
 | `paloma media` | upload · get · download · delete | [commands/media.md](commands/media.md) |
 | `paloma message` | read · typing · history | [commands/message.md](commands/message.md) |
-| `paloma number` | list · get · register · deregister · set-pin · quality | [commands/number.md](commands/number.md) |
+| `paloma number` | list · get · register · deregister · set-pin · quality · health | [commands/number.md](commands/number.md) |
 | `paloma profile` | get · set · photo | [commands/profile.md](commands/profile.md) |
 | `paloma calling` | status · enable · disable · set · sip · codecs | [commands/calling.md](commands/calling.md) |
 | `paloma webhook` | get · subscribe · unsubscribe · fields · fields available · fields set | [commands/webhook.md](commands/webhook.md) |
@@ -39,7 +39,8 @@ New here? Start with [Installation](installation.md) → [Getting started](getti
 | `paloma link` | create (offline) | [commands/link.md](commands/link.md) |
 | `paloma export` · `apply` · `diff` | your WhatsApp setup as code (declarative YAML: Calling, Profile, Number, Commerce, ConversationalAutomation, Template, Webhook) | [commands/manifests.md](commands/manifests.md) |
 | `paloma completion` | bash · zsh · fish · powershell · elvish | [commands/completion.md](commands/completion.md) |
-| `paloma account` · `qr` | planned | [commands/planned.md](commands/planned.md) |
+| `paloma account` | get · set · limits · health · activities · subscribed-apps · billing-currency (analytics planned) | [commands/account.md](commands/account.md) |
+| `paloma qr` | planned | [commands/planned.md](commands/planned.md) |
 
 > Anything marked **planned** is already visible in `paloma --help` and exits with a
 > clear "not yet implemented (planned for vX.Y)" message. See the

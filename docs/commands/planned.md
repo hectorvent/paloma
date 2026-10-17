@@ -7,7 +7,7 @@ so the published surface stays discoverable and honest. All are planned for v1.0
 
 | Group | Verbs | Purpose |
 |-------|-------|---------|
-| `paloma account` | `get`, `limits`, `analytics`, `subscribed-apps` | WABA-level reads and messaging analytics |
+| `paloma account` | `analytics` | Messaging analytics ([account reads](account.md) already ship) |
 | `paloma webhook` | `listen`, `verify-url`, `simulate` | Receive-side: ephemeral listener, hub.challenge check, local signed-payload simulator (`get` / `subscribe` / `unsubscribe` / `fields` already ship, see [webhook](webhook.md)) |
 | `paloma qr` | `create`, `list`, `get`, `update`, `delete` | Message QR codes |
 

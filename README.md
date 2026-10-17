@@ -278,8 +278,9 @@ error: text body is 5000 chars; max is 4096        # exit 5
 | `calling` | status · enable · disable · set · sip · codecs |
 | `flow` | list · get · create · update · publish · deprecate · delete · assets |
 | `webhook` | get · subscribe · unsubscribe · fields |
-| `number` | list · get · register · deregister · set-pin · quality |
+| `number` | list · get · register · deregister · set-pin · quality · health |
 | `profile` | get · set · photo |
+| `account` | get · set · limits · health · activities · subscribed-apps · billing-currency |
 | `block` | add · remove · list |
 | `export` · `apply` · `diff` | your setup as code: declarative YAML for the seven kinds above |
 | `auth` | login · status · whoami · logout |

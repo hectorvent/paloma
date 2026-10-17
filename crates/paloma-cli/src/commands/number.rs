@@ -23,6 +23,8 @@ pub enum NumberCommand {
     Get { phone_number_id: Option<String> },
     /// Show quality rating, messaging limit and throughput.
     Quality { phone_number_id: Option<String> },
+    /// Show messaging and calling health for a number.
+    Health { phone_number_id: Option<String> },
     /// Register the number for Cloud API use.
     Register(RegisterArgs),
     /// Deregister the number.
@@ -147,6 +149,11 @@ impl NumberCommand {
                         .map(str::to_owned)
                 })
                 .await
+            }
+            Self::Health { phone_number_id } => {
+                let id = target(app, phone_number_id)?;
+                app.send_and_emit(&phone_numbers::get(&id, "health_status"), field_id)
+                    .await
             }
             Self::Register(a) => {
                 if let Some(region) = &a.data_localization_region {

@@ -115,6 +115,30 @@ pub fn not_blank(value: &str, what: &str) -> Result<()> {
     }
 }
 
+/// An opaque Graph node id must remain a single path segment, never a URL or query.
+pub fn graph_node_id(value: &str, what: &str) -> Result<()> {
+    if value.is_empty()
+        || !value
+            .bytes()
+            .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'_' | b'-'))
+    {
+        return Err(Error::validation(format!(
+            "{what} must contain only ASCII letters, digits, underscores or hyphens"
+        )));
+    }
+    Ok(())
+}
+
+/// Currency support is account-dependent; validate the ISO code shape locally.
+pub fn currency_code(value: &str) -> Result<()> {
+    if value.len() != 3 || !value.bytes().all(|b| b.is_ascii_uppercase()) {
+        return Err(Error::validation(
+            "currency must be a three-letter uppercase code, such as INR",
+        ));
+    }
+    Ok(())
+}
+
 /// A length check in characters, not bytes. The error never echoes the value.
 pub fn max_chars(value: &str, max: usize, what: &str) -> Result<()> {
     let len = value.chars().count();

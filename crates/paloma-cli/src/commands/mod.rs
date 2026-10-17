@@ -105,7 +105,7 @@ impl Command {
             Self::Webhook(c) => c.run(app).await,
             Self::Calling(c) => c.run(app).await,
             Self::Flow(c) => c.run(app).await,
-            Self::Account(c) => c.run(app),
+            Self::Account(c) => c.run(app).await,
             Self::Qr(c) => c.run(app),
             Self::Link(c) => c.run(app),
             Self::Auth(c) => c.run(app).await,
