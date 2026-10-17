@@ -77,8 +77,6 @@ a token. Data goes to stdout; diagnostics go to stderr. Missing WABA context or 
 credentials exit `3`; rate limits exit `4`. Reads require a token with access to the
 WABA and appropriate WhatsApp business management permissions.
 
-`account analytics` remains planned for v1.0.
-
 ## `paloma account set`
 
 Update common account settings with typed flags, or supply a full writable JSON object
@@ -146,3 +144,90 @@ Dry-run prints the readiness GET and completion POST without executing either. A
 dry-run prints its single POST. A real completion makes a GET followed by the POST. Neither command changes your
 Paloma configuration. See [the billing currency guide](../billing-currency.md) for the
 prerequisites, destination checks and profile updates.
+
+## `paloma account analytics`
+
+Read messaging counts by default, or delivered-volume and approximate-cost breakdowns
+with `--pricing`. Both are GET field expansions on the active WABA/Messaging account.
+Use `--waba-id`, `PALOMA_WABA_ID` or the profile to choose it. No phone-number id is
+required. The send-only `--messaging-account-id` does not override this selection, so
+`--waba-id <old-account>` still reaches pre-migration history.
+
+```bash
+paloma account analytics --start 2026-11-01 --end 2026-11-02
+paloma account analytics --start 1793491200 --end 1793577600 --product-type template
+paloma account analytics --pricing --start 2026-11-01 --end 2026-11-02 \
+  --metric cost,volume --dimension country,pricing-category,pricing-type
+paloma account analytics --pricing --start 2026-11-01 --end 2026-11-02 \
+  --dimension country,pricing-category,tier --country IN --pricing-category utility -o json
+```
+
+### Time and common filters
+
+| Flag | Meaning |
+|---|---|
+| `--start <time>` | Required. Nonnegative UNIX **seconds**, or `YYYY-MM-DD` at midnight UTC |
+| `--end <time>` | Required, in the same formats; must be later than `--start` |
+| `--granularity half-hour\|day\|month` | Reporting interval; defaults to `day` |
+| `--phone-number <number>` | Actual E.164 number, not a Graph id or BSUID; repeat or comma-separate. A leading `+` is accepted and omitted in the Graph filter |
+| `--country <code>` | Uppercase two-letter country code; repeat or comma-separate |
+
+Granularity maps to `HALF_HOUR`, `DAY`, `MONTH` for messaging, and `HALF_HOUR`, `DAILY`,
+`MONTHLY` for pricing. Date inputs are always UTC; they do not inherit your machine's
+timezone. Meta controls retention and bucket boundaries. Its documented lookback for
+these reports is one year; Paloma does not invent a fixed-day equivalent or silently
+truncate a requested range.
+
+Omitted filters are omitted from the request, letting Meta select all available data.
+Only currently associated phone numbers contribute, and historical data does not move
+when a Messaging account is cloned for billing migration.
+
+### Messaging filters
+
+`--product-type template|non-template|incoming` selects template sends (`0`), non-template
+sends (`2`) or incoming messages (`100`). Repeat or comma-separate to combine them.
+This flag cannot be used with `--pricing`.
+
+The table shows `start`, `end`, `sent` and `delivered` for each returned data point.
+
+### Pricing filters
+
+These flags require `--pricing` and can be repeated or comma-separated:
+
+| Flag | Values |
+|---|---|
+| `--metric` | `cost`, `volume` |
+| `--pricing-type` | `free-customer-service`, `free-entry-point`, `regular` |
+| `--pricing-category` | `authentication`, `authentication-international`, `marketing`, `marketing-lite`, `marketing-lite-dynamic`, `service`, `utility`, `referral-conversion` |
+| `--dimension` | `country`, `phone`, `pricing-category`, `pricing-type`, `tier` |
+
+For volume-tier information, request `country`, `pricing-category` and `tier` together.
+The `marketing-lite-dynamic` category covers the newer max-price pricing category.
+
+The table includes all data points from all returned groups, with time boundaries,
+phone number, country, pricing category/type, tier, volume and cost. Missing fields
+show as `-`. Cost is approximate, in the selected account's currency; Meta may omit it
+for accounts billed through a partner credit line. Missing costs remain absent, and
+Paloma neither replaces them with zero nor adds totals across dimensions.
+
+### Output and failures
+
+JSON, YAML and raw preserve Meta's response envelope and any extra fields. Only table
+output flattens pricing groups. `-o raw` preserves decimal text exactly as received;
+`-q` is silent because a report has no primary resource id. An empty report succeeds
+and renders `(none)` as a table; malformed report structures exit `1`.
+
+All local date, range, phone and country checks run before context resolution or API
+calls and exit `5`. Missing flags, invalid enum values and incompatible filter modes
+exit `2`. Missing WABA context exits `3`. API failures keep the shared Graph error/exit
+mapping, including HTTP `401`/`403` authentication failures (`3`) and throttling (`4`).
+
+`--dry-run` prints the GET, including the complete encoded field expansion, without
+reading a token or sending a request:
+
+```bash
+paloma account analytics --pricing --start 2026-11-01 --end 2026-11-02 --dry-run -o json
+```
+
+The deprecated `conversation_analytics` field is not exposed. Template and calling
+analytics belong to their own resources and are outside this command.

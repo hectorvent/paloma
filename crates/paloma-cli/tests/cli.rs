@@ -7710,9 +7710,9 @@ fn account_reads_require_waba_and_validate_fields_before_context() {
         .env_remove("PALOMA_WABA_ID")
         .args(["account", "analytics"])
         .assert()
-        .code(1)
+        .code(2)
         .stdout("")
-        .stderr(predicate::str::contains("planned for v1.0"));
+        .stderr(predicate::str::contains("--start"));
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -9264,4 +9264,440 @@ async fn template_routing_never_refreshes_http_400_auth_policy_or_unknown_reject
             assert_eq!(graph.received_requests().await.unwrap().len(), 2);
         }
     }
+}
+
+fn messaging_analytics_response() -> Value {
+    json!({"id":WABA,"analytics":{"phone_numbers":["15551234567"],"country_codes":["US"],"granularity":"DAY","data_points":[{"start":1_793_491_200_u64,"end":1_793_577_600_u64,"sent":12,"delivered":10}]}})
+}
+
+fn pricing_analytics_response() -> Value {
+    json!({"id":WABA,"pricing_analytics":{"data":[
+        {"data_points":[{"start":1_793_491_200_u64,"end":1_793_577_600_u64,"phone_number":"15551234567","country":"IN","pricing_category":"AUTHENTICATION","pricing_type":"REGULAR","tier":"0:750000","volume":2,"cost":4.6}]},
+        {"data_points":[{"start":1_793_491_200_u64,"end":1_793_577_600_u64,"country":"US","pricing_category":"MARKETING_LITE_DYNAMIC","pricing_type":"REGULAR","volume":3}]}
+    ]}})
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn account_analytics_sends_the_exact_messaging_field_expansion_and_preserves_formats() {
+    let graph = MockServer::start().await;
+    let home = TempDir::new().unwrap();
+    let body = messaging_analytics_response();
+    Mock::given(method("GET")).and(path(format!("/v26.0/{WABA}")))
+        .and(header("authorization", format!("Bearer {TOKEN}")))
+        .and(query_param("fields", "analytics.start(1793491200).end(1793577600).granularity(DAY).phone_numbers([\"15551234567\",\"15557654321\"]).product_types([0,2,100]).country_codes([\"US\",\"IN\"])"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(&body))
+        .expect(5).mount(&graph).await;
+    for format in ["table", "json", "yaml", "raw"] {
+        let out = paloma(Some(&graph), &home)
+            .env_remove("PALOMA_PHONE_NUMBER_ID")
+            .args([
+                "account",
+                "analytics",
+                "--start",
+                "2026-11-01",
+                "--end",
+                "2026-11-02",
+                "--phone-number",
+                "+15551234567,15557654321",
+                "--product-type",
+                "template,non-template",
+                "--product-type",
+                "incoming",
+                "--country",
+                "US,IN",
+                "-o",
+                format,
+            ])
+            .output()
+            .unwrap();
+        assert!(
+            out.status.success(),
+            "{}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+        assert!(out.stderr.is_empty());
+        match format {
+            "table" => {
+                let stdout = String::from_utf8_lossy(&out.stdout);
+                assert!(
+                    stdout.contains("SENT")
+                        && stdout.contains("DELIVERED")
+                        && stdout.contains("12")
+                        && stdout.contains("10")
+                );
+            }
+            "yaml" => assert_eq!(
+                serde_norway::from_slice::<Value>(&out.stdout).unwrap(),
+                body
+            ),
+            _ => assert_eq!(stdout_json(&out), body),
+        }
+    }
+    paloma(Some(&graph), &home)
+        .args([
+            "account",
+            "analytics",
+            "--start",
+            "2026-11-01",
+            "--end",
+            "2026-11-02",
+            "--phone-number",
+            "+15551234567,15557654321",
+            "--product-type",
+            "template,non-template,incoming",
+            "--country",
+            "US,IN",
+            "-q",
+        ])
+        .assert()
+        .success()
+        .stdout("")
+        .stderr("");
+    assert!(
+        graph
+            .received_requests()
+            .await
+            .unwrap()
+            .iter()
+            .all(|request| request.body.is_empty())
+    );
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn account_pricing_analytics_serializes_all_filters_and_flattens_every_table_group() {
+    let graph = MockServer::start().await;
+    let home = TempDir::new().unwrap();
+    let body = pricing_analytics_response();
+    Mock::given(method("GET")).and(path(format!("/v26.0/{WABA}")))
+        .and(header("authorization", format!("Bearer {TOKEN}")))
+        .and(query_param("fields", "pricing_analytics.start(1793491200).end(1793577600).granularity(DAILY).phone_numbers([\"15551234567\"]).country_codes([\"US\",\"IN\"]).metric_types([\"COST\",\"VOLUME\"]).pricing_types([\"REGULAR\",\"FREE_ENTRY_POINT\"]).pricing_categories([\"AUTHENTICATION\",\"MARKETING_LITE_DYNAMIC\"]).dimensions([\"COUNTRY\",\"PRICING_CATEGORY\",\"TIER\",\"PHONE\",\"PRICING_TYPE\"])"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(&body))
+        .expect(5).mount(&graph).await;
+    let args = [
+        "account",
+        "analytics",
+        "--pricing",
+        "--start",
+        "1793491200",
+        "--end",
+        "1793577600",
+        "--phone-number",
+        "15551234567",
+        "--country",
+        "US,IN",
+        "--metric",
+        "cost,volume",
+        "--pricing-type",
+        "regular,free-entry-point",
+        "--pricing-category",
+        "authentication,marketing-lite-dynamic",
+        "--dimension",
+        "country,pricing-category,tier,phone,pricing-type",
+    ];
+    for format in ["table", "json", "yaml", "raw"] {
+        let out = paloma(Some(&graph), &home)
+            .args(args)
+            .args(["-o", format])
+            .output()
+            .unwrap();
+        assert!(
+            out.status.success(),
+            "{}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+        assert!(out.stderr.is_empty());
+        match format {
+            "table" => {
+                let stdout = String::from_utf8_lossy(&out.stdout);
+                assert!(
+                    stdout.contains("AUTHENTICATION") && stdout.contains("MARKETING_LITE_DYNAMIC")
+                );
+                assert!(stdout.contains("0:750000") && stdout.contains("4.6"));
+                let missing_cost_row = stdout
+                    .lines()
+                    .find(|line| line.contains("MARKETING_LITE_DYNAMIC"))
+                    .unwrap();
+                assert!(missing_cost_row.ends_with('-'), "{missing_cost_row}");
+            }
+            "yaml" => assert_eq!(
+                serde_norway::from_slice::<Value>(&out.stdout).unwrap(),
+                body
+            ),
+            _ => assert_eq!(stdout_json(&out), body),
+        }
+    }
+    paloma(Some(&graph), &home)
+        .args(args)
+        .arg("-q")
+        .assert()
+        .success()
+        .stdout("")
+        .stderr("");
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn analytics_granularities_translate_by_mode_and_omit_unspecified_filters_offline() {
+    let graph = MockServer::start().await;
+    let home = TempDir::new().unwrap();
+    for (pricing, granularity, expected) in [
+        (false, "half-hour", "HALF_HOUR"),
+        (false, "day", "DAY"),
+        (false, "month", "MONTH"),
+        (true, "half-hour", "HALF_HOUR"),
+        (true, "day", "DAILY"),
+        (true, "month", "MONTHLY"),
+    ] {
+        let mut cmd = paloma(Some(&graph), &home);
+        cmd.env_remove("PALOMA_TOKEN")
+            .env_remove("PALOMA_PHONE_NUMBER_ID")
+            .args([
+                "account",
+                "analytics",
+                "--start",
+                "2026-11-01",
+                "--end",
+                "2026-11-02",
+                "--granularity",
+                granularity,
+                "--dry-run",
+                "-o",
+                "json",
+            ]);
+        if pricing {
+            cmd.arg("--pricing");
+        }
+        let out = cmd.output().unwrap();
+        assert!(
+            out.status.success(),
+            "{}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+        let request = stdout_json(&out);
+        assert_eq!(request["method"], "GET");
+        assert!(request.get("body").is_none());
+        let field = if pricing {
+            "pricing_analytics"
+        } else {
+            "analytics"
+        };
+        let query = format!("{field}.start(1793491200).end(1793577600).granularity({expected})");
+        let url = percent_encoding::percent_decode_str(request["url"].as_str().unwrap())
+            .decode_utf8()
+            .unwrap();
+        assert_eq!(url, format!("{}/v26.0/{WABA}?fields={query}", graph.uri()));
+        assert!(String::from_utf8_lossy(&out.stderr).contains("dry-run: no request sent"));
+    }
+    assert!(graph.received_requests().await.unwrap().is_empty());
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn analytics_invalid_dates_ranges_and_filters_fail_before_context_or_a_request() {
+    let graph = MockServer::start().await;
+    let home = TempDir::new().unwrap();
+    for (start, end, extra) in [
+        ("2026-02-29", "2026-03-01", vec![]),
+        ("2026-11-31", "2026-12-01", vec![]),
+        ("bad", "2026-11-02", vec![]),
+        ("2026-11-01", "bad", vec![]),
+        ("-1", "10", vec![]),
+        ("2026-11-02", "2026-11-01", vec![]),
+        ("2026-11-01", "2026-11-01", vec![]),
+        ("18446744073709551616", "18446744073709551617", vec![]),
+        ("1", "2", vec!["--country", "us"]),
+        ("1", "2", vec!["--country", "USA"]),
+        ("1", "2", vec!["--country", "US\").end(0)"]),
+        ("1", "2", vec!["--phone-number", "111"]),
+        ("1", "2", vec!["--phone-number", BSUID]),
+    ] {
+        paloma(Some(&graph), &home)
+            .env_remove("PALOMA_WABA_ID")
+            .env_remove("PALOMA_TOKEN")
+            .args(["account", "analytics", "--start", start, "--end", end])
+            .args(extra)
+            .assert()
+            .code(5)
+            .stdout("");
+    }
+    assert!(graph.received_requests().await.unwrap().is_empty());
+}
+
+#[test]
+fn analytics_closed_sets_and_mode_conflicts_are_usage_errors() {
+    let home = TempDir::new().unwrap();
+    for extra in [
+        vec!["--granularity", "daily"],
+        vec!["--product-type", "1"],
+        vec!["--pricing", "--product-type", "template"],
+        vec!["--metric", "cost"],
+        vec!["--dimension", "country"],
+        vec!["--pricing-type", "regular"],
+        vec!["--pricing-category", "utility"],
+        vec!["--pricing", "--metric", "conversations"],
+        vec!["--pricing", "--dimension", "unknown"],
+        vec!["--pricing", "--pricing-category", "unknown"],
+        vec!["--pricing", "--pricing-type", "paid-exempt"],
+        vec!["--conversations"],
+    ] {
+        paloma(None, &home)
+            .env_remove("PALOMA_WABA_ID")
+            .env_remove("PALOMA_TOKEN")
+            .args(["account", "analytics", "--start", "1", "--end", "2"])
+            .args(extra)
+            .assert()
+            .code(2)
+            .stdout("");
+    }
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn analytics_targets_the_selected_waba_and_can_read_pre_migration_history() {
+    let graph = MockServer::start().await;
+    let home = TempDir::new().unwrap();
+    Mock::given(method("GET"))
+        .and(path("/v26.0/old_account"))
+        .and(query_param(
+            "fields",
+            "analytics.start(1709164800).end(1709251200).granularity(DAY)",
+        ))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .set_body_json(json!({"id":"old_account","analytics":{"data_points":[]}})),
+        )
+        .expect(1)
+        .mount(&graph)
+        .await;
+    paloma(Some(&graph), &home)
+        .env("PALOMA_MESSAGING_ACCOUNT_ID", "new_account")
+        .env_remove("PALOMA_PHONE_NUMBER_ID")
+        .args([
+            "account",
+            "analytics",
+            "--start",
+            "2024-02-29",
+            "--end",
+            "2024-03-01",
+            "--waba-id",
+            "old_account",
+        ])
+        .assert()
+        .success()
+        .stdout("(none)\n")
+        .stderr("");
+    paloma(Some(&graph), &home)
+        .env_remove("PALOMA_WABA_ID")
+        .args([
+            "account",
+            "analytics",
+            "--start",
+            "1",
+            "--end",
+            "2",
+            "--dry-run",
+        ])
+        .assert()
+        .code(3)
+        .stdout("")
+        .stderr(predicate::str::contains("--waba-id"));
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn analytics_empty_and_malformed_reports_are_distinct() {
+    for (pricing, body, valid) in [
+        (false, json!({"analytics":{"data_points":[]}}), true),
+        (true, json!({"pricing_analytics":{"data":[]}}), true),
+        (
+            true,
+            json!({"pricing_analytics":{"data":[{"data_points":[]}]}}),
+            true,
+        ),
+        (false, json!({"id":WABA}), false),
+        (false, json!({"analytics":{"data_points":[1]}}), false),
+        (true, json!({"pricing_analytics":{"data":[{}]}}), false),
+        (true, json!({"pricing_analytics":{"data":null}}), false),
+    ] {
+        let graph = MockServer::start().await;
+        let home = TempDir::new().unwrap();
+        Mock::given(method("GET"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(body))
+            .expect(1)
+            .mount(&graph)
+            .await;
+        let mut cmd = paloma(Some(&graph), &home);
+        cmd.args(["account", "analytics", "--start", "1", "--end", "2"]);
+        if pricing {
+            cmd.arg("--pricing");
+        }
+        if valid {
+            cmd.assert().success().stdout("(none)\n").stderr("");
+        } else {
+            cmd.assert()
+                .code(1)
+                .stdout("")
+                .stderr(predicate::str::contains("malformed"));
+        }
+    }
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn analytics_preserves_api_auth_and_rate_limit_errors_on_stderr() {
+    for (status, body, exit) in [
+        (
+            403,
+            json!({"error":{"code":200,"message":"analytics permission denied"}}),
+            3,
+        ),
+        (
+            429,
+            json!({"error":{"code":130_429,"message":"analytics throttled"}}),
+            4,
+        ),
+    ] {
+        let graph = MockServer::start().await;
+        let home = TempDir::new().unwrap();
+        // Reads retry throttling by design, so allow the three bounded attempts.
+        Mock::given(method("GET"))
+            .respond_with(
+                ResponseTemplate::new(status)
+                    .set_body_json(body)
+                    .insert_header("Retry-After", "0"),
+            )
+            .expect(if status == 429 { 3 } else { 1 })
+            .mount(&graph)
+            .await;
+        paloma(Some(&graph), &home)
+            .args(["account", "analytics", "--start", "1", "--end", "2"])
+            .assert()
+            .code(exit)
+            .stdout("")
+            .stderr(predicate::str::contains("analytics"));
+    }
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn pricing_analytics_raw_keeps_decimal_text_and_unknown_response_fields() {
+    let graph = MockServer::start().await;
+    let home = TempDir::new().unwrap();
+    let body = r#"{ "id":"222", "currency":"EUR", "pricing_analytics":{"data":[{"data_points":[{"start":1,"end":2,"pricing_category":"FUTURE_CATEGORY","cost":0.1234567890123456789012345}]}]}}"#;
+    Mock::given(method("GET"))
+        .and(path(format!("/v26.0/{WABA}")))
+        .respond_with(ResponseTemplate::new(200).set_body_string(body))
+        .expect(1)
+        .mount(&graph)
+        .await;
+    paloma(Some(&graph), &home)
+        .args([
+            "account",
+            "analytics",
+            "--pricing",
+            "--start",
+            "1",
+            "--end",
+            "2",
+            "-o",
+            "raw",
+        ])
+        .assert()
+        .success()
+        .stdout(format!("{body}\n"))
+        .stderr("");
 }

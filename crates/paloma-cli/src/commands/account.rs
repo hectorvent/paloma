@@ -1,5 +1,5 @@
 //! Account reads keep WABA health separate from the portfolio limit exposed by each
-//! phone number. Analytics stays discoverable until its query surface is implemented.
+//! phone number. Analytics keeps its reporting filters separate from account settings.
 
 use std::path::PathBuf;
 
@@ -7,10 +7,12 @@ use clap::{Args, Subcommand};
 use paloma_core::{Error, Result, validate};
 use paloma_graph::api::{account, webhook};
 
-use super::{planned, read_json};
+use super::read_json;
 
+mod analytics;
 mod billing_currency;
 use crate::app::{App, field_id, no_id};
+use analytics::Analytics;
 use billing_currency::BillingCurrency;
 
 const LIMIT_COLUMNS: &[&str] = &[
@@ -43,8 +45,8 @@ pub enum AccountCommand {
     Limits(PageArgs),
     /// Show the WABA's messaging and calling health.
     Health,
-    /// Messaging analytics (planned v1.0).
-    Analytics,
+    /// Report messaging counts or pricing analytics.
+    Analytics(Analytics),
     /// List apps subscribed to the WABA.
     SubscribedApps(PageArgs),
 }
@@ -147,8 +149,8 @@ impl AccountCommand {
         {
             validate::not_blank(fields, "fields")?;
         }
-        if matches!(self, Self::Analytics) {
-            return planned("account analytics", "v1.0");
+        if let Self::Analytics(args) = self {
+            return args.run(app).await;
         }
         let waba = app.ctx()?.require_waba_id()?.to_owned();
         match self {
@@ -168,7 +170,7 @@ impl AccountCommand {
                 )
                 .await
             }
-            Self::Set(_) | Self::BillingCurrency(_) => {
+            Self::Set(_) | Self::BillingCurrency(_) | Self::Analytics(_) => {
                 unreachable!("handled before context resolution")
             }
             Self::Get { fields } => {
@@ -202,7 +204,6 @@ impl AccountCommand {
                 )
                 .await
             }
-            Self::Analytics => unreachable!("planned command returned before resolving context"),
         }
     }
 }

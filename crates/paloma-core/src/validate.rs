@@ -152,6 +152,34 @@ pub fn currency_code(value: &str) -> Result<()> {
     Ok(())
 }
 
+/// Analytics uses phone numbers, not phone-number ids or business-scoped user ids.
+pub fn analytics_phone_number(value: &str) -> Result<()> {
+    if !is_e164(value) {
+        return Err(Error::validation(
+            "analytics phone numbers must use E.164 format",
+        ));
+    }
+    Ok(())
+}
+
+/// Analytics country filters use uppercase two-letter country codes.
+pub fn country_code(value: &str) -> Result<()> {
+    if value.len() != 2 || !value.bytes().all(|b| b.is_ascii_uppercase()) {
+        return Err(Error::validation(
+            "country must be a two-letter uppercase code, such as US",
+        ));
+    }
+    Ok(())
+}
+
+/// Equal or reversed boundaries cannot describe an analytics interval.
+pub fn analytics_range(start: u64, end: u64) -> Result<()> {
+    if start >= end {
+        return Err(Error::validation("--start must be earlier than --end"));
+    }
+    Ok(())
+}
+
 /// A length check in characters, not bytes. The error never echoes the value.
 pub fn max_chars(value: &str, max: usize, what: &str) -> Result<()> {
     let len = value.chars().count();

@@ -280,7 +280,7 @@ error: text body is 5000 chars; max is 4096        # exit 5
 | `webhook` | get · subscribe · unsubscribe · fields |
 | `number` | list · get · register · deregister · set-pin · quality · health |
 | `profile` | get · set · photo |
-| `account` | get · set · limits · health · activities · subscribed-apps · billing-currency |
+| `account` | get · set · limits · health · activities · subscribed-apps · billing-currency · analytics |
 | `block` | add · remove · list |
 | `qr` | create · list · get · update · delete |
 | `automation` | get · set |
@@ -297,7 +297,7 @@ endpoint, or keep the default `--via auto`. See [template sends](docs/commands/s
 for permissions, offline dry-runs and handling a category change.
 
 **Coming next:** `webhook listen` and `simulate` (receive real events locally, and
-send signed test payloads to your endpoint), `account` analytics. Those
+send signed test payloads to your endpoint). Those
 commands already appear in `--help` and say which release they're planned for. See
 [planned commands](docs/commands/planned.md).
 

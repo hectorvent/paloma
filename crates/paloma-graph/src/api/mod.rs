@@ -3,6 +3,7 @@
 //! it.
 
 pub mod account;
+pub mod analytics;
 pub mod block;
 pub mod calling;
 pub mod commerce;
