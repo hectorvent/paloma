@@ -1,7 +1,7 @@
 # `paloma template`
 
 Manage the full message-template lifecycle on the WABA: `list`, `status`, `get`,
-`create`, `submit`, `watch`, `edit`, `delete`. Only `namespace` is still planned.
+`create`, `submit`, `watch`, `edit`, `delete`, `namespace`.
 
 ```
 paloma template <verb> [args] [flags]
@@ -205,7 +205,12 @@ disabled status can't be deleted.
 
 ---
 
-## Planned verbs
+## `paloma template namespace`
 
-`namespace` (fetch the WABA `message_template_namespace`). See the
-[planned commands](planned.md).
+`paloma template namespace` reads the active WABA's `message_template_namespace`.
+With `-q` it prints only that namespace. It supports `--dry-run` without reading a token.
+
+```bash
+paloma template namespace
+paloma template namespace --waba-id 123456789 -q
+```

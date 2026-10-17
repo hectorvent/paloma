@@ -10,11 +10,6 @@ so the published surface stays discoverable and honest. All are planned for v1.0
 | `paloma account` | `analytics` | Messaging analytics ([account reads](account.md) already ship) |
 | `paloma webhook` | `listen`, `verify-url`, `simulate` | Receive-side: ephemeral listener, hub.challenge check, local signed-payload simulator (`get` / `subscribe` / `unsubscribe` / `fields` already ship, see [webhook](webhook.md)) |
 
-Also planned within implemented groups:
-
-- **`paloma template`**: only `namespace` remains. The rest of the lifecycle
-  (list/status/get/create/submit/watch/edit/delete) is implemented.
-
 ## The differentiators on the way
 
 The features that make this more than "curl with flags," in order of value:

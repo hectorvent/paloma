@@ -7,7 +7,7 @@ use paloma_graph::api::templates::{self, Button, Examples, Header, InlineTemplat
 use paloma_graph::paging;
 use serde_json::{Value, json};
 
-use super::{planned, read_json};
+use super::read_json;
 use crate::app::{App, field_id, no_id};
 use crate::output::Output;
 
@@ -61,7 +61,7 @@ pub enum TemplateCommand {
     Edit(Edit),
     /// Delete a template (all languages, one with --language or --id), or several with --ids.
     Delete(Delete),
-    /// Show the WABA's template namespace (planned v1.0).
+    /// Show the WABA's template namespace.
     Namespace,
 }
 
@@ -267,7 +267,15 @@ impl TemplateCommand {
                     .await
             }
             Self::Delete(a) => delete(app, a).await,
-            Self::Namespace => planned("template namespace", "v1.0"),
+            Self::Namespace => {
+                let waba = app.ctx()?.require_waba_id()?.to_owned();
+                app.send_and_emit(&templates::namespace(&waba), |v| {
+                    v.get("message_template_namespace")
+                        .and_then(Value::as_str)
+                        .map(str::to_owned)
+                })
+                .await
+            }
         }
     }
 }

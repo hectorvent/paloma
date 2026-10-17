@@ -315,6 +315,11 @@ pub async fn find_one(
     }
 }
 
+/// Template namespace belongs to the WABA node, not a particular template.
+pub fn namespace(waba_id: &str) -> Request {
+    Request::get(waba_id).query("fields", "message_template_namespace")
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

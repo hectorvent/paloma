@@ -8266,6 +8266,36 @@ async fn download_timeout_applies_to_the_cdn_request_and_does_not_retry() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
+async fn template_namespace_reads_the_waba_and_quiet_prints_the_namespace() {
+    let graph = MockServer::start().await;
+    let home = TempDir::new().unwrap();
+    Mock::given(method("GET"))
+        .and(path(format!("/v26.0/{WABA}")))
+        .and(query_param("fields", "message_template_namespace"))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .set_body_json(json!({"id":WABA,"message_template_namespace":"example_namespace"})),
+        )
+        .expect(1)
+        .mount(&graph)
+        .await;
+    paloma(Some(&graph), &home)
+        .env_remove("PALOMA_PHONE_NUMBER_ID")
+        .args(["template", "namespace", "-q"])
+        .assert()
+        .success()
+        .stdout("example_namespace\n")
+        .stderr("");
+    let out = paloma(Some(&graph), &home)
+        .env_remove("PALOMA_TOKEN")
+        .args(["template", "namespace", "--dry-run", "-o", "json"])
+        .output()
+        .unwrap();
+    assert!(out.status.success());
+    assert_eq!(stdout_json(&out)["method"], "GET");
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn qr_image_refuses_a_file_created_while_the_graph_request_runs() {
     let graph = MockServer::start().await;
     let cdn = MockServer::start().await;

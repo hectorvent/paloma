@@ -272,7 +272,7 @@ error: text body is 5000 chars; max is 4096        # exit 5
 | Group | Commands |
 |-------|----------|
 | `send` | text · template · image · document · audio · video · sticker · location · contact · interactive (button, list, cta-url, location-request, address, carousel, call, request-contact) · flow · call-permission · product · product-list · catalog · reaction · raw |
-| `template` | list · status · get · create · submit · watch · edit · delete |
+| `template` | list · status · get · create · submit · watch · edit · delete · namespace |
 | `media` | upload · get · download · delete |
 | `message` | read · typing · history |
 | `calling` | status · enable · disable · set · sip · codecs |
