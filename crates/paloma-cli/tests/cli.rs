@@ -8134,6 +8134,110 @@ async fn qr_dry_run_prints_both_image_steps_and_invalid_input_never_sends() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
+async fn automation_reads_and_writes_typed_and_cleared_components() {
+    let graph = MockServer::start().await;
+    let home = TempDir::new().unwrap();
+    Mock::given(method("GET"))
+        .and(path(format!("/v26.0/{PHONE}")))
+        .and(query_param("fields", "conversational_automation"))
+        .respond_with(
+            ResponseTemplate::new(200).set_body_json(
+                json!({"id":PHONE,"conversational_automation":{"prompts":["Support"]}}),
+            ),
+        )
+        .expect(1)
+        .mount(&graph)
+        .await;
+    paloma(Some(&graph), &home)
+        .args(["automation", "get", "-q"])
+        .assert()
+        .success()
+        .stdout(format!("{PHONE}\n"))
+        .stderr("");
+    for (args, body) in [
+        (
+            vec![
+                "--welcome",
+                "false",
+                "--prompt",
+                "Support",
+                "--command",
+                "help:Get help: now",
+            ],
+            json!({"enable_welcome_message":false,"prompts":["Support"],"commands":[{"command_name":"help","command_description":"Get help: now"}]}),
+        ),
+        (
+            vec!["--clear-prompts", "--clear-commands"],
+            json!({"prompts":[],"commands":[]}),
+        ),
+    ] {
+        Mock::given(method("POST"))
+            .and(path(format!("/v26.0/{PHONE}/conversational_automation")))
+            .and(body_json(&body))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({"success":true})))
+            .expect(1)
+            .mount(&graph)
+            .await;
+        paloma(Some(&graph), &home)
+            .args(["automation", "set"])
+            .args(&args)
+            .arg("-q")
+            .assert()
+            .success()
+            .stdout("")
+            .stderr("");
+        let out = paloma(Some(&graph), &home)
+            .env_remove("PALOMA_TOKEN")
+            .args(["automation", "set"])
+            .args(&args)
+            .args(["--dry-run", "-o", "json"])
+            .output()
+            .unwrap();
+        assert!(out.status.success());
+        assert_eq!(stdout_json(&out)["body"], body);
+    }
+}
+
+#[test]
+fn automation_validates_typed_and_file_settings_before_context() {
+    let home = TempDir::new().unwrap();
+    for args in [
+        vec![],
+        vec!["--command", "bad"],
+        vec!["--command", "/help:Hint"],
+        vec!["--prompt", &"x".repeat(81)],
+        vec![
+            "--prompt", "a", "--prompt", "b", "--prompt", "c", "--prompt", "d", "--prompt", "e",
+        ],
+    ] {
+        paloma(None, &home)
+            .env_remove("PALOMA_PHONE_NUMBER_ID")
+            .args(["automation", "set"])
+            .args(&args)
+            .assert()
+            .code(5)
+            .stdout("");
+    }
+    let file = home.path().join("automation.json");
+    for body in [
+        json!([]),
+        json!({}),
+        json!({"prompts":[1]}),
+        json!({"commands":[{"command_name":"x"}]}),
+        json!({"enable_welcome_message":"true"}),
+    ] {
+        std::fs::write(&file, body.to_string()).unwrap();
+        paloma(None, &home)
+            .env_remove("PALOMA_PHONE_NUMBER_ID")
+            .args(["automation", "set", "--file"])
+            .arg(&file)
+            .assert()
+            .code(5)
+            .stdout("");
+    }
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn download_timeout_applies_to_the_cdn_request_and_does_not_retry() {
     let graph = MockServer::start().await;
     mount_media_lookup(&graph).await;

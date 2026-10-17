@@ -196,3 +196,9 @@ pub const DEFAULT_SIP_PORT: u16 = 5061;
 pub const MAX_QR_MESSAGE: usize = 140;
 pub const QR_CODE_LENGTH: usize = 14;
 pub const MAX_QR_PAGE: u32 = 25;
+/// Conversational component limits from Meta's phone-number guide.
+pub const MAX_AUTOMATION_PROMPTS: usize = 4;
+pub const MAX_AUTOMATION_PROMPT: usize = 80;
+pub const MAX_AUTOMATION_COMMANDS: usize = 30;
+pub const MAX_AUTOMATION_COMMAND_NAME: usize = 32;
+pub const MAX_AUTOMATION_COMMAND_DESCRIPTION: usize = 256;

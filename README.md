@@ -283,6 +283,7 @@ error: text body is 5000 chars; max is 4096        # exit 5
 | `account` | get · set · limits · health · activities · subscribed-apps · billing-currency |
 | `block` | add · remove · list |
 | `qr` | create · list · get · update · delete |
+| `automation` | get · set |
 | `export` · `apply` · `diff` | your setup as code: declarative YAML for the seven kinds above |
 | `auth` | login · status · whoami · logout |
 | `config` · `configure` | profiles and settings |

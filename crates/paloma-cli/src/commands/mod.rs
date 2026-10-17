@@ -15,6 +15,7 @@ use crate::app::App;
 
 mod account;
 mod auth;
+mod automation;
 mod block;
 mod calling;
 mod config;
@@ -51,6 +52,9 @@ pub enum Command {
     /// Read and update the business profile.
     #[command(subcommand)]
     Profile(profile::ProfileCommand),
+    /// Configure welcome messages, ice breakers and bot commands.
+    #[command(subcommand)]
+    Automation(automation::AutomationCommand),
     /// Manage the block list.
     #[command(subcommand)]
     Block(block::BlockCommand),
@@ -102,6 +106,7 @@ impl Command {
             Self::Number(c) => c.run(app).await,
             Self::Profile(c) => c.run(app).await,
             Self::Block(c) => c.run(app).await,
+            Self::Automation(c) => c.run(app).await,
             Self::Webhook(c) => c.run(app).await,
             Self::Calling(c) => c.run(app).await,
             Self::Flow(c) => c.run(app).await,
