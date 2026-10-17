@@ -973,6 +973,8 @@ async fn template_components_file_preserves_payload_and_redacts_dry_runs() {
                 .args([
                     "send",
                     "template",
+                    "--via",
+                    "cloud",
                     "15551234567",
                     "order_ready",
                     "--lang",
@@ -1005,6 +1007,8 @@ async fn template_components_file_preserves_payload_and_redacts_dry_runs() {
             .args([
                 "send",
                 "template",
+                "--via",
+                "cloud",
                 "15551234567",
                 "order_ready",
                 "--lang",
@@ -1050,6 +1054,8 @@ async fn template_text_flags_accept_values_starting_with_a_hyphen() {
         .args([
             "send",
             "template",
+            "--via",
+            "cloud",
             "15551234567",
             "sale",
             "--lang",
@@ -1962,7 +1968,14 @@ async fn template_typed_flags_send_the_exact_components_in_order() {
         .await;
     let home = TempDir::new().unwrap();
     let out = paloma(Some(&graph), &home)
-        .args(["send", "template", "15551234567", "order_ready"])
+        .args([
+            "send",
+            "template",
+            "--via",
+            "cloud",
+            "15551234567",
+            "order_ready",
+        ])
         .args(["--lang", "en_US", "--header-image", "MEDIA1"])
         .args(["--var", "first_name=Ana"])
         .args(["--button", "0:url=a=b:c"])
@@ -1985,7 +1998,16 @@ fn template_media_header_is_an_id_or_a_link_and_a_dry_run_masks_secrets() {
     let home = TempDir::new().unwrap();
     let components = |args: &[&str]| {
         let out = paloma(None, &home)
-            .args(["send", "template", "15551234567", "t", "--lang", "en"])
+            .args([
+                "send",
+                "template",
+                "--via",
+                "cloud",
+                "15551234567",
+                "t",
+                "--lang",
+                "en",
+            ])
             .args(args)
             .args(["--dry-run", "-o", "raw"])
             .output()
@@ -2027,7 +2049,16 @@ fn template_header_flags_and_the_components_file_conflict() {
         vec!["--components-file", file, "--button", "0:url=a"],
     ] {
         paloma(None, &home)
-            .args(["send", "template", "15551234567", "t", "--lang", "en"])
+            .args([
+                "send",
+                "template",
+                "--via",
+                "cloud",
+                "15551234567",
+                "t",
+                "--lang",
+                "en",
+            ])
             .args(args)
             .assert()
             .code(2)
@@ -2064,7 +2095,16 @@ fn template_bad_typed_flags_exit_5_without_echoing_the_value() {
         (vec!["--header-image", "https:///SECRET"], "media id or"),
     ] {
         paloma(None, &home)
-            .args(["send", "template", "15551234567", "t", "--lang", "en"])
+            .args([
+                "send",
+                "template",
+                "--via",
+                "cloud",
+                "15551234567",
+                "t",
+                "--lang",
+                "en",
+            ])
             .args(args)
             .assert()
             .code(5)
@@ -2079,6 +2119,8 @@ fn template_uppercase_link_is_a_link_and_stays_masked_everywhere() {
     let args = [
         "send",
         "template",
+        "--via",
+        "cloud",
         "15551234567",
         "t",
         "--lang",
@@ -2120,7 +2162,16 @@ fn template_documented_flag_combinations_work() {
         vec!["--header-text", "A", "--button", "0:url=b"],
     ] {
         paloma(None, &home)
-            .args(["send", "template", "15551234567", "t", "--lang", "en"])
+            .args([
+                "send",
+                "template",
+                "--via",
+                "cloud",
+                "15551234567",
+                "t",
+                "--lang",
+                "en",
+            ])
             .args(args)
             .arg("--dry-run")
             .assert()
@@ -2135,6 +2186,8 @@ fn template_blank_body_var_exits_5_without_a_request() {
         .args([
             "send",
             "template",
+            "--via",
+            "cloud",
             "15551234567",
             "sale",
             "--lang",
@@ -2186,6 +2239,8 @@ async fn template_text_flags_send_named_or_positional_body_with_header() {
         command.args([
             "send",
             "template",
+            "--via",
+            "cloud",
             "15551234567",
             "order_ready",
             "--lang",
@@ -2222,6 +2277,8 @@ fn template_parameter_errors_fail_before_context_resolution() {
             .args([
                 "send",
                 "template",
+                "--via",
+                "cloud",
                 "15551234567",
                 "order_ready",
                 "--lang",
@@ -2248,6 +2305,8 @@ fn template_parameter_errors_fail_before_context_resolution() {
             .args([
                 "send",
                 "template",
+                "--via",
+                "cloud",
                 "15551234567",
                 "order_ready",
                 "--lang",
@@ -2263,6 +2322,8 @@ fn template_parameter_errors_fail_before_context_resolution() {
         .args([
             "send",
             "template",
+            "--via",
+            "cloud",
             "15551234567",
             "order_ready",
             "--lang",
@@ -2289,6 +2350,8 @@ fn template_parameter_sources_conflict_as_usage_errors() {
             .args([
                 "send",
                 "template",
+                "--via",
+                "cloud",
                 "15551234567",
                 "order_ready",
                 "--lang",
@@ -2310,7 +2373,7 @@ fn reply_to_quotes_the_message_on_every_send_type_that_allows_it() {
     let to = "15551234567";
     let cases: Vec<Vec<&str>> = vec![
         vec!["text", to, "hi"],
-        vec!["template", to, "order", "--lang", "en_US"],
+        vec!["template", "--via", "cloud", to, "order", "--lang", "en_US"],
         vec!["image", to, "--id", "9"],
         vec!["document", to, "--id", "9"],
         vec!["audio", to, "--id", "9"],
@@ -2386,7 +2449,7 @@ fn reply_to_is_refused_where_it_cannot_apply_or_is_blank() {
     std::fs::write(&contacts, r#"[{"name":{"formatted_name":"A"}}]"#).unwrap();
     let blank: [&[&str]; 6] = [
         &["text", to, "hi"],
-        &["template", to, "order", "--lang", "en_US"],
+        &["template", "--via", "cloud", to, "order", "--lang", "en_US"],
         &["image", to, "--id", "9"],
         &["location", to, "--lat", "1", "--long", "2"],
         &["contact", to, "--file", contacts.to_str().unwrap()],
@@ -2477,6 +2540,8 @@ async fn reply_to_on_a_template_warns_on_stderr_and_still_sends() {
         .args([
             "send",
             "template",
+            "--via",
+            "cloud",
             "15551234567",
             "order",
             "--lang",
@@ -5524,7 +5589,10 @@ fn every_send_verb_addresses_a_bsuid_with_recipient() {
     let upload = upload.to_str().unwrap();
     let cases: Vec<(&str, Vec<&str>)> = vec![
         ("text", vec!["text", BSUID, "hi"]),
-        ("template", vec!["template", BSUID, "t", "--lang", "en"]),
+        (
+            "template",
+            vec!["template", "--via", "cloud", BSUID, "t", "--lang", "en"],
+        ),
         ("image", vec!["image", BSUID, "--id", "9"]),
         ("document", vec!["document", BSUID, "--id", "9"]),
         ("audio", vec!["audio", BSUID, "--id", "9"]),
@@ -5666,7 +5734,9 @@ async fn an_authentication_template_to_a_bsuid_surfaces_metas_refusal() {
 
     let home = TempDir::new().unwrap();
     paloma(Some(&graph), &home)
-        .args(["send", "template", BSUID, "otp", "--lang", "en", "-q"])
+        .args([
+            "send", "template", "--via", "cloud", BSUID, "otp", "--lang", "en", "-q",
+        ])
         .assert()
         .code(1)
         .stdout(predicate::str::is_empty())
@@ -8545,4 +8615,653 @@ async fn webhook_manifest_stays_waba_scoped_when_the_phone_has_an_override() {
             .iter()
             .all(|request| request.method.as_str() == "GET")
     );
+}
+
+/// Each lookup returns the next category so reclassification can be exercised without
+/// caching or timing-dependent mocks. Exact query matching also catches account drift.
+async fn mock_routing_categories(graph: &MockServer, account: &str, categories: &[&str]) {
+    let categories: Vec<String> = categories.iter().map(ToString::to_string).collect();
+    let expected = u64::try_from(categories.len()).unwrap();
+    let calls = std::sync::atomic::AtomicUsize::new(0);
+    Mock::given(method("GET"))
+        .and(path(format!("/v26.0/{account}/message_templates")))
+        .and(header("authorization", format!("Bearer {TOKEN}")))
+        .and(query_param("name", "order"))
+        .and(query_param("language", "en_US"))
+        .and(query_param("fields", "id,name,language,category"))
+        .and(query_param("limit", "100"))
+        .respond_with(move |_: &wiremock::Request| {
+            let index = calls.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            ResponseTemplate::new(200).set_body_json(json!({"data":[{
+                "id":"template_1", "name":"order", "language":"en_US",
+                "category":categories[index.min(categories.len() - 1)]
+            }]}))
+        })
+        .expect(expected)
+        .mount(graph)
+        .await;
+}
+
+fn routing_template_body() -> Value {
+    json!({"messaging_product":"whatsapp", "recipient_type":"individual", "to":"15551234567", "type":"template", "template":{"name":"order", "language":{"code":"en_US"}}})
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn template_auto_routes_each_current_category_and_preserves_response_output() {
+    for (category, edge) in [
+        ("MARKETING", "marketing_messages"),
+        ("UTILITY", "messages"),
+        ("AUTHENTICATION", "messages"),
+    ] {
+        let graph = MockServer::start().await;
+        let home = TempDir::new().unwrap();
+        mock_routing_categories(&graph, WABA, &[category, category, category]).await;
+        let response =
+            json!({"messages":[{"id":"wamid.ROUTED"}], "contacts":[{"input":"15551234567"}]});
+        Mock::given(method("POST"))
+            .and(path(format!("/v26.0/{PHONE}/{edge}")))
+            .and(header("authorization", format!("Bearer {TOKEN}")))
+            .and(body_json(routing_template_body()))
+            .respond_with(ResponseTemplate::new(200).set_body_json(&response))
+            .expect(3)
+            .mount(&graph)
+            .await;
+        for format in ["json", "raw"] {
+            let out = paloma(Some(&graph), &home)
+                .args([
+                    "send",
+                    "template",
+                    "15551234567",
+                    "order",
+                    "--lang",
+                    "en_US",
+                    "-o",
+                    format,
+                ])
+                .output()
+                .unwrap();
+            assert!(
+                out.status.success(),
+                "{}",
+                String::from_utf8_lossy(&out.stderr)
+            );
+            assert!(out.stderr.is_empty());
+            assert_eq!(stdout_json(&out), response);
+        }
+        paloma(Some(&graph), &home)
+            .args([
+                "send",
+                "template",
+                "15551234567",
+                "order",
+                "--lang",
+                "en_US",
+                "-q",
+            ])
+            .assert()
+            .success()
+            .stdout("wamid.ROUTED\n")
+            .stderr("");
+        assert_eq!(graph.received_requests().await.unwrap().len(), 6);
+    }
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn marketing_route_keeps_bsuid_components_reply_and_the_billed_account() {
+    let graph = MockServer::start().await;
+    let home = TempDir::new().unwrap();
+    mock_routing_categories(&graph, "777", &["MARKETING"]).await;
+    let components = json!([
+        {"type":"header","parameters":[{"type":"image","image":{"id":"MEDIA_1"}}]},
+        {"type":"body","parameters":[{"type":"text","parameter_name":"first_name","text":"Ana"}]},
+        {"type":"button","sub_type":"flow","index":"0","parameters":[{"type":"action","action":{"flow_token":"ROUTING_FLOW_SECRET"}}]}
+    ]);
+    let file = home.path().join("routing-components.json");
+    std::fs::write(&file, components.to_string()).unwrap();
+    Mock::given(method("POST")).and(path(format!("/v26.0/{PHONE}/marketing_messages")))
+        .and(body_json(json!({"messaging_product":"whatsapp", "recipient_type":"individual", "recipient":BSUID, "messaging_account_id":"777", "context":{"message_id":"wamid.OLD"}, "type":"template", "template":{"name":"order", "language":{"code":"en_US"}, "components":components}})))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({"messages":[{"id":"wamid.BSUID"}],"contacts":[{"user_id":BSUID}]})))
+        .expect(1).mount(&graph).await;
+    let out = paloma(Some(&graph), &home)
+        .args([
+            "send",
+            "template",
+            BSUID,
+            "order",
+            "--lang",
+            "en_US",
+            "--messaging-account-id",
+            "777",
+            "--components-file",
+        ])
+        .arg(&file)
+        .args(["--reply-to", "wamid.OLD", "-q", "-vv"])
+        .output()
+        .unwrap();
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert_eq!(out.stdout, b"wamid.BSUID\n");
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(stderr.contains("quoted message"));
+    assert!(!stderr.contains("ROUTING_FLOW_SECRET"));
+    assert!(!stderr.contains(TOKEN));
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn explicit_template_routes_skip_metadata_and_need_no_account_context() {
+    let graph = MockServer::start().await;
+    let home = TempDir::new().unwrap();
+    for (via, edge) in [("cloud", "messages"), ("marketing", "marketing_messages")] {
+        Mock::given(method("POST"))
+            .and(path(format!("/v26.0/{PHONE}/{edge}")))
+            .and(body_json(routing_template_body()))
+            .respond_with(
+                ResponseTemplate::new(200)
+                    .set_body_json(json!({"messages":[{"id":"wamid.EXPLICIT"}]})),
+            )
+            .expect(1)
+            .mount(&graph)
+            .await;
+        paloma(Some(&graph), &home)
+            .env_remove("PALOMA_WABA_ID")
+            .env_remove("PALOMA_MESSAGING_ACCOUNT_ID")
+            .args([
+                "send",
+                "template",
+                "15551234567",
+                "order",
+                "--lang",
+                "en_US",
+                "--via",
+                via,
+                "-q",
+            ])
+            .assert()
+            .success()
+            .stdout("wamid.EXPLICIT\n")
+            .stderr("");
+    }
+    assert!(
+        graph
+            .received_requests()
+            .await
+            .unwrap()
+            .iter()
+            .all(|request| request.method.as_str() == "POST")
+    );
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn template_routing_dry_runs_are_offline_and_show_dynamic_or_fixed_endpoints() {
+    let graph = MockServer::start().await;
+    let home = TempDir::new().unwrap();
+    for via in ["auto", "cloud", "marketing"] {
+        let out = paloma(Some(&graph), &home)
+            .env_remove("PALOMA_TOKEN")
+            .args([
+                "send",
+                "template",
+                "15551234567",
+                "order",
+                "--lang",
+                "en_US",
+                "--via",
+                via,
+                "--dry-run",
+                "-o",
+                "json",
+            ])
+            .output()
+            .unwrap();
+        assert!(
+            out.status.success(),
+            "{}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+        let plan = stdout_json(&out);
+        if via == "auto" {
+            assert_eq!(plan[0]["method"], "GET");
+            assert!(
+                plan[0]["url"]
+                    .as_str()
+                    .unwrap()
+                    .contains(&format!("/{WABA}/message_templates?"))
+            );
+            assert!(
+                plan[1]["url"]
+                    .as_str()
+                    .unwrap()
+                    .contains("<messages-or-marketing_messages-from-category>")
+            );
+            assert_eq!(plan[1]["body"], routing_template_body());
+        } else {
+            let edge = if via == "cloud" {
+                "messages"
+            } else {
+                "marketing_messages"
+            };
+            assert!(
+                plan["url"]
+                    .as_str()
+                    .unwrap()
+                    .ends_with(&format!("/{PHONE}/{edge}"))
+            );
+            assert_eq!(plan["body"], routing_template_body());
+        }
+        assert!(String::from_utf8_lossy(&out.stderr).contains("dry-run: no request sent"));
+    }
+    assert!(graph.received_requests().await.unwrap().is_empty());
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn automatic_template_routing_matches_exact_name_and_language_across_pages() {
+    let graph = MockServer::start().await;
+    let home = TempDir::new().unwrap();
+    Mock::given(method("GET")).and(path(format!("/v26.0/{WABA}/message_templates")))
+        .and(query_param("after", "next"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({"data":[{"name":"order","language":"en_US","category":"MARKETING","correct_category":"UTILITY"}]})))
+        .expect(1).with_priority(1).mount(&graph).await;
+    Mock::given(method("GET"))
+        .and(path(format!("/v26.0/{WABA}/message_templates")))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({"data":[
+            {"name":"order_extra","language":"en_US","category":"UTILITY"},
+            {"name":"order","language":"es","category":"AUTHENTICATION"}],
+            "paging":{"cursors":{"after":"next"},"next":"https://graph.facebook.com/next"}})))
+        .expect(1)
+        .with_priority(2)
+        .mount(&graph)
+        .await;
+    Mock::given(method("POST"))
+        .and(path(format!("/v26.0/{PHONE}/marketing_messages")))
+        .and(body_json(routing_template_body()))
+        .respond_with(
+            ResponseTemplate::new(200).set_body_json(json!({"messages":[{"id":"wamid.EXACT"}]})),
+        )
+        .expect(1)
+        .mount(&graph)
+        .await;
+    paloma(Some(&graph), &home)
+        .args([
+            "send",
+            "template",
+            "15551234567",
+            "order",
+            "--lang",
+            "en_US",
+            "-q",
+        ])
+        .assert()
+        .success()
+        .stdout("wamid.EXACT\n")
+        .stderr("");
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn template_routing_rejects_missing_unknown_or_ambiguous_metadata_without_sending() {
+    for response in [
+        json!({"data":[]}),
+        json!({"data":[{"name":"order","language":"en_US"}]}),
+        json!({"data":[{"name":"order","language":"en_US","category":"FUTURE_CATEGORY"}]}),
+        json!({"data":[{"name":"order","language":"en_US","category":"UTILITY"},{"name":"order","language":"en_US","category":"MARKETING"}]}),
+        json!({"data":null}),
+    ] {
+        let graph = MockServer::start().await;
+        let home = TempDir::new().unwrap();
+        Mock::given(method("GET"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(response))
+            .expect(1)
+            .mount(&graph)
+            .await;
+        paloma(Some(&graph), &home)
+            .args([
+                "send",
+                "template",
+                "15551234567",
+                "order",
+                "--lang",
+                "en_US",
+            ])
+            .assert()
+            .code(1)
+            .stdout("");
+        assert_eq!(graph.received_requests().await.unwrap().len(), 1);
+    }
+}
+
+#[test]
+fn template_routing_validates_locally_before_account_resolution() {
+    let home = TempDir::new().unwrap();
+    for args in [
+        vec!["bad", "order", "--lang", "en_US"],
+        vec!["15551234567", "order", "--lang", "en_US", "--var", "bad"],
+        vec!["15551234567", "order", "--lang", " "],
+    ] {
+        paloma(None, &home)
+            .env_remove("PALOMA_WABA_ID")
+            .env_remove("PALOMA_TOKEN")
+            .args(["send", "template"])
+            .args(args)
+            .assert()
+            .code(5)
+            .stdout("");
+    }
+    paloma(None, &home)
+        .env_remove("PALOMA_WABA_ID")
+        .env_remove("PALOMA_MESSAGING_ACCOUNT_ID")
+        .args([
+            "send",
+            "template",
+            "15551234567",
+            "order",
+            "--lang",
+            "en_US",
+            "--dry-run",
+        ])
+        .assert()
+        .code(3)
+        .stdout("")
+        .stderr(predicate::str::contains("--via cloud|marketing"));
+    paloma(None, &home)
+        .args([
+            "send",
+            "template",
+            "15551234567",
+            "order",
+            "--lang",
+            "en_US",
+            "--via",
+            "unknown",
+        ])
+        .assert()
+        .code(2)
+        .stdout("");
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn automatic_template_routing_reroutes_once_after_confirmed_category_changes() {
+    for (old, new, first_edge, next_edge, code) in [
+        (
+            "UTILITY",
+            "MARKETING",
+            "messages",
+            "marketing_messages",
+            131_063,
+        ),
+        (
+            "MARKETING",
+            "UTILITY",
+            "marketing_messages",
+            "messages",
+            100,
+        ),
+    ] {
+        let graph = MockServer::start().await;
+        let home = TempDir::new().unwrap();
+        mock_routing_categories(&graph, WABA, &[old, new]).await;
+        Mock::given(method("POST"))
+            .and(path(format!("/v26.0/{PHONE}/{first_edge}")))
+            .and(body_json(routing_template_body()))
+            .respond_with(
+                ResponseTemplate::new(400)
+                    .set_body_json(json!({"error":{"code":code,"message":"category rejected"}})),
+            )
+            .expect(1)
+            .mount(&graph)
+            .await;
+        Mock::given(method("POST"))
+            .and(path(format!("/v26.0/{PHONE}/{next_edge}")))
+            .and(body_json(routing_template_body()))
+            .respond_with(
+                ResponseTemplate::new(200)
+                    .set_body_json(json!({"messages":[{"id":"wamid.REROUTED"}]})),
+            )
+            .expect(1)
+            .mount(&graph)
+            .await;
+        paloma(Some(&graph), &home)
+            .args([
+                "send",
+                "template",
+                "15551234567",
+                "order",
+                "--lang",
+                "en_US",
+                "-q",
+            ])
+            .assert()
+            .success()
+            .stdout("wamid.REROUTED\n")
+            .stderr(predicate::str::contains(format!(
+                "retrying once via /{next_edge}"
+            )));
+        let requests = graph.received_requests().await.unwrap();
+        assert_eq!(requests.len(), 4);
+        assert_eq!(requests[1].body, requests[3].body);
+    }
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn automatic_template_routing_stops_if_refresh_does_not_change_the_endpoint() {
+    let graph = MockServer::start().await;
+    let home = TempDir::new().unwrap();
+    mock_routing_categories(&graph, WABA, &["UTILITY", "AUTHENTICATION"]).await;
+    Mock::given(method("POST"))
+        .and(path(format!("/v26.0/{PHONE}/messages")))
+        .respond_with(
+            ResponseTemplate::new(400)
+                .set_body_json(json!({"error":{"code":131_063,"message":"original refusal"}})),
+        )
+        .expect(1)
+        .mount(&graph)
+        .await;
+    paloma(Some(&graph), &home)
+        .args([
+            "send",
+            "template",
+            "15551234567",
+            "order",
+            "--lang",
+            "en_US",
+            "-q",
+        ])
+        .assert()
+        .code(1)
+        .stdout("")
+        .stderr(predicate::str::contains("original refusal"));
+    assert_eq!(graph.received_requests().await.unwrap().len(), 3);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn automatic_template_routing_never_loops_on_a_second_rejection() {
+    let graph = MockServer::start().await;
+    let home = TempDir::new().unwrap();
+    mock_routing_categories(&graph, WABA, &["UTILITY", "MARKETING"]).await;
+    for (edge, code) in [("messages", 131_063), ("marketing_messages", 100)] {
+        Mock::given(method("POST"))
+            .and(path(format!("/v26.0/{PHONE}/{edge}")))
+            .respond_with(
+                ResponseTemplate::new(400)
+                    .set_body_json(json!({"error":{"code":code,"message":"still rejected"}})),
+            )
+            .expect(1)
+            .mount(&graph)
+            .await;
+    }
+    paloma(Some(&graph), &home)
+        .args([
+            "send",
+            "template",
+            "15551234567",
+            "order",
+            "--lang",
+            "en_US",
+        ])
+        .assert()
+        .code(1)
+        .stdout("")
+        .stderr(predicate::str::contains("still rejected"));
+    assert_eq!(graph.received_requests().await.unwrap().len(), 4);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn automatic_template_routing_never_reroutes_ambiguous_or_noncategory_failures() {
+    for (response, exit) in [
+        (
+            ResponseTemplate::new(500)
+                .set_body_json(json!({"error":{"code":100,"message":"server failed"}})),
+            1,
+        ),
+        (
+            ResponseTemplate::new(503)
+                .set_body_json(json!({"error":{"code":131_063,"message":"unavailable"}})),
+            1,
+        ),
+        (
+            ResponseTemplate::new(403)
+                .set_body_json(json!({"error":{"code":100,"message":"denied"}})),
+            3,
+        ),
+        (
+            ResponseTemplate::new(429)
+                .set_body_json(json!({"error":{"code":130_429,"message":"slow"}})),
+            4,
+        ),
+        (
+            ResponseTemplate::new(400)
+                .set_body_json(json!({"error":{"code":131_049,"message":"policy"}})),
+            6,
+        ),
+        (
+            ResponseTemplate::new(400).set_body_string("not a Graph error"),
+            1,
+        ),
+        (ResponseTemplate::new(200).set_body_string("not JSON"), 1),
+        (
+            ResponseTemplate::new(200).set_delay(std::time::Duration::from_secs(2)),
+            1,
+        ),
+    ] {
+        let graph = MockServer::start().await;
+        let home = TempDir::new().unwrap();
+        mock_routing_categories(&graph, WABA, &["UTILITY"]).await;
+        Mock::given(method("POST"))
+            .and(path(format!("/v26.0/{PHONE}/messages")))
+            .respond_with(response)
+            .expect(1)
+            .mount(&graph)
+            .await;
+        paloma(Some(&graph), &home)
+            .args([
+                "send",
+                "template",
+                "15551234567",
+                "order",
+                "--lang",
+                "en_US",
+                "--timeout",
+                "200ms",
+                "-q",
+            ])
+            .assert()
+            .code(exit)
+            .stdout("")
+            .stderr(predicate::str::contains("retrying once").not());
+        assert_eq!(graph.received_requests().await.unwrap().len(), 2);
+    }
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn explicit_template_routing_does_not_refresh_or_override_a_rejected_route() {
+    let graph = MockServer::start().await;
+    let home = TempDir::new().unwrap();
+    Mock::given(method("POST")).and(path(format!("/v26.0/{PHONE}/messages")))
+        .respond_with(ResponseTemplate::new(400).set_body_json(json!({"error":{"code":131_063,"message":"Marketing templates disabled for Cloud API"}})))
+        .expect(1).mount(&graph).await;
+    paloma(Some(&graph), &home)
+        .args([
+            "send",
+            "template",
+            "15551234567",
+            "order",
+            "--lang",
+            "en_US",
+            "--via",
+            "cloud",
+        ])
+        .assert()
+        .code(1)
+        .stdout("")
+        .stderr(predicate::str::contains("--via marketing"));
+    assert_eq!(graph.received_requests().await.unwrap().len(), 1);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn automatic_template_routing_surfaces_lookup_auth_errors_without_a_send() {
+    let graph = MockServer::start().await;
+    let home = TempDir::new().unwrap();
+    Mock::given(method("GET"))
+        .respond_with(ResponseTemplate::new(403).set_body_json(
+            json!({"error":{"code":200,"message":"template management permission missing"}}),
+        ))
+        .expect(1)
+        .mount(&graph)
+        .await;
+    paloma(Some(&graph), &home)
+        .args([
+            "send",
+            "template",
+            "15551234567",
+            "order",
+            "--lang",
+            "en_US",
+        ])
+        .assert()
+        .code(3)
+        .stdout("")
+        .stderr(predicate::str::contains(
+            "template management permission missing",
+        ));
+    assert_eq!(graph.received_requests().await.unwrap().len(), 1);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn template_routing_never_refreshes_http_400_auth_policy_or_unknown_rejections() {
+    // Some existing error mappings retain HTTP-400 auth/policy codes as generic API
+    // errors. The reroute allowlist must remain safe independently of that taxonomy.
+    for (category, edge) in [("UTILITY", "messages"), ("MARKETING", "marketing_messages")] {
+        for code in [
+            3, 10, 190, 200, 299, 131_005, 368, 130_497, 131_031, 999_999,
+        ] {
+            let graph = MockServer::start().await;
+            let home = TempDir::new().unwrap();
+            mock_routing_categories(&graph, WABA, &[category]).await;
+            Mock::given(method("POST"))
+                .and(path(format!("/v26.0/{PHONE}/{edge}")))
+                .respond_with(
+                    ResponseTemplate::new(400)
+                        .set_body_json(json!({"error":{"code":code,"message":"do not reroute"}})),
+                )
+                .expect(1)
+                .mount(&graph)
+                .await;
+            paloma(Some(&graph), &home)
+                .args([
+                    "send",
+                    "template",
+                    "15551234567",
+                    "order",
+                    "--lang",
+                    "en_US",
+                    "-q",
+                ])
+                .assert()
+                .code(1)
+                .stdout("")
+                .stderr(predicate::str::contains("retrying once").not());
+            assert_eq!(graph.received_requests().await.unwrap().len(), 2);
+        }
+    }
 }

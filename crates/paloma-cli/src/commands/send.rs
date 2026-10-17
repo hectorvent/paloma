@@ -17,6 +17,8 @@ use super::{read_file, read_json};
 use crate::app::App;
 use crate::output::Output;
 
+mod template_routing;
+
 #[derive(Debug, Subcommand)]
 pub enum SendCommand {
     /// Send a text message.
@@ -128,6 +130,9 @@ pub struct Template {
     /// Template language code, e.g. en_US.
     #[arg(long)]
     lang: String,
+    /// Select the endpoint: auto looks up the latest category; explicit routes skip lookup.
+    #[arg(long, value_enum, default_value = "auto")]
+    via: TemplateVia,
     /// Body variable values, in order ({{1}}, {{2}}, …); repeatable.
     #[arg(long = "body-var", value_name = "VALUE", allow_hyphen_values = true)]
     body_vars: Vec<String>,
@@ -163,6 +168,23 @@ pub struct Template {
     components_file: Option<PathBuf>,
     #[command(flatten)]
     reply: Reply,
+}
+
+#[derive(Debug, Clone, Copy, ValueEnum)]
+enum TemplateVia {
+    Auto,
+    Cloud,
+    Marketing,
+}
+
+impl TemplateVia {
+    const fn endpoint(self) -> Option<messages::TemplateEndpoint> {
+        match self {
+            Self::Auto => None,
+            Self::Cloud => Some(messages::TemplateEndpoint::Cloud),
+            Self::Marketing => Some(messages::TemplateEndpoint::Marketing),
+        }
+    }
 }
 
 #[derive(Debug, Args)]
@@ -755,11 +777,14 @@ impl SendCommand {
                     app.out
                         .warn("WhatsApp doesn't show the quoted message on a template");
                 }
-                dispatch(
+                template_routing::send(
                     app,
                     messages::template_with_components(
                         &a.to, &a.name, &a.lang, components, reply_to,
                     ),
+                    &a.name,
+                    &a.lang,
+                    a.via,
                 )
                 .await
             }

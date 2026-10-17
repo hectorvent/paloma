@@ -1,4 +1,4 @@
-//! `POST /{phone-number-id}/messages`: one physical endpoint behind every message type.
+//! Message envelopes are shared by Cloud API and Marketing Messages API sends.
 //!
 //! The builders return the full JSON envelope so `--dry-run` shows exactly what would be
 //! sent. Optional fields are omitted rather than sent as `null`.
@@ -16,6 +16,42 @@ use crate::Request;
 /// Send any message payload.
 pub fn send(phone_number_id: &str, payload: Value) -> Request {
     Request::post(format!("{phone_number_id}/messages")).json(payload)
+}
+
+/// Marketing templates use a separate edge; utility and authentication stay on Cloud API.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TemplateEndpoint {
+    Cloud,
+    Marketing,
+}
+
+impl TemplateEndpoint {
+    pub const fn edge(self) -> &'static str {
+        match self {
+            Self::Cloud => "messages",
+            Self::Marketing => "marketing_messages",
+        }
+    }
+
+    pub fn for_category(category: &str) -> Option<Self> {
+        match category {
+            "MARKETING" => Some(Self::Marketing),
+            "UTILITY" | "AUTHENTICATION" => Some(Self::Cloud),
+            _ => None,
+        }
+    }
+}
+
+pub fn send_template(phone: &str, payload: Value, endpoint: TemplateEndpoint) -> Request {
+    Request::post(format!("{phone}/{}", endpoint.edge())).json(payload)
+}
+
+/// An offline plan cannot know the category. Never execute this placeholder request.
+pub fn template_routing_preview(phone: &str, payload: Value) -> Request {
+    Request::post(format!(
+        "{phone}/<messages-or-marketing_messages-from-category>"
+    ))
+    .json(payload)
 }
 
 /// Name the account to bill. Only messages are billed, and those carry a `type`; status

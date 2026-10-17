@@ -56,8 +56,8 @@ const fn hint(code: i64) -> Option<&'static str> {
              because repeated attempts can block delivery to this user for up to 24 hours",
         ),
         131_061 => Some(
-            "templates with a max price can't be sent through /messages; call the Marketing \
-             Messages API (/marketing_messages) directly, because Paloma can't send through it yet",
+            "templates with a max price can't be sent through /messages; use paloma send template \
+             --via marketing to call /marketing_messages after completing MM API onboarding",
         ),
         131_062 => Some(
             "authentication and max-price templates can't go to a business-scoped user ID; \
@@ -65,10 +65,9 @@ const fn hint(code: i64) -> Option<&'static str> {
              template without optimization_spec",
         ),
         131_063 => Some(
-            "this account has disable_marketing_messages_on_cloud_api set; re-enable marketing \
-             templates on the Cloud API, or once onboarded with the Terms of Service signed, call \
-             the Marketing Messages API (/marketing_messages) directly, because Paloma can't send \
-             through it yet",
+            "this account has disable_marketing_messages_on_cloud_api set; use paloma send template \
+             --via auto to refresh the category, or --via marketing after completing MM API \
+             onboarding with the Terms of Service signed",
         ),
         131_065 => Some(
             "max-price delivery isn't available in this user's country; send to a supported \

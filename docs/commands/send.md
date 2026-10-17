@@ -95,6 +95,7 @@ paloma send template <to> <name> --lang <code> [flags]
 |------|-------------|
 | `<name>` | Template name (positional) |
 | `--lang <code>` | **Required.** Template language, e.g. `en_US`, `es` |
+| `--via auto\|cloud\|marketing` | Endpoint selection; defaults to `auto`, which reads the template's latest category |
 | `--body-var <value>` | Positional body text variable; repeat in order |
 | `--var <name=value>` | Named body text variable; repeat with unique names; names contain lowercase letters and underscores; conflicts with `--body-var` |
 | `--header-text <text>` | Text value for a positional header variable; combines with `--body-var`; conflicts with `--var` |
@@ -102,8 +103,70 @@ paloma send template <to> <name> --lang <code> [flags]
 | `--header-video <id\|url>` | Video header: a media ID or an `http(s)` link |
 | `--header-document <id\|url>` | Document header: a media ID or an `http(s)` link |
 | `--button <index:type=value>` | A button's parameter; repeat for each button |
-| `--components-file <path>` | JSON array of send components, or `{"components": [...]}`; exclusive with the flags above except `--lang` |
+| `--components-file <path>` | JSON array of send components, or `{"components": [...]}`; exclusive with typed component flags; combines with `--lang` and `--via` |
 | `--reply-to <wamid>` | Send as a reply to this message id; WhatsApp doesn't show the quote on a template |
+
+### Category-aware routing
+
+By default, `send template` reads the current category for the exact template name and
+language, then chooses the endpoint:
+
+| Current category | Endpoint |
+|---|---|
+| `MARKETING` | `/{phone-number-id}/marketing_messages` |
+| `UTILITY` or `AUTHENTICATION` | `/{phone-number-id}/messages` |
+
+The lookup uses `--messaging-account-id` when configured, otherwise the active WABA.
+Automatic routing therefore requires account context and permission to read its templates,
+in addition to messaging permission. The selected Messaging account id stays on the send
+payload. Each invocation fetches a fresh category; no persistent category cache is used.
+The impending `correct_category` field never controls routing.
+
+**Compatibility:** older versions sent every template through `/messages` without a
+lookup. Use `--via cloud` to retain that behavior, or `--via marketing` to select the
+Marketing Messages API directly. Explicit routes need no WABA context or template-management
+permission, and Paloma never overrides or refreshes an explicit route after rejection.
+Both endpoints preserve the same recipient, language, reply context and component values.
+
+```bash
+paloma send template 15551234567 order_ready --lang en_US --waba-id 123456789
+paloma send template 15551234567 sale --lang en_US --via marketing
+paloma send template 15551234567 login_code --lang en_US --via cloud
+```
+
+Automatic routing refreshes the category only after a structured Graph HTTP `400`
+rejection with code `131061` or `131063` on Cloud API, or code `100` (invalid parameter)
+on the Marketing Messages API. It sends once more only if the completed category now
+selects the other endpoint. The payload is unchanged, and a note on stderr identifies the reroute. A second
+failure stops immediately. No same-endpoint resend or reroute follows an auth failure,
+rate limit, policy block, timeout, server error, malformed response or successful send.
+The client's existing bounded retry policy for explicit rate-limit responses still applies.
+
+Missing templates, malformed metadata, multiple exact matches on a lookup page, and
+missing/unsupported categories exit `1` without sending. Missing account context and
+HTTP `401`/`403` lookup failures exit `3`; other Graph failures retain their existing
+error-code mapping. Local parameter errors still exit `5` before
+any lookup or credential resolution; invalid `--via` values exit `2`.
+
+Dry-run remains **offline** and reads no token. In automatic mode it prints the initial
+category GET plus a POST with the explicit placeholder
+`<messages-or-marketing_messages-from-category>` in the URL. Later lookup pages and the
+conditional rejection/refresh path depend on live responses and are not expanded in that
+initial plan. Use `--via cloud` or `--via marketing` for a single POST with a fixed endpoint.
+For a raw send-body preview, use an explicit route with `--dry-run -o raw`.
+
+```bash
+paloma send template 15551234567 sale --lang en_US --dry-run -o json
+paloma send template 15551234567 sale --lang en_US --via marketing --dry-run -o raw
+```
+
+`-q` still prints only the final `wamid`; JSON/raw preserve the final Graph response.
+Category lookups and a rejected attempt never produce data on stdout. Marketing API
+onboarding, Terms of Service, eligibility and Meta-side Cloud API fallback remain Meta's
+responsibility. This command does not enroll an account or change its marketing toggle.
+Inspect those settings with [account commands](account.md#paloma-account-set).
+
+### Template components
 
 Use one header flag at most. Media headers combine with `--body-var` or `--var`.
 

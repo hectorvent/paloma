@@ -48,6 +48,17 @@ pub fn lookup_page(
     list(waba_id, &filter, after)
 }
 
+/// Routing needs the completed category, not an impending `correct_category` change.
+pub fn routing_lookup_page(
+    account_id: &str,
+    name: &str,
+    language: &str,
+    after: Option<&str>,
+) -> Request {
+    lookup_page(account_id, name, Some(language), after)
+        .query("fields", "id,name,language,category")
+}
+
 /// The entries of a lookup response whose name matches exactly (and language, if given).
 pub fn exact_matches<'a>(
     response: &'a Value,

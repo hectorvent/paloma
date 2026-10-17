@@ -271,7 +271,7 @@ error: text body is 5000 chars; max is 4096        # exit 5
 
 | Group | Commands |
 |-------|----------|
-| `send` | text · template · image · document · audio · video · sticker · location · contact · interactive (button, list, cta-url, location-request, address, carousel, call, request-contact) · flow · call-permission · product · product-list · catalog · reaction · raw |
+| `send` | text · template (category routing) · image · document · audio · video · sticker · location · contact · interactive (button, list, cta-url, location-request, address, carousel, call, request-contact) · flow · call-permission · product · product-list · catalog · reaction · raw |
 | `template` | list · status · get · create · submit · watch · edit · delete · namespace |
 | `media` | upload · get · download · delete |
 | `message` | read · typing · history |
@@ -290,6 +290,11 @@ error: text body is 5000 chars; max is 4096        # exit 5
 | `link` | `wa.me` click-to-chat links, offline, no token needed |
 | `completion` | bash · zsh · fish · powershell · elvish |
 | `version` | the installed version |
+
+Template sends look up the latest category and route marketing templates through the
+Marketing Messages API. Use `send template --via cloud|marketing` for an explicit
+endpoint, or keep the default `--via auto`. See [template sends](docs/commands/send.md#category-aware-routing)
+for permissions, offline dry-runs and handling a category change.
 
 **Coming next:** `webhook listen` and `simulate` (receive real events locally, and
 send signed test payloads to your endpoint), `account` analytics. Those
@@ -341,8 +346,7 @@ GitHub Releases.
 <div align="center">
 <sub>
 
-Paloma is an independent open-source project and is **not affiliated with, endorsed by, or sponsored by**
-WhatsApp LLC or Meta Platforms, Inc. WhatsApp is a trademark of WhatsApp LLC.
+Paloma is an independent open-source project and is **not affiliated with, endorsed by, or sponsored by** WhatsApp LLC or Meta Platforms, Inc. WhatsApp is a trademark of WhatsApp LLC.
 
 </sub>
 </div>
