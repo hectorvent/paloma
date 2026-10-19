@@ -158,10 +158,12 @@ impl Client {
         if !(200..300).contains(&status) {
             let text = resp.text().await.unwrap_or_default();
             return Err(match req.target {
-                Target::Url(_) if status == 429 => {
+                Target::Url(_) | Target::Placeholder(_) if status == 429 => {
                     Error::RateLimited("download failed: rate limited (429)".into())
                 }
-                Target::Url(_) => Error::other(format!("download failed: HTTP {status}")),
+                Target::Url(_) | Target::Placeholder(_) => {
+                    Error::other(format!("download failed: HTTP {status}"))
+                }
                 Target::Node(_) => map_error(status, &text),
             });
         }
@@ -239,6 +241,9 @@ impl Client {
         req: &Request,
         timeout: Option<Duration>,
     ) -> Result<reqwest::RequestBuilder> {
+        if matches!(req.target, Target::Placeholder(_)) {
+            return Err(Error::validation("a dry-run placeholder cannot be sent"));
+        }
         let url = self.url(req);
         debug!(method = req.method.as_str(), url = %redact_url(&url), "request");
         let mut builder = match req.method {
@@ -326,5 +331,43 @@ fn transport(e: reqwest::Error) -> Error {
         Error::other("request timed out (raise it with --timeout)")
     } else {
         Error::other(format!("HTTP error: {e}"))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use secrecy::SecretString;
+
+    #[derive(Debug)]
+    struct NoSecrets;
+
+    impl Credentials for NoSecrets {
+        fn access_token(&self) -> Result<SecretString> {
+            panic!("a placeholder must not read credentials");
+        }
+
+        fn app_secret(&self) -> Result<SecretString> {
+            panic!("a placeholder must not read credentials");
+        }
+    }
+
+    #[tokio::test]
+    async fn dry_run_placeholders_are_readable_but_never_executable() {
+        let client = Client::new(
+            ClientConfig::new("http://127.0.0.1:9", "v26.0"),
+            Arc::new(NoSecrets),
+        )
+        .unwrap();
+        let mut request = Request::get_placeholder("<url from the media lookup>");
+        assert_eq!(
+            client.describe(&request)["url"],
+            "<url from the media lookup>"
+        );
+        // Even a caller accidentally requesting authentication cannot make this sendable.
+        request.auth = Auth::User;
+        let error = client.execute(&request).await.unwrap_err();
+        assert_eq!(error.exit_code().code(), 5);
+        assert!(error.to_string().contains("placeholder cannot be sent"));
     }
 }
