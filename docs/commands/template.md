@@ -1,7 +1,8 @@
 # `paloma template`
 
 Manage the full message-template lifecycle on the WABA: `list`, `status`, `get`,
-`create`, `submit`, `watch`, `edit`, `delete`, `namespace`.
+`create`, `submit`, `watch`, `edit`, `delete`, `namespace`, `archive`, `unarchive`, `unpause`,
+`library`, `compare`, `migrate`, `preview`, `upsert`, `group`, `analytics`.
 
 ```
 paloma template <verb> [args] [flags]
@@ -71,13 +72,18 @@ Show the full definition of a template by name, optionally narrowed to one
 language.
 
 ```
-paloma template get <name> [--language es]
+paloma template get <name> [--language es] [--quality]
 ```
 
 The result is `{"data": [...]}` holding only templates with exactly that name, from the first
 page that has one; `-q` prints the first one's id. Later pages aren't fetched, so without
 `--language` other translations may be on them. Paloma says so on stderr when more pages
 exist. Exits non-zero if no page has the name.
+
+`--quality` asks only for `name`, `language`, `status`,
+[`quality_score`](https://developers.facebook.com/documentation/business-messaging/whatsapp/templates/template-quality) and
+[`health_status`](https://developers.facebook.com/documentation/business-messaging/whatsapp/support/health-status), and the table shows the score and whether the
+template can be sent.
 
 ---
 
@@ -207,10 +213,172 @@ disabled status can't be deleted.
 
 ## `paloma template namespace`
 
-`paloma template namespace` reads the active WABA's `message_template_namespace`.
-With `-q` it prints only that namespace. It supports `--dry-run` without reading a token.
+Print the WABA's `message_template_namespace`. `-q` prints only the namespace.
+
+## `paloma template archive` / `unarchive`
+
+[Archive](https://developers.facebook.com/documentation/business-messaging/whatsapp/templates/template-archival) up to 100 templates by id, or restore them.
 
 ```bash
-paloma template namespace
-paloma template namespace --waba-id 123456789 -q
+paloma template archive --ids 1387372356726668,1304694804498707 --yes
+paloma template unarchive --ids 1387372356726668
 ```
+
+An archived template can't be sent, and Meta deletes it after 28 days unless it's unarchived,
+so `archive` confirms first. `unarchive` restores the previous status and doesn't confirm.
+
+Meta answers 200 even when some templates fail. Paloma prints the response, warns on stderr and
+exits 1 if `failed_templates` isn't empty.
+
+## `paloma template unpause`
+
+[Unpause](https://developers.facebook.com/documentation/business-messaging/whatsapp/templates/template-pausing) a template by id. A template paused during template
+pacing stays paused until you do this; other pauses also end on their own.
+
+```bash
+paloma template unpause 1387372356726668
+```
+
+## `paloma template library`
+
+Browse [Meta's Template Library](https://developers.facebook.com/documentation/business-messaging/whatsapp/templates/template-library), and create a template from an
+entry.
+
+```bash
+paloma template library list --search payments
+paloma template library list --topic ORDER_MANAGEMENT --language en_US --all
+
+paloma template library create --name my_delivery_update \
+      --library-template delivery_update_1 --language en_US \
+      --button-inputs-file buttons.json
+```
+
+`library list` takes `--search`, `--topic`, `--usecase`, `--industry`, `--language`, `--name`,
+`--all` and `--after`. It doesn't need a WABA id, because the library is Meta's.
+
+| `library create` flag | Description |
+|-----------------------|-------------|
+| `--name <name>` | **Required.** Name for your template |
+| `--library-template <name>` | **Required.** The exact name of the library template |
+| `--language <code>` | **Required.** Language code |
+| `--button-inputs-file <path>` | JSON array for `library_template_button_inputs`. Meta requires it for a utility template with buttons |
+| `--body-inputs-file <path>` | JSON object for `library_template_body_inputs` |
+
+The category is always sent as `UTILITY`, which
+[Meta's page](https://developers.facebook.com/documentation/business-messaging/whatsapp/templates/template-library)
+requires when creating from the library.
+
+## `paloma template compare`
+
+[Compare](https://developers.facebook.com/documentation/business-messaging/whatsapp/templates/template-comparison) two templates on the same WABA: their sends, which
+has the lower block rate, and each one's top reason for being blocked.
+
+```bash
+paloma template compare 5289179717853347 1533406637136032 --days 30
+```
+
+`--days` is the window back from now, and must be 7, 30, 60 or 90. Each template must have been
+sent at least 1,000 times in it, or Meta returns an error.
+
+## `paloma template migrate`
+
+[Recreate templates](https://developers.facebook.com/documentation/business-messaging/whatsapp/templates/template-migration) from another WABA of the same business on
+the active WABA, after confirming. The source keeps its templates. Only `APPROVED` templates with
+a `quality_score` of `GREEN` or `UNKNOWN` qualify, and Meta wants a system or business token.
+
+```bash
+paloma template migrate --from 102290129340398 --yes
+paloma template migrate --from 102290129340398 --page 1 --yes
+paloma template migrate --from 102290129340398 --ids 35002248699842,351234565148 --yes
+```
+
+| Flag | Description |
+|------|-------------|
+| `--from <waba-id>` | **Required.** The WABA to copy from |
+| `--ids <id,id,...>` | Only these templates, up to 500. Use it to retry the failed ones |
+| `--page <n>` | Which set of 500 templates to migrate, from 0 |
+| `--count <n>` | Batch size, up to 500. Lower it if the request times out |
+
+As with `archive`, a response with `failed_templates` is printed and exits 1.
+
+## `paloma template preview`
+
+[Preview authentication template text](https://developers.facebook.com/documentation/business-messaging/whatsapp/templates/authentication-templates/template-preview)
+in each language. `--auth` is required, because those are the only previews Meta offers.
+
+```bash
+paloma template preview --auth --language en_US,es_ES \
+      --security-recommendation --code-expiration 10
+```
+
+| Flag | Description |
+|------|-------------|
+| `--language <a,b>` | Keep only these language codes. Paloma filters the result itself, and warns about a code that has no preview |
+| `--security-recommendation` | Include the security recommendation in the body |
+| `--code-expiration <minutes>` | Include the expiration footer, from 1 to 90 minutes |
+
+## `paloma template upsert`
+
+[Create or update an authentication template](https://developers.facebook.com/documentation/business-messaging/whatsapp/templates/authentication-templates/bulk-management)
+in several languages. A template with a matching name and language is updated, and any other
+language is created, with no confirmation.
+
+```bash
+paloma template upsert --file auth_code.json
+```
+
+The file is the template definition with `languages`, an array, in place of `language`. `-q`
+prints the first template's id. These exit 5 before any API call: a file with `language`, without
+`languages`, without a valid `name`, whose `category` isn't `AUTHENTICATION`, or with a `text` or
+`autofill_text` property, which Meta's page says upsert doesn't support.
+
+## `paloma template group`
+
+[Template groups](https://developers.facebook.com/documentation/business-messaging/whatsapp/templates/template-groups) track the metrics of a set of templates together.
+A template can be in one group at a time.
+
+```bash
+paloma template group create --name "Black Friday" --description "US sale" \
+      --templates 278077987957091,1945418102598215
+paloma template group get 9020555671393375
+paloma template group set 9020555671393375 --add 844006344365270 --remove 1035843174854974
+paloma template group delete 9020555671393375 --yes
+```
+
+| Verb | Notes |
+|------|-------|
+| `create` | `--name` up to 256 characters and unique, `--description` up to 512, `--templates` required. `-q` prints the group's id |
+| `get` | The group and the templates in it |
+| `set` | Any of `--name`, `--description`, `--add`, `--remove`. Metrics a removed template contributed stay with the group |
+| `delete` | Confirms first. The templates stay |
+
+There's no `list`, because Meta's docs don't describe a way to list groups.
+
+## `paloma template analytics`
+
+Daily [template and template group metrics](https://developers.facebook.com/documentation/business-messaging/whatsapp/analytics#template-analytics).
+
+**This needs template analytics enabled on the WABA**, either in WhatsApp Manager or with
+`paloma account set --insights true` (see [Turning on insights](account.md#paloma-account-set)).
+Once enabled, it can't be disabled. It isn't available to accounts in the European Union or Japan.
+
+```bash
+paloma template analytics --ids 1421988012088524,2632273056924580 \
+      --start 2026-10-01 --end 2026-10-08 --metrics sent,delivered,read
+paloma template analytics --ids 1421988012088524 --start 2026-10-01 --end 2026-10-08 \
+      --product-type MARKETING_MESSAGES_LITE_API
+paloma template analytics --groups 1044106240855852 --start 1738465116 --end 1739559516
+```
+
+| Flag | Description |
+|------|-------------|
+| `--ids <id,id,...>` | Template ids, up to 10 (`template_analytics`) |
+| `--groups <id,id,...>` | Template group ids instead, up to 10 (`template_group_analytics`) |
+| `--start <t>`, `--end <t>` | **Required.** A UNIX timestamp or `YYYY-MM-DD`. The lookback window is 90 days. An impossible date, or a start after the end, exits `5`; the same day for both is fine |
+| `--metrics <a,b>` | Metrics to return, e.g. `cost`, `clicked`, `delivered`, `read`, `sent`. All of them by default |
+| `--product-type <t>` | `CLOUD_API` or `MARKETING_MESSAGES_LITE_API`. Meta counts only Cloud API sends by default, so **sends made with [`--via marketing`](send.md#category-aware-routing) need this**. Templates only |
+| `--waba-timezone` | Use the WABA's timezone instead of UTC. `--start` and `--end` must then be `YYYY-MM-DD` |
+| `--after <cursor>` | Return the page following this cursor |
+
+The table shows sent, delivered and read counts. Use `-o json` for `clicked`, `cost` and the
+conversion metrics.

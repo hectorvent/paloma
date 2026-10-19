@@ -36,6 +36,24 @@ pub const MAX_TEMPLATE_PHONE_BUTTONS: usize = 1;
 pub const MAX_TEMPLATE_COPY_CODE_BUTTONS: usize = 1;
 /// Template ids one bulk delete can name.
 pub const MAX_TEMPLATE_DELETE_IDS: usize = 100;
+/// Template ids one archive or unarchive request can name.
+pub const MAX_TEMPLATE_ARCHIVE_IDS: usize = 100;
+/// Template ids one migrate request can name.
+pub const MAX_TEMPLATE_MIGRATE_IDS: usize = 500;
+/// The largest batch one migrate request can process.
+pub const MAX_TEMPLATE_MIGRATE_COUNT: u32 = 500;
+/// The only lookback windows, in days, that template comparison accepts.
+pub const TEMPLATE_COMPARE_WINDOW_DAYS: [u64; 4] = [7, 30, 60, 90];
+/// `code_expiration_minutes` an authentication template preview accepts.
+pub const TEMPLATE_PREVIEW_CODE_EXPIRATION: RangeInclusive<u32> = 1..=90;
+/// Characters in a template group's name.
+pub const MAX_TEMPLATE_GROUP_NAME: usize = 256;
+/// Characters in a template group's description.
+pub const MAX_TEMPLATE_GROUP_DESCRIPTION: usize = 512;
+/// Template ids one analytics request can name.
+pub const MAX_TEMPLATE_ANALYTICS_IDS: usize = 10;
+/// Template group ids one analytics request can name.
+pub const MAX_TEMPLATE_GROUP_ANALYTICS_IDS: usize = 10;
 /// `message_send_ttl_seconds` an authentication template accepts.
 pub const TEMPLATE_TTL_AUTHENTICATION: RangeInclusive<i64> = 30..=900;
 /// `message_send_ttl_seconds` a utility template accepts.

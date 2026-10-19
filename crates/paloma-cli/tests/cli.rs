@@ -9701,3 +9701,816 @@ async fn pricing_analytics_raw_keeps_decimal_text_and_unknown_response_fields() 
         .stdout(format!("{body}\n"))
         .stderr("");
 }
+
+/// Print a command's request under `--dry-run`, with nothing sent.
+fn dry_run_request(home: &TempDir, args: &[&str]) -> Value {
+    let out = paloma(None, home)
+        .args(args)
+        .args(["--dry-run", "-o", "json"])
+        .output()
+        .unwrap();
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert!(String::from_utf8_lossy(&out.stderr).contains("dry-run: no request sent"));
+    stdout_json(&out)
+}
+
+const GRAPH: &str = "https://graph.facebook.com/v26.0";
+
+#[tokio::test(flavor = "multi_thread")]
+async fn template_get_quality_asks_for_the_quality_fields_and_lists_them() {
+    let graph = MockServer::start().await;
+    Mock::given(method("GET"))
+        .and(path(format!("/v26.0/{WABA}/message_templates")))
+        .and(query_param("name", "sale"))
+        .and(query_param(
+            "fields",
+            "name,language,status,quality_score,health_status",
+        ))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({"data":[{
+            "name":"sale", "language":"en_US", "status":"APPROVED", "id":"77",
+            "quality_score":{"score":"GREEN", "date":1_758_754_645},
+            "health_status":{"can_send_message":"AVAILABLE"},
+        }]})))
+        .expect(2)
+        .mount(&graph)
+        .await;
+    let home = TempDir::new().unwrap();
+    paloma(Some(&graph), &home)
+        .args(["template", "get", "sale", "--quality"])
+        .assert()
+        .success()
+        .stdout(
+            predicate::str::contains("GREEN")
+                .and(predicate::str::contains("AVAILABLE"))
+                .and(predicate::str::contains("CAN SEND MESSAGE")),
+        );
+    paloma(Some(&graph), &home)
+        .args(["template", "get", "sale", "--quality", "-q"])
+        .assert()
+        .success()
+        .stdout("77\n");
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn template_archive_confirms_and_posts_the_ids() {
+    let graph = MockServer::start().await;
+    Mock::given(method("POST"))
+        .and(path(format!("/v26.0/{WABA}/message_templates/archive")))
+        .and(body_json(json!({"hsm_ids":["1","2"]})))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .set_body_json(json!({"archived_templates":["1","2"], "failed_templates":{}})),
+        )
+        .expect(1)
+        .mount(&graph)
+        .await;
+    let home = TempDir::new().unwrap();
+    paloma(Some(&graph), &home)
+        .args(["template", "archive", "--ids", "1,2"])
+        .assert()
+        .code(5)
+        .stdout("")
+        .stderr(predicate::str::contains("--yes"));
+    paloma(Some(&graph), &home)
+        .args(["template", "archive", "--ids", "1,2", "--yes", "-o", "json"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("archived_templates"));
+    let dry = dry_run_request(&home, &["template", "archive", "--ids", "1"]);
+    assert_eq!(
+        dry["url"],
+        format!("{GRAPH}/{WABA}/message_templates/archive")
+    );
+    assert_eq!(dry["body"], json!({"hsm_ids":["1"]}));
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn template_unarchive_needs_no_confirmation_and_a_partial_failure_exits_1() {
+    let graph = MockServer::start().await;
+    Mock::given(method("POST"))
+        .and(path(format!("/v26.0/{WABA}/message_templates/unarchive")))
+        .and(body_json(json!({"hsm_ids":["1","2"]})))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "unarchived_templates":["1"],
+            "failed_templates":{"2":"Template is not archived"},
+        })))
+        .expect(1)
+        .mount(&graph)
+        .await;
+    let home = TempDir::new().unwrap();
+    paloma(Some(&graph), &home)
+        .args(["template", "unarchive", "--ids", "1,2", "-o", "json"])
+        .assert()
+        .code(1)
+        .stdout(predicate::str::contains("Template is not archived"))
+        .stderr(predicate::str::contains("1 template(s) failed"));
+}
+
+#[test]
+fn template_archive_validates_ids_before_any_request() {
+    let home = TempDir::new().unwrap();
+    let too_many: Vec<String> = (0..101).map(|i| i.to_string()).collect();
+    for ids in [too_many.join(","), "abc".to_owned(), "1,1".to_owned()] {
+        for verb in ["archive", "unarchive"] {
+            paloma(None, &home)
+                .args(["template", verb, "--ids", &ids, "--yes"])
+                .assert()
+                .code(5);
+        }
+    }
+    paloma(None, &home)
+        .args(["template", "archive"])
+        .assert()
+        .code(2);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn template_unpause_posts_to_the_template_and_quiet_prints_its_id() {
+    let graph = MockServer::start().await;
+    Mock::given(method("POST"))
+        .and(path("/v26.0/77/unpause"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({"success":true})))
+        .expect(1)
+        .mount(&graph)
+        .await;
+    let home = TempDir::new().unwrap();
+    paloma(Some(&graph), &home)
+        .args(["template", "unpause", "77", "-q"])
+        .assert()
+        .success()
+        .stdout("77\n");
+    paloma(None, &home)
+        .args(["template", "unpause", "sale"])
+        .assert()
+        .code(5);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn template_library_list_has_no_waba_in_its_path_and_shows_columns() {
+    let graph = MockServer::start().await;
+    Mock::given(method("GET"))
+        .and(path("/v26.0/message_template_library"))
+        .and(query_param("search", "payments"))
+        .and(query_param("topic", "PAYMENTS"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({"data":[{
+            "name":"low_balance_warning_1", "language":"en_US", "category":"UTILITY",
+            "topic":"PAYMENTS", "usecase":"LOW_BALANCE_WARNING", "id":"7147",
+        }]})))
+        .expect(1)
+        .mount(&graph)
+        .await;
+    let home = TempDir::new().unwrap();
+    paloma(Some(&graph), &home)
+        .env_remove("PALOMA_WABA_ID")
+        .args([
+            "template", "library", "list", "--search", "payments", "--topic", "PAYMENTS",
+        ])
+        .assert()
+        .success()
+        .stdout(
+            predicate::str::contains("low_balance_warning_1")
+                .and(predicate::str::contains("USECASE")),
+        );
+    assert_eq!(
+        dry_run_request(&home, &["template", "library", "list", "--name", "x"])["url"],
+        format!("{GRAPH}/message_template_library?name=x")
+    );
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn template_library_create_sends_the_library_fields() {
+    let graph = MockServer::start().await;
+    let buttons = json!([{"type":"PHONE_NUMBER", "phone_number":"+16315551010"}]);
+    let inputs = json!({"add_contact_number":true});
+    Mock::given(method("POST"))
+        .and(path(format!("/v26.0/{WABA}/message_templates")))
+        .and(body_json(json!({
+            "name":"my_delivery_update",
+            "category":"UTILITY",
+            "language":"en_US",
+            "library_template_name":"delivery_update_1",
+            "library_template_button_inputs":buttons,
+            "library_template_body_inputs":inputs,
+        })))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .set_body_json(json!({"id":"55", "status":"APPROVED", "category":"UTILITY"})),
+        )
+        .expect(1)
+        .mount(&graph)
+        .await;
+    let home = TempDir::new().unwrap();
+    let button_file = home.path().join("buttons.json");
+    std::fs::write(&button_file, buttons.to_string()).unwrap();
+    let body_file = home.path().join("body.json");
+    std::fs::write(&body_file, inputs.to_string()).unwrap();
+    let base = [
+        "template",
+        "library",
+        "create",
+        "--name",
+        "my_delivery_update",
+        "--library-template",
+        "delivery_update_1",
+        "--language",
+        "en_US",
+    ];
+    paloma(Some(&graph), &home)
+        .args(base)
+        .arg("--button-inputs-file")
+        .arg(&button_file)
+        .arg("--body-inputs-file")
+        .arg(&body_file)
+        .arg("-q")
+        .assert()
+        .success()
+        .stdout("55\n");
+    // An array of inputs and an object of them, the wrong way round.
+    paloma(None, &home)
+        .args(base)
+        .arg("--button-inputs-file")
+        .arg(&body_file)
+        .assert()
+        .code(5);
+    paloma(None, &home)
+        .args(base)
+        .arg("--body-inputs-file")
+        .arg(&button_file)
+        .assert()
+        .code(5);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn template_compare_sends_a_window_in_unix_seconds() {
+    let graph = MockServer::start().await;
+    Mock::given(method("GET"))
+        .and(path("/v26.0/1/compare"))
+        .and(query_param("template_ids", "[2]"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({"data":[
+            {"metric":"BLOCK_RATE", "type":"RELATIVE", "order_by_relative_metric":["2","1"]},
+        ]})))
+        .expect(1)
+        .mount(&graph)
+        .await;
+    let home = TempDir::new().unwrap();
+    paloma(Some(&graph), &home)
+        .args(["template", "compare", "1", "2", "--days", "30"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("BLOCK_RATE").and(predicate::str::contains("2,1")));
+
+    let dry = dry_run_request(&home, &["template", "compare", "1", "2", "--days", "7"]);
+    let url = dry["url"].as_str().unwrap();
+    assert!(
+        url.starts_with(&format!("{GRAPH}/1/compare?template_ids=%5B2%5D&start=")),
+        "{url}"
+    );
+    let param = |key: &str| -> u64 {
+        url.split(&format!("{key}="))
+            .nth(1)
+            .and_then(|rest| rest.split('&').next())
+            .and_then(|value| value.parse().ok())
+            .unwrap()
+    };
+    assert_eq!(param("end") - param("start"), 604_800);
+    assert!(param("end") < 10_000_000_000, "seconds, not milliseconds");
+}
+
+#[test]
+fn template_compare_rejects_other_windows_and_ids_before_a_request() {
+    let home = TempDir::new().unwrap();
+    paloma(None, &home)
+        .args(["template", "compare", "1", "2", "--days", "14"])
+        .assert()
+        .code(2);
+    paloma(None, &home)
+        .args(["template", "compare", "1", "x", "--days", "7"])
+        .assert()
+        .code(5);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn template_migrate_confirms_then_posts_to_the_destination() {
+    let graph = MockServer::start().await;
+    Mock::given(method("POST"))
+        .and(path(format!("/v26.0/{WABA}/migrate_message_templates")))
+        .and(body_json(json!({
+            "source_waba_id":"333",
+            "page_number":0,
+            "count":200,
+            "template_ids":["1","2"],
+        })))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "migrated_templates":["1"],
+            "failed_templates":{"2":"Incorrect category"},
+        })))
+        .expect(1)
+        .mount(&graph)
+        .await;
+    let home = TempDir::new().unwrap();
+    let args = [
+        "template", "migrate", "--from", "333", "--ids", "1,2", "--page", "0", "--count", "200",
+    ];
+    paloma(Some(&graph), &home)
+        .args(args)
+        .assert()
+        .code(5)
+        .stderr(predicate::str::contains("--yes"));
+    paloma(Some(&graph), &home)
+        .args(args)
+        .args(["--yes", "-o", "json"])
+        .assert()
+        .code(1)
+        .stdout(predicate::str::contains("Incorrect category"))
+        .stderr(predicate::str::contains("1 template(s) failed"));
+    let dry = dry_run_request(&home, &["template", "migrate", "--from", "333"]);
+    assert_eq!(
+        dry["url"],
+        format!("{GRAPH}/{WABA}/migrate_message_templates")
+    );
+    assert_eq!(dry["body"], json!({"source_waba_id":"333"}));
+}
+
+#[test]
+fn template_migrate_validates_before_a_request() {
+    let home = TempDir::new().unwrap();
+    let too_many: Vec<String> = (0..501).map(|i| i.to_string()).collect();
+    for args in [
+        vec!["--from", "abc"],
+        vec!["--from", "333", "--count", "501"],
+        vec!["--from", "333", "--ids", &too_many.join(",")],
+    ] {
+        paloma(None, &home)
+            .args(["template", "migrate", "--yes"])
+            .args(args)
+            .assert()
+            .code(5);
+    }
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn template_preview_needs_auth_sends_otp_and_narrows_languages_itself() {
+    let graph = MockServer::start().await;
+    Mock::given(method("GET"))
+        .and(path(format!("/v26.0/{WABA}/message_template_previews")))
+        .and(query_param("category", "AUTHENTICATION"))
+        .and(query_param("add_security_recommendation", "true"))
+        .and(query_param("code_expiration_minutes", "10"))
+        .and(query_param("button_types", "OTP"))
+        .and(wiremock::matchers::query_param_is_missing("language"))
+        .and(wiremock::matchers::query_param_is_missing("languages"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({"data":[
+            {"language":"en_US", "body":"code", "footer":"10 minutes", "buttons":[{"text":"Copy code"}]},
+            {"language":"es_ES", "body":"codigo", "footer":"10 minutos", "buttons":[{"text":"Copiar"}]},
+        ]})))
+        .expect(1)
+        .mount(&graph)
+        .await;
+    let home = TempDir::new().unwrap();
+    let out = paloma(Some(&graph), &home)
+        .args([
+            "template",
+            "preview",
+            "--auth",
+            "--security-recommendation",
+            "--code-expiration",
+            "10",
+            "--language",
+            "es_ES,fr",
+            "-o",
+            "json",
+        ])
+        .output()
+        .unwrap();
+    assert!(out.status.success());
+    let v = stdout_json(&out);
+    assert_eq!(v["data"].as_array().unwrap().len(), 1);
+    assert_eq!(v["data"][0]["language"], "es_ES");
+    assert!(String::from_utf8_lossy(&out.stderr).contains("no preview for language fr"));
+
+    assert_eq!(
+        dry_run_request(&home, &["template", "preview", "--auth"])["url"],
+        format!(
+            "{GRAPH}/{WABA}/message_template_previews?category=AUTHENTICATION&button_types=OTP"
+        )
+    );
+    paloma(None, &home)
+        .args(["template", "preview"])
+        .assert()
+        .code(2);
+    paloma(None, &home)
+        .args(["template", "preview", "--auth", "--code-expiration", "91"])
+        .assert()
+        .code(5);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn template_upsert_posts_the_file_and_rejects_a_single_language() {
+    let graph = MockServer::start().await;
+    let body = json!({
+        "name":"auth_code",
+        "languages":["en_US","es_ES"],
+        "category":"AUTHENTICATION",
+        "components":[{"type":"BODY", "add_security_recommendation":true}],
+    });
+    Mock::given(method("POST"))
+        .and(path(format!("/v26.0/{WABA}/upsert_message_templates")))
+        .and(body_json(&body))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({"data":[
+            {"id":"95", "status":"APPROVED", "language":"en_US"},
+            {"id":"96", "status":"APPROVED", "language":"es_ES"},
+        ]})))
+        .expect(2)
+        .mount(&graph)
+        .await;
+    let home = TempDir::new().unwrap();
+    let file = home.path().join("upsert.json");
+    std::fs::write(&file, body.to_string()).unwrap();
+    let upsert = |extra: &[&str]| {
+        let mut cmd = paloma(Some(&graph), &home);
+        cmd.args(["template", "upsert", "--file"])
+            .arg(&file)
+            .args(extra);
+        cmd
+    };
+    upsert(&["-q"]).assert().success().stdout("95\n");
+    upsert(&[])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("es_ES").and(predicate::str::contains("96")));
+    for bad in [
+        json!({"name":"a", "language":"en_US", "languages":["en_US"]}),
+        json!({"name":"a"}),
+        json!({"languages":["en_US"]}),
+    ] {
+        std::fs::write(&file, bad.to_string()).unwrap();
+        upsert(&[]).assert().code(5);
+    }
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn template_group_create_sends_integer_ids() {
+    let graph = MockServer::start().await;
+    Mock::given(method("POST"))
+        .and(path(format!("/v26.0/{WABA}/template_groups")))
+        .and(body_json(json!({
+            "name":"Black Friday",
+            "description":"US sale",
+            "whatsapp_business_templates":[278_077_987_957_091_u64, 2],
+        })))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({"id":"90"})))
+        .expect(1)
+        .mount(&graph)
+        .await;
+    let home = TempDir::new().unwrap();
+    let args = [
+        "template",
+        "group",
+        "create",
+        "--name",
+        "Black Friday",
+        "--description",
+        "US sale",
+        "--templates",
+        "278077987957091,2",
+        "-q",
+    ];
+    paloma(Some(&graph), &home)
+        .args(args)
+        .assert()
+        .success()
+        .stdout("90\n");
+    let long_name = "x".repeat(257);
+    let long_description = "x".repeat(513);
+    for bad in [
+        vec!["--name", &long_name, "--templates", "1"],
+        vec![
+            "--name",
+            "n",
+            "--description",
+            &long_description,
+            "--templates",
+            "1",
+        ],
+        vec!["--name", "n", "--templates", "abc"],
+    ] {
+        paloma(None, &home)
+            .args(["template", "group", "create"])
+            .args(bad)
+            .assert()
+            .code(5);
+    }
+    paloma(None, &home)
+        .args(["template", "group", "create", "--name", "n"])
+        .assert()
+        .code(2);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn template_group_get_set_and_delete_use_the_group_node() {
+    let graph = MockServer::start().await;
+    Mock::given(method("GET"))
+        .and(path("/v26.0/90"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({"id":"90", "name":"g"})))
+        .expect(1)
+        .mount(&graph)
+        .await;
+    Mock::given(method("POST"))
+        .and(path("/v26.0/90"))
+        .and(body_json(
+            json!({"add_templates":[1,2], "remove_templates":[3]}),
+        ))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({"success":true})))
+        .expect(1)
+        .mount(&graph)
+        .await;
+    Mock::given(method("DELETE"))
+        .and(path("/v26.0/90"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({"success":true})))
+        .expect(1)
+        .mount(&graph)
+        .await;
+    let home = TempDir::new().unwrap();
+    let group = |args: &[&str]| {
+        let mut cmd = paloma(Some(&graph), &home);
+        cmd.args(["template", "group"]).args(args);
+        cmd
+    };
+    group(&["get", "90", "-q"])
+        .assert()
+        .success()
+        .stdout("90\n");
+    group(&["set", "90", "--add", "1,2", "--remove", "3", "-q"])
+        .assert()
+        .success()
+        .stdout("90\n");
+    group(&["delete", "90"])
+        .assert()
+        .code(5)
+        .stderr(predicate::str::contains("--yes"));
+    group(&["delete", "90", "--yes", "-q"])
+        .assert()
+        .success()
+        .stdout("90\n");
+    group(&["set", "90"]).assert().code(2);
+    group(&["get", "abc"]).assert().code(5);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn template_analytics_queries_templates_and_lists_the_data_points() {
+    let graph = MockServer::start().await;
+    Mock::given(method("GET"))
+        .and(path(format!("/v26.0/{WABA}/template_analytics")))
+        .and(query_param("granularity", "daily"))
+        .and(query_param("start", "1718064000"))
+        .and(query_param("end", "1718122745"))
+        .and(query_param("template_ids", "[14,26]"))
+        .and(query_param("metric_types", "sent,read"))
+        .and(query_param("product_type", "MARKETING_MESSAGES_LITE_API"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({"data":[{
+            "granularity":"DAILY",
+            "product_type":"marketing_messages_lite_api",
+            "data_points":[{"template_id":"14", "start":1, "end":2, "sent":5, "read":3}],
+        }, {"data_points":[{"template_id":"26", "start":1, "end":2, "sent":6}]}]})))
+        .expect(1)
+        .mount(&graph)
+        .await;
+    let home = TempDir::new().unwrap();
+    paloma(Some(&graph), &home)
+        .args([
+            "template",
+            "analytics",
+            "--ids",
+            "14,26",
+            "--start",
+            "1718064000",
+            "--end",
+            "1718122745",
+            "--metrics",
+            "sent,read",
+            "--product-type",
+            "MARKETING_MESSAGES_LITE_API",
+        ])
+        .assert()
+        .success()
+        .stdout(
+            predicate::str::contains("TEMPLATE ID")
+                .and(predicate::str::contains("14"))
+                .and(predicate::str::contains("26")),
+        );
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn template_analytics_queries_groups_in_the_accounts_timezone() {
+    let graph = MockServer::start().await;
+    Mock::given(method("GET"))
+        .and(path(format!("/v26.0/{WABA}/template_group_analytics")))
+        .and(query_param("template_group_ids", "[104]"))
+        .and(query_param("start", "2026-10-01"))
+        .and(query_param("end", "2026-10-02"))
+        .and(query_param("use_waba_timezone", "true"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({"data":[{
+            "granularity":"DAILY",
+            "data_points":[{"template_group_id":"104", "start":1, "end":2, "sent":9}],
+        }]})))
+        .expect(1)
+        .mount(&graph)
+        .await;
+    let home = TempDir::new().unwrap();
+    paloma(Some(&graph), &home)
+        .args([
+            "template",
+            "analytics",
+            "--groups",
+            "104",
+            "--start",
+            "2026-10-01",
+            "--end",
+            "2026-10-02",
+            "--waba-timezone",
+        ])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("TEMPLATE GROUP ID").and(predicate::str::contains("104")));
+}
+
+#[test]
+fn template_analytics_validates_before_a_request() {
+    let home = TempDir::new().unwrap();
+    let window = ["--start", "1718064000", "--end", "1718122745"];
+    let eleven = (0..11).map(|i| i.to_string()).collect::<Vec<_>>().join(",");
+    for bad in [
+        vec!["--ids", &eleven],
+        vec!["--groups", &eleven],
+        vec!["--groups", "abc"],
+        vec!["--ids", "abc"],
+    ] {
+        paloma(None, &home)
+            .args(["template", "analytics"])
+            .args(window)
+            .args(bad)
+            .assert()
+            .code(5);
+    }
+    // --waba-timezone takes dates only.
+    paloma(None, &home)
+        .args(["template", "analytics", "--ids", "1", "--waba-timezone"])
+        .args(window)
+        .assert()
+        .code(5);
+    paloma(None, &home)
+        .args([
+            "template",
+            "analytics",
+            "--ids",
+            "1",
+            "--start",
+            "soon",
+            "--end",
+            "1",
+        ])
+        .assert()
+        .code(5);
+    // Needs a subject, and Meta documents product_type only for templates.
+    paloma(None, &home)
+        .args(["template", "analytics"])
+        .args(window)
+        .assert()
+        .code(2);
+    paloma(None, &home)
+        .args([
+            "template",
+            "analytics",
+            "--groups",
+            "1",
+            "--product-type",
+            "CLOUD_API",
+        ])
+        .args(window)
+        .assert()
+        .code(2);
+}
+
+#[test]
+fn template_upsert_refuses_what_metas_bulk_page_rules_out_before_the_context() {
+    let home = TempDir::new().unwrap();
+    let file = home.path().join("upsert.json");
+    let otp = |button: Value| {
+        json!({
+            "name": "auth_code",
+            "languages": ["en_US"],
+            "category": "AUTHENTICATION",
+            "components": [{ "type": "BUTTONS", "buttons": [button] }],
+        })
+    };
+    for (bad, needle) in [
+        (
+            json!({"name":"Auth Code", "languages":["en_US"], "category":"AUTHENTICATION"}),
+            "template names",
+        ),
+        (
+            json!({"name":"auth_code", "languages":["en_US"], "category":"UTILITY"}),
+            "AUTHENTICATION",
+        ),
+        (
+            json!({"name":"auth_code", "languages":["en_US"]}),
+            "AUTHENTICATION",
+        ),
+        (
+            otp(json!({"type":"OTP", "otp_type":"COPY_CODE", "text":"Copy"})),
+            "`text`",
+        ),
+        (
+            otp(json!({"type":"OTP", "otp_type":"ONE_TAP", "autofill_text":"Fill"})),
+            "`autofill_text`",
+        ),
+    ] {
+        std::fs::write(&file, bad.to_string()).unwrap();
+        paloma(None, &home)
+            .env_remove("PALOMA_WABA_ID")
+            .args(["template", "upsert", "--file"])
+            .arg(&file)
+            .assert()
+            .code(5)
+            .stdout(predicate::str::is_empty())
+            .stderr(predicate::str::contains(needle));
+    }
+    std::fs::write(
+        &file,
+        otp(json!({"type":"OTP", "otp_type":"COPY_CODE"})).to_string(),
+    )
+    .unwrap();
+    // No --yes: like `template edit`, upsert doesn't ask.
+    let file = file.to_str().unwrap();
+    let request = dry_run_request(&home, &["template", "upsert", "--file", file]);
+    assert_eq!(request["body"]["name"], "auth_code");
+}
+
+#[test]
+fn template_library_create_always_sends_utility() {
+    let home = TempDir::new().unwrap();
+    let args = [
+        "template",
+        "library",
+        "create",
+        "--name",
+        "my_update",
+        "--library-template",
+        "delivery_update_1",
+        "--language",
+        "en_US",
+    ];
+    assert_eq!(dry_run_request(&home, &args)["body"]["category"], "UTILITY");
+    paloma(None, &home)
+        .args(args)
+        .args(["--category", "MARKETING"])
+        .assert()
+        .code(2);
+}
+
+#[test]
+fn template_analytics_refuses_impossible_dates_and_a_backwards_range() {
+    let home = TempDir::new().unwrap();
+    let range = |start: &'static str, end: &'static str| {
+        vec![
+            "template",
+            "analytics",
+            "--ids",
+            "1",
+            "--start",
+            start,
+            "--end",
+            end,
+        ]
+    };
+    for (args, needle) in [
+        (range("2026-02-30", "2026-03-01"), "--start"),
+        (range("2026-02-01", "2026-13-01"), "--end"),
+        (range("2026-10-08", "2026-10-01"), "must not be after"),
+        (range("1718122745", "1718064000"), "must not be after"),
+    ] {
+        paloma(None, &home)
+            .args(args)
+            .assert()
+            .code(5)
+            .stderr(predicate::str::contains(needle));
+    }
+    paloma(None, &home)
+        .args(range("1718064000", "2026-10-01"))
+        .arg("--waba-timezone")
+        .assert()
+        .code(5)
+        .stderr(predicate::str::contains("with --waba-timezone"));
+    // One day is a real range: Meta reports whole days.
+    let request = dry_run_request(&home, &range("2026-10-01", "2026-10-01"));
+    assert!(
+        request["url"]
+            .as_str()
+            .unwrap()
+            .contains("start=2026-10-01")
+    );
+}
