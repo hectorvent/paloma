@@ -10514,3 +10514,29 @@ fn template_analytics_refuses_impossible_dates_and_a_backwards_range() {
             .contains("start=2026-10-01")
     );
 }
+
+#[tokio::test(flavor = "multi_thread")]
+async fn template_upsert_rejects_non_string_and_blank_languages_before_a_request() {
+    let graph = MockServer::start().await;
+    let home = TempDir::new().unwrap();
+    let file = home.path().join("upsert.json");
+    for languages in [json!([42]), json!([""]), json!([" "])] {
+        std::fs::write(
+            &file,
+            json!({
+                "name": "auth_code", "category": "AUTHENTICATION", "languages": languages,
+            })
+            .to_string(),
+        )
+        .unwrap();
+        paloma(Some(&graph), &home)
+            .env_remove("PALOMA_WABA_ID")
+            .args(["template", "upsert", "--file"])
+            .arg(&file)
+            .assert()
+            .code(5)
+            .stdout(predicate::str::is_empty())
+            .stderr(predicate::str::contains("language"));
+    }
+    assert!(graph.received_requests().await.unwrap().is_empty());
+}

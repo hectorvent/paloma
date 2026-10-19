@@ -327,7 +327,8 @@ language is created, with no confirmation.
 paloma template upsert --file auth_code.json
 ```
 
-The file is the template definition with `languages`, an array, in place of `language`. `-q`
+The file is the template definition with `languages`, a nonempty array of nonblank language-code
+strings, in place of `language`. `-q`
 prints the first template's id. These exit 5 before any API call: a file with `language`, without
 `languages`, without a valid `name`, whose `category` isn't `AUTHENTICATION`, or with a `text` or
 `autofill_text` property, which Meta's page says upsert doesn't support.

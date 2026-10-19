@@ -760,12 +760,20 @@ async fn upsert(app: &App, file: &std::path::Path) -> Result<()> {
              `\"category\": \"AUTHENTICATION\"`",
         ));
     }
-    if body
+    let Some(languages) = body
         .get("languages")
         .and_then(Value::as_array)
-        .is_none_or(Vec::is_empty)
-    {
+        .filter(|languages| !languages.is_empty())
+    else {
         return Err(Error::validation("the file needs a `languages` array"));
+    };
+    for language in languages {
+        let Some(language) = language.as_str() else {
+            return Err(Error::validation(
+                "`languages` must contain language-code strings",
+            ));
+        };
+        validate::not_blank(language, "a language code in `languages`")?;
     }
     if let Some(property) = upsert_unsupported_property(&body) {
         return Err(Error::validation(format!(

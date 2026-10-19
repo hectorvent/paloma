@@ -49,8 +49,6 @@ pub enum Target {
     Node(String),
     /// A full URL handed back by Graph (media/asset downloads on a CDN host).
     Url(String),
-    /// Fixed dry-run text for a URL only an earlier response can reveal. Never sent.
-    Placeholder(&'static str),
 }
 
 /// One multipart form field.
@@ -193,15 +191,6 @@ impl Request {
         self
     }
 
-    /// A dry-run GET whose URL is not yet known. The client refuses to execute it.
-    pub fn get_placeholder(text: &'static str) -> Self {
-        Self {
-            target: Target::Placeholder(text),
-            auth: Auth::None,
-            ..Self::get_url(String::new())
-        }
-    }
-
     #[must_use]
     #[allow(clippy::needless_pass_by_value)] // builder ergonomics: `.header("file_offset", 0)`
     pub fn header(mut self, name: &str, value: impl ToString) -> Self {
@@ -234,7 +223,6 @@ impl Request {
         let mut url = match &self.target {
             Target::Node(node) => format!("{}/{}/{}", base.trim_end_matches('/'), version, node),
             Target::Url(u) => u.clone(),
-            Target::Placeholder(text) => (*text).to_owned(),
         };
         if !self.query.is_empty() {
             let qs: Vec<String> = self
@@ -253,11 +241,7 @@ impl Request {
     pub fn describe(&self, base: &str, version: &str) -> Value {
         let mut out = Map::new();
         out.insert("method".into(), self.method.as_str().into());
-        let url = match &self.target {
-            Target::Placeholder(text) => (*text).to_owned(),
-            _ => redact_url(&self.url(base, version)),
-        };
-        out.insert("url".into(), url.into());
+        out.insert("url".into(), redact_url(&self.url(base, version)).into());
         match &self.auth {
             Auth::User | Auth::None => {}
             Auth::App { app_id } => {

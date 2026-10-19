@@ -87,10 +87,8 @@ impl MediaCommand {
             Self::Download(a) => {
                 let lookup = media::get(&a.media_id);
                 if app.dry_run() {
-                    return app.print_dry_run(&[
-                        lookup,
-                        Request::get_placeholder("<url from the media lookup>"),
-                    ]);
+                    return app
+                        .print_dry_run(&[lookup, Request::get_url("<url from the media lookup>")]);
                 }
                 let info: media::MediaInfo = app.fetch(&lookup).await?.parse()?;
                 let url = info.url.filter(|u| !u.is_empty()).ok_or_else(|| {

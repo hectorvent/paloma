@@ -119,7 +119,3 @@ unless `--yes`.
 
 Downloads honor the global `--timeout` for the request and response-body transfer. A
 transfer interrupted after data arrives may leave a partial output file.
-
-For a download dry-run, the second GET uses a labelled placeholder because its URL
-comes from the metadata response. Placeholders are readable in the plan and cannot
-be executed by the Graph client.
