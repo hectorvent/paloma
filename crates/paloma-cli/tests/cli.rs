@@ -8412,19 +8412,32 @@ async fn webhook_get_quiet_uses_number_override_ahead_of_waba_and_application() 
                 json!({"data":[{"override_callback_uri":"https://example.com/waba"}]}),
             ),
         )
-        .expect(1)
+        .expect(2)
         .mount(&graph)
         .await;
     Mock::given(method("GET")).and(path(format!("/v26.0/{PHONE}")))
         .and(query_param("fields", "webhook_configuration"))
         .respond_with(ResponseTemplate::new(200).set_body_json(json!({"webhook_configuration":{"phone_number":"https://example.com/number","application":"https://example.com/app"}})))
-        .expect(1).mount(&graph).await;
+        .expect(2).mount(&graph).await;
     paloma(Some(&graph), &home)
         .args(["webhook", "get", "-q"])
         .assert()
         .success()
         .stdout("https://example.com/number\n")
         .stderr("");
+    let response = paloma(Some(&graph), &home)
+        .args(["webhook", "get", "-o", "json"])
+        .output()
+        .unwrap();
+    assert!(response.status.success());
+    assert!(response.stderr.is_empty());
+    let body = stdout_json(&response);
+    assert_eq!(
+        body["number_override_callback_uri"],
+        "https://example.com/number"
+    );
+    assert_eq!(body["override_callback_uri"], "https://example.com/waba");
+    assert_eq!(body["effective_callback_url"], "https://example.com/number");
 }
 
 #[test]

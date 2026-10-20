@@ -226,8 +226,9 @@ job needs no config file at all: just set `PALOMA_TOKEN` plus the IDs.
 
 **Built-in safeguards:**
 
-- The keyring is read only when a request is actually sent. `--help`, `--dry-run` and
-  offline commands never touch it.
+- The keyring is read when a request is sent or a listener starts. `--help`
+  and offline commands never touch it; `--dry-run` reads secrets only for a command
+  that [reads live state](docs/global-flags.md#what---dry-run-means) to build its request.
 - `--token` is hidden from `--help`. The scripting paths are `PALOMA_TOKEN` and
   `echo "$T" | paloma auth login --with-token`, so tokens stay out of shell history.
 - `paloma config list` hides secret values, and a plaintext token in the file triggers
@@ -316,8 +317,8 @@ Then run `paloma configure` and you're ready. Full walkthrough:
 
 ## Documentation
 
-- **Guides:** [Installation](docs/installation.md) · [Getting started](docs/getting-started.md) · [Configuration](docs/configuration.md) · [Authentication](docs/authentication.md) · [Global flags](docs/global-flags.md) · [Scripting](docs/scripting.md)
-- **Commands:** [send](docs/commands/send.md) · [template](docs/commands/template.md) · [media](docs/commands/media.md) · [message](docs/commands/message.md) · [calling](docs/commands/calling.md) · [flow](docs/commands/flow.md) · [webhook](docs/commands/webhook.md) · [number](docs/commands/number.md) · [profile](docs/commands/profile.md) · [block](docs/commands/block.md) · [auth](docs/commands/auth.md) · [config](docs/commands/config.md) · [link](docs/commands/link.md) · [completion](docs/commands/completion.md)
+- **Guides:** [Installation](docs/installation.md) · [Getting started](docs/getting-started.md) · [Configuration](docs/configuration.md) · [Authentication](docs/authentication.md) · [Global flags](docs/global-flags.md) · [Scripting](docs/scripting.md) · [Billing currency](docs/billing-currency.md)
+- **Commands:** [send](docs/commands/send.md) · [template](docs/commands/template.md) · [media](docs/commands/media.md) · [message](docs/commands/message.md) · [calling](docs/commands/calling.md) · [flow](docs/commands/flow.md) · [webhook](docs/commands/webhook.md) · [number](docs/commands/number.md) · [account](docs/commands/account.md) · [profile](docs/commands/profile.md) · [block](docs/commands/block.md) · [qr](docs/commands/qr.md) · [automation](docs/commands/automation.md) · [auth](docs/commands/auth.md) · [config](docs/commands/config.md) · [link](docs/commands/link.md) · [completion](docs/commands/completion.md)
 - **Setup as code:** [export / apply / diff](docs/commands/manifests.md)
 - **Project:** [Architecture](docs/architecture.md) · [Contributing](CONTRIBUTING.md)
 

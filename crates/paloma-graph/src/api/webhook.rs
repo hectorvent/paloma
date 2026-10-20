@@ -191,6 +191,15 @@ pub fn number_callback(phone: &str, url: &str, token: Option<&str>) -> Request {
     Request::post(phone).json(json!({"webhook_configuration":config}))
 }
 
+/// The active phone number's alternate callback, when configured.
+pub fn number_override_callback(config: &Value) -> Option<String> {
+    config
+        .pointer("/webhook_configuration/phone_number")
+        .and_then(Value::as_str)
+        .filter(|url| !url.is_empty())
+        .map(str::to_owned)
+}
+
 /// Effective delivery prefers a number override, then the WABA override, then the app.
 pub fn effective_callback(config: &Value, waba_override: Option<&str>) -> Option<String> {
     [

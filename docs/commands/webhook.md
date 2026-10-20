@@ -15,7 +15,8 @@ existing token; no app secret is needed. `listen`, `verify-url` and `simulate` p
 ## `paloma webhook get`
 
 Show the current webhook configuration: the effective callback URL (read from the
-phone-number `webhook_configuration`), the per-WABA `override_callback_uri` (empty
+phone-number `webhook_configuration`), the active number's
+`number_override_callback_uri` (null when unset), the per-WABA `override_callback_uri` (empty
 when the WABA uses the app-level callback rather than an override), and the
 subscribed app.
 

@@ -157,6 +157,7 @@ impl WebhookCommand {
                 app.out.emit(
                     &Output::new(json!({
                         "effective_callback_url": effective,
+                        "number_override_callback_uri": webhook::number_override_callback(&cfg),
                         "override_callback_uri": override_uri,
                         "subscribed_apps": apps.get("data").cloned().unwrap_or(Value::Array(vec![])),
                     }))
