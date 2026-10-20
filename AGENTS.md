@@ -33,7 +33,8 @@ Read [docs/architecture.md](docs/architecture.md) first. The short version:
 ```
 paloma-core      errors + exit codes, validation, limits, 24h policy, Credentials trait
 paloma-config    config.toml (toml_edit writes), profiles, keyring, Context resolution
-paloma-graph     Request (a call as data), Client, error_map, paging, api::<resource>
+paloma-graph     Request (a call as data), Client, error_map, paging, api::<resource>,
+                 callback (calling webhook endpoints), webhook_samples
 paloma-manifest  YAML manifests: interpolate, case, diff, Kind enum + kinds/*
 paloma-cli       clap tree (commands/*), App wiring, output::Printer
 ```
@@ -46,6 +47,7 @@ Each cross-cutting concern lives in exactly one place, and that is load-bearing:
   `paloma_config::resolve::Context::resolve`. clap merges flag and env (`env = "PALOMA_…"`).
 - **All stdout** goes through `paloma_cli::output::Printer`. Never `println!`.
 - **`--dry-run`** is enforced by `App::send`; commands build a `Request` and hand it over.
+  Webhook endpoint probes aren't Graph calls, so they check `app.dry_run()` themselves.
 - **Cloud API limits** are named constants in `paloma_core::limits`.
 
 ## Conventions that matter
@@ -54,8 +56,9 @@ Each cross-cutting concern lives in exactly one place, and that is load-bearing:
 (`app.out.info/note/warn`). `-q` prints only `Output::primary_id`, so
 `MID=$(paloma send text … -q)` works. `-o table|json|yaml|raw`; json/raw pass the raw
 Graph body through. Lists set `.table("/data", COLUMNS)`.
-`template get` is the exception: it prints only exact matches as `{"data":[...]}`, because
-Graph's name filter can return other templates.
+`template get` is one exception: it prints only exact matches as `{"data":[...]}`, because
+Graph's name filter can return other templates. `webhook listen` is another: it always
+prints JSON lines, whatever `-o` says, unless `-q` selects only primary ids.
 
 **Exit codes are a contract.** `0` ok, `1` generic, `2` usage (clap), `3` auth,
 `4` rate-limited, `5` validation, `6` policy. Return the right `Error` variant; use
@@ -81,7 +84,7 @@ flag only warns). Secrets
 are `SecretString`s; `Request::describe` never includes them.
 
 **Lazy context.** `ctx.require_phone_number_id()` / `require_waba_id()` at the point of
-use; the keyring is read only when a request is sent.
+use; the keyring is read only when a request is sent, or a listener starts.
 
 **Docs explain why, not what.** Each module opens with a short `//!` on the constraint
 it exists to satisfy. Match that; don't narrate code.

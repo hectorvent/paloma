@@ -57,8 +57,8 @@ Order is the contract:
 Return the right `paloma_core::Error` variant: `Validation` (5), `Auth` (3),
 `Policy` (6), `Usage` (2); `Api` comes from `error_map`.
 
-Un-planning: delete the `planned("group verb", "vX.Y")` arm (see `commands/qr.rs`) and
-the "(planned vX.Y)" from the doc comment.
+Un-planning: delete the `planned("group verb", "vX.Y")` arm and the "(planned vX.Y)" from
+the doc comment.
 
 ## 4. Contract test (`crates/paloma-cli/tests/cli.rs`)
 

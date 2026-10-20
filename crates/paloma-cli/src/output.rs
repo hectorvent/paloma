@@ -134,6 +134,14 @@ impl Printer {
         let _ = std::io::stdout().lock().write_all(text.as_bytes());
     }
 
+    /// One line straight to stdout, flushed, for a stream. A long-running command needs the
+    /// error to stop, and to tell a reader that has gone from a write that failed.
+    #[allow(clippy::unused_self)] // a method so every write goes through the Printer
+    pub fn stream_line(&self, line: &str) -> std::io::Result<()> {
+        let mut stdout = std::io::stdout().lock();
+        writeln!(stdout, "{line}").and_then(|()| stdout.flush())
+    }
+
     /// A human-facing diagnostic on stderr.
     #[allow(clippy::unused_self)]
     pub fn info(&self, msg: impl AsRef<str>) {

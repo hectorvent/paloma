@@ -59,7 +59,7 @@ pub struct GlobalArgs {
     )]
     pub token: Option<String>,
 
-    /// Meta app secret (app-level webhook subscriptions).
+    /// Meta app secret (app-level webhook subscriptions, webhook signatures).
     #[arg(
         long,
         global = true,

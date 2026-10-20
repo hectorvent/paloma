@@ -1,12 +1,21 @@
-use clap::{Args, Subcommand};
-use paloma_core::{Error, Result, limits, validate};
+//! Webhook configuration and local receive tools share validation and secret handling.
+
+use std::path::PathBuf;
+
+use clap::{Args, Subcommand, ValueEnum};
+use paloma_core::{Error, ExitCode, Result, limits, validate};
 use paloma_graph::api::webhook::{self, AVAILABLE_FIELDS};
+use paloma_graph::callback::{self, Probe, Url};
+use paloma_graph::request::redact_url;
+use paloma_graph::webhook_samples::{self, SAMPLE_EVENTS, SampleContext};
 use secrecy::{ExposeSecret, SecretString};
 use serde_json::{Value, json};
 
-use super::{SecretSource, planned, read_secret};
+use super::{SecretSource, read_secret};
 use crate::app::{App, no_id};
 use crate::output::Output;
+
+mod listen;
 
 #[derive(Debug, Subcommand)]
 pub enum WebhookCommand {
@@ -27,12 +36,49 @@ pub enum WebhookCommand {
     Unsubscribe,
     /// Show or change the app-level webhook field subscriptions.
     Fields(Fields),
-    /// Run a local webhook receiver (planned v1.0).
-    Listen,
-    /// Verify an endpoint's hub.challenge handshake (planned v1.0).
-    VerifyUrl,
-    /// Send signed sample payloads to an endpoint (planned v1.0).
-    Simulate,
+    /// Run a local webhook receiver that prints each event as a line of JSON.
+    Listen(listen::ListenArgs),
+    /// Run Meta's hub.challenge handshake against an endpoint and report pass or fail.
+    VerifyUrl(VerifyUrlArgs),
+    /// POST a signed sample webhook to an endpoint and report pass or fail.
+    Simulate(SimulateArgs),
+}
+
+#[derive(Debug, Args)]
+pub struct VerifyUrlArgs {
+    /// The endpoint to check.
+    url: String,
+    #[command(flatten)]
+    verify_token: VerifyTokenInput,
+}
+
+#[derive(Debug, Args)]
+pub struct SimulateArgs {
+    /// The endpoint to POST to.
+    url: String,
+    /// Which sample delivery to send.
+    #[arg(
+        long,
+        default_value = "text",
+        conflicts_with = "file",
+        value_parser = clap::builder::PossibleValuesParser::new(SAMPLE_EVENTS)
+    )]
+    event: String,
+    /// Send this JSON file instead of a sample, byte for byte.
+    #[arg(long, value_name = "PATH")]
+    file: Option<PathBuf>,
+    /// valid: sign with the app secret. wrong and missing test that the endpoint rejects it,
+    /// so they pass when it doesn't answer 200, and don't need the app secret.
+    #[arg(long, value_enum, default_value_t)]
+    signature: SignatureMode,
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, ValueEnum)]
+enum SignatureMode {
+    #[default]
+    Valid,
+    Wrong,
+    Missing,
 }
 
 #[derive(Debug, Args)]
@@ -124,8 +170,7 @@ impl WebhookCommand {
                 verify_token,
             } => {
                 if let Some(url) = &callback_url {
-                    validate::not_blank(url, "callback URL")?;
-                    validate::max_chars(url, limits::MAX_WEBHOOK_CALLBACK_URL, "callback URL")?;
+                    check_callback_url(url)?;
                 } else if verify_token.given() {
                     return Err(Error::validation("a verify token requires --callback-url"));
                 }
@@ -171,11 +216,196 @@ impl WebhookCommand {
                 app.send_and_emit(&webhook::unsubscribe(&waba), no_id).await
             }
             Self::Fields(f) => f.run(app).await,
-            Self::Listen => planned("webhook listen", "v1.0"),
-            Self::VerifyUrl => planned("webhook verify-url", "v1.0"),
-            Self::Simulate => planned("webhook simulate", "v1.0"),
+            Self::Listen(args) => listen::run(args, app).await,
+            Self::VerifyUrl(args) => args.run(app).await,
+            Self::Simulate(args) => args.run(app).await,
         }
     }
+}
+
+/// Explicit callback changes must be usable by Meta before a token is requested.
+fn check_callback_url(url: &str) -> Result<()> {
+    validate::not_blank(url, "--callback-url")?;
+    validate::max_chars(url, limits::MAX_WEBHOOK_CALLBACK_URL, "callback URL")?;
+    if callback::parse_url(url)?.scheme() != "https" {
+        return Err(Error::validation(format!(
+            "--callback-url must be an https URL: {}",
+            redact_url(url)
+        )));
+    }
+    Ok(())
+}
+
+/// Meta needs a real certificate; plain HTTP is only good for trying things out locally.
+fn warn_unless_https(app: &App, url: &Url) {
+    if url.scheme() != "https" {
+        app.out.warn(
+            "this isn't HTTPS: Meta only calls endpoints with a valid TLS certificate, so this \
+             check says nothing about the certificate",
+        );
+    }
+}
+
+impl VerifyUrlArgs {
+    async fn run(self, app: &App) -> Result<()> {
+        let url = callback::parse_url(&self.url)?;
+        warn_unless_https(app, &url);
+        let token = self.verify_token.read(app)?;
+        let safe_url = redact_url(url.as_str());
+        let challenge = callback::challenge()?;
+        if app.dry_run() {
+            app.out.note("dry-run: no request sent");
+            app.out.emit(&Output::new(json!({
+                "method": "GET",
+                "url": safe_url,
+                "query": {
+                    "hub.mode": "subscribe",
+                    "hub.challenge": challenge,
+                    "hub.verify_token": "<redacted>",
+                },
+            })));
+            return Ok(());
+        }
+        let result = Probe::new(app.globals.timeout)?
+            .handshake(&url, token.expose_secret(), &challenge)
+            .await?;
+        app.out.emit(&Output::new(json!({
+            "url": safe_url,
+            "passed": result.passed(),
+            "status": result.status,
+            "challenge_echoed": result.echoed_challenge,
+        })));
+        if result.passed() {
+            app.out.info("handshake passed");
+            return Ok(());
+        }
+        app.out.warn(if result.status == 200 {
+            "handshake failed: the endpoint answered 200, but the body isn't exactly the \
+             hub.challenge value"
+                .to_owned()
+        } else {
+            format!(
+                "handshake failed: the endpoint answered {}. Meta needs 200 and the \
+                 hub.challenge value, and redirects aren't followed",
+                result.status
+            )
+        });
+        Err(Error::Silent(ExitCode::Generic))
+    }
+}
+
+impl SimulateArgs {
+    async fn run(self, app: &App) -> Result<()> {
+        let url = callback::parse_url(&self.url)?;
+        warn_unless_https(app, &url);
+        let file_body = self.file.as_deref().map(read_payload).transpose()?;
+        let ctx = app.ctx()?;
+        let (body, source) = match file_body {
+            Some(body) => (body, "file"),
+            None => {
+                let sample = SampleContext {
+                    waba_id: ctx
+                        .waba_id
+                        .clone()
+                        .unwrap_or_else(|| "102290129340398".into()),
+                    phone_number_id: ctx
+                        .phone_number_id
+                        .clone()
+                        .unwrap_or_else(|| "106540352242922".into()),
+                    timestamp: std::time::SystemTime::now()
+                        .duration_since(std::time::UNIX_EPOCH)
+                        .map_or(0, |d| d.as_secs()),
+                    nonce: callback::nonce()?,
+                };
+                let payload = webhook_samples::payload(&self.event, &sample)
+                    .ok_or_else(|| Error::validation(format!("unknown event: {}", self.event)))?;
+                (payload.to_string().into_bytes(), self.event.as_str())
+            }
+        };
+        let safe_url = redact_url(url.as_str());
+        if app.dry_run() {
+            app.out.note("dry-run: no request sent");
+            let mut headers = json!({ "Content-Type": "application/json" });
+            if self.signature != SignatureMode::Missing {
+                headers[callback::SIGNATURE_HEADER] = "sha256=<computed when sent>".into();
+            }
+            let parsed: Value = serde_json::from_slice(&body).unwrap_or_default();
+            // `-o raw` shows just the body, as for any dry run; the rest the whole request.
+            let raw = matches!(app.out.format(), crate::cli::Format::Raw)
+                .then(|| String::from_utf8_lossy(&body).into_owned());
+            app.out.emit(&Output {
+                raw,
+                ..Output::new(json!({
+                    "method": "POST",
+                    "url": safe_url,
+                    "headers": headers,
+                    "body": parsed,
+                }))
+            });
+            return Ok(());
+        }
+        let signature = match self.signature {
+            SignatureMode::Valid => Some(callback::sign(
+                ctx.require_app_secret()?.expose_secret(),
+                &body,
+            )),
+            SignatureMode::Wrong => Some(callback::wrong_signature(&body)?),
+            SignatureMode::Missing => None,
+        };
+        let status = Probe::new(app.globals.timeout)?
+            .deliver(&url, body, signature.as_deref())
+            .await?;
+        let expects_200 = self.signature == SignatureMode::Valid;
+        let passed = (status == 200) == expects_200;
+        app.out.emit(&Output::new(json!({
+            "url": safe_url,
+            "event": source,
+            "signature": self.signature.to_possible_value().map(|v| v.get_name().to_owned()),
+            "status": status,
+            "passed": passed,
+        })));
+        match (passed, expects_200) {
+            (true, true) => app.out.info("delivered: the endpoint answered 200"),
+            (true, false) if status >= 500 => app.out.warn(format!(
+                "rejected, but with a server error ({status}): check it isn't crashing instead \
+                 of checking the signature"
+            )),
+            (true, false) => app.out.info(format!(
+                "rejected as it should be: the endpoint answered {status}"
+            )),
+            (false, true) => app.out.warn(format!(
+                "the endpoint answered {status}. Meta treats anything but 200 as a failed \
+                 delivery and retries it for up to 7 days"
+            )),
+            (false, false) => app.out.warn(
+                "the endpoint answered 200 to a request with a bad signature: it isn't checking \
+                 X-Hub-Signature-256",
+            ),
+        }
+        if passed {
+            Ok(())
+        } else {
+            Err(Error::Silent(ExitCode::Generic))
+        }
+    }
+}
+
+/// A custom payload, checked but unchanged: the signature covers these exact bytes.
+fn read_payload(path: &std::path::Path) -> Result<Vec<u8>> {
+    validate::readable_file(path)?;
+    let body = std::fs::read(path)
+        .map_err(|e| Error::validation(format!("could not read {}: {e}", path.display())))?;
+    if body.len() > limits::MAX_WEBHOOK_PAYLOAD {
+        return Err(Error::validation(format!(
+            "{} is {} bytes; webhook payloads are at most {}",
+            path.display(),
+            body.len(),
+            limits::MAX_WEBHOOK_PAYLOAD
+        )));
+    }
+    callback::compact_json(&body)
+        .map_err(|e| Error::validation(format!("{} is not valid JSON: {e}", path.display())))?;
+    Ok(body)
 }
 
 impl Fields {
@@ -201,6 +431,9 @@ impl Fields {
                 callback_url,
                 verify_token,
             }) => {
+                if let Some(url) = &callback_url {
+                    check_callback_url(url)?;
+                }
                 // Only a new callback URL uses a token, so a PALOMA_VERIFY_TOKEN that's merely
                 // set in the environment isn't sent without one.
                 let verify_token = if callback_url.is_some() {

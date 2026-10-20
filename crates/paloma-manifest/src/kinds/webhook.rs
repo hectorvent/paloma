@@ -92,6 +92,19 @@ pub async fn plan(cx: Cx<'_>, spec: &Value) -> Result<KindPlan> {
         if wanted != current {
             let added: Vec<_> = wanted.difference(&current).cloned().collect();
             let removed: Vec<_> = current.difference(&wanted).cloned().collect();
+            // Only new names: a field the app already has, which `export` wrote out, may be
+            // one Meta added after this list was made, and must not break a re-apply.
+            let unknown: Vec<&str> = added
+                .iter()
+                .map(String::as_str)
+                .filter(|f| !webhook::AVAILABLE_FIELDS.contains(f))
+                .collect();
+            if !unknown.is_empty() {
+                return Err(Error::validation(format!(
+                    "unknown webhook field: {}; `paloma webhook fields available` lists them",
+                    unknown.join(", ")
+                )));
+            }
             let callback = webhook::app_callback_url(&subs)
                 .or_else(|| text("callback_url").map(str::to_owned));
             plan.changes.push(format!(

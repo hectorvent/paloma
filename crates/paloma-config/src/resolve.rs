@@ -187,7 +187,7 @@ impl Context {
         self.app_secret()?.ok_or_else(|| {
             Error::auth(
                 "no app secret: set PALOMA_APP_SECRET or an app_secret_ref in your profile \
-                 (needed for app-level webhook field subscriptions)",
+                 (needed for app-level webhook field subscriptions and webhook signatures)",
             )
         })
     }

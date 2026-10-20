@@ -223,3 +223,6 @@ pub const MAX_AUTOMATION_COMMAND_DESCRIPTION: usize = 256;
 
 /// Alternate webhook callback URLs are limited to 200 characters.
 pub const MAX_WEBHOOK_CALLBACK_URL: usize = 200;
+
+/// Meta accepts webhook payloads up to 3 MiB.
+pub const MAX_WEBHOOK_PAYLOAD: usize = 3 * 1024 * 1024;

@@ -277,7 +277,7 @@ error: text body is 5000 chars; max is 4096        # exit 5
 | `message` | read · typing · history |
 | `calling` | status · enable · disable · set · sip · codecs |
 | `flow` | list · get · create · update · publish · deprecate · delete · assets |
-| `webhook` | get · subscribe · unsubscribe · fields |
+| `webhook` | get · subscribe · unsubscribe · fields · listen · verify-url · simulate |
 | `number` | list · get · register · deregister · set-pin · quality · health |
 | `profile` | get · set · photo |
 | `account` | get · set · limits · health · activities · subscribed-apps · billing-currency · analytics |
@@ -296,10 +296,9 @@ Marketing Messages API. Use `send template --via cloud|marketing` for an explici
 endpoint, or keep the default `--via auto`. See [template sends](docs/commands/send.md#category-aware-routing)
 for permissions, offline dry-runs and handling a category change.
 
-**Coming next:** `webhook listen` and `simulate` (receive real events locally, and
-send signed test payloads to your endpoint). Those
-commands already appear in `--help` and say which release they're planned for. See
-[planned commands](docs/commands/planned.md).
+Develop receive-side integrations with `webhook listen`, check the verification
+handshake with `webhook verify-url`, and send signed test payloads with
+`webhook simulate`. See [webhook tools](docs/commands/webhook.md).
 
 ## Install
 

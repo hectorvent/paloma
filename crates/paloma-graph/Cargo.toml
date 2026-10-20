@@ -8,6 +8,7 @@ repository.workspace = true
 authors.workspace = true
 
 [dependencies]
+ring.workspace = true
 paloma-core.workspace = true
 futures-util.workspace = true
 mime_guess.workspace = true

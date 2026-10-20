@@ -18,6 +18,7 @@ name = "paloma"
 path = "src/main.rs"
 
 [dependencies]
+axum.workspace = true
 paloma-core.workspace = true
 paloma-config.workspace = true
 paloma-graph.workspace = true
@@ -35,7 +36,7 @@ secrecy.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 serde_norway.workspace = true
-tokio.workspace = true
+tokio = { workspace = true, features = ["net", "signal", "sync"] }
 tracing.workspace = true
 tracing-subscriber.workspace = true
 

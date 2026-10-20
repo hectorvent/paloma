@@ -46,7 +46,7 @@ Group findings by file:
 ```
 docs/commands/send.md
   - missing flag --biz-opaque (send text)
-  - documents `webhook listen` as available; it is planned v1.0
+  - documents `<group> <verb>` as available; it is planned vX.Y
 ```
 
 End with counts (files checked, findings). If everything matches, say so.

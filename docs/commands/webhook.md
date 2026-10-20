@@ -10,8 +10,7 @@ paloma webhook <verb> [flags]
 `subscribe` and `unsubscribe` manage the WABA's app subscription and alternate callback
 (`POST/DELETE /{waba-id}/subscribed_apps`). `subscribe --number` manages the active
 number's alternate callback; `get` resolves the effective delivery URL. These use your
-existing token; no app secret is needed. The receive-side bridge (`listen`, `verify-url`, `simulate`) is
-planned for v1.0; those verbs exit non-zero with a not-implemented error.
+existing token; no app secret is needed. `listen`, `verify-url` and `simulate` provide local receive-side development and callback checks.
 
 ## `paloma webhook get`
 
@@ -137,6 +136,153 @@ and a verify token to reactivate the subscription; pass them when Meta asks. The
 from the same sources as for `subscribe`, and it's only used with `--callback-url`. As there,
 `--verify-token-stdin` needs `--yes`. Setting
 fields changes which events production receives, so it confirms first (`--yes` to skip).
+
+## `paloma webhook verify-url`
+
+Check that your endpoint would pass Meta's verification, before you point Meta at it. It sends
+what Meta sends, and passes only on what Meta accepts: status `200` and a body that is exactly
+the challenge.
+
+```
+GET <url>?hub.mode=subscribe&hub.challenge=<random digits>&hub.verify_token=<your token>
+```
+
+```bash
+PALOMA_VERIFY_TOKEN=t paloma webhook verify-url https://example.com/webhooks/whatsapp
+printf '%s' "$VERIFY_TOKEN" | paloma webhook verify-url https://example.com/hook --verify-token-stdin
+
+# show the request without sending it; the token is masked
+PALOMA_VERIFY_TOKEN=t paloma webhook verify-url https://example.com/hook --dry-run
+```
+
+The verify token comes from the same sources as for `subscribe`. It's never printed, and
+neither is the endpoint's response body, which could echo it. Redirects aren't followed, so the
+token can't reach another host.
+
+stdout shows `url`, `passed`, `status` and `challenge_echoed`, and stderr says why it failed.
+`-q` prints nothing, so use the exit code:
+
+| Exit | Meaning |
+|------|---------|
+| `0` | Passed |
+| `1` | Failed, or the endpoint couldn't be reached (stdout is empty then) |
+| `5` | Not an http or https URL, or no verify token |
+
+Plain `http://` works for local testing but warns: Meta only calls endpoints with a valid TLS
+certificate, and self-signed ones aren't accepted, so a pass on `http://` doesn't tell you
+about that.
+
+## `paloma webhook simulate`
+
+POST a sample webhook to your endpoint, signed as Meta signs it: `X-Hub-Signature-256` is
+`sha256=` and the HMAC-SHA256 of the body, with your app secret as the key. Only a `200` passes,
+because Meta treats [any other status](https://developers.facebook.com/documentation/business-messaging/whatsapp/webhooks/overview#webhook-delivery-failure)
+as a failed delivery and retries it for up to 7 days.
+
+| Flag | Meaning |
+|------|---------|
+| `--event <name>` | Which sample to send (default `text`) |
+| `--file <path>` | Send this JSON file instead, byte for byte (at most 3 MB) |
+| `--signature <mode>` | `valid` (default), `wrong` or `missing` |
+
+| `--event` | What it tests |
+|-----------|---------------|
+| `text` | An incoming message from a user with no username: `wa_id`, `from` and the BSUID in `user_id`, `from_user_id` |
+| `text-username` | A username user whose number can't be shared: **no `wa_id` or `from`**, only `user_id`, `from_user_id`, and the parent BSUIDs |
+| `status-delivered` | A delivered status with `contacts`, `recipient_user_id` and `pricing` |
+| `status-failed` | A failed status with `errors`, and no `contacts` |
+| `status-paid-exempt` | A free service message: `pricing.type` `free_customer_service`, `pricing.subtype` `paid_exempt` |
+| `status-marketing-lite-dynamic` | A max-price marketing message: `pricing.category` `marketing_lite_dynamic`, with `cost` |
+| `user-changed-number` | The `user_changed_number` system message, with the new and previous BSUIDs |
+| `user-changed-user-id` | The `user_changed_user_id` system message: BSUIDs only, **no `from` or `wa_id`** |
+| `template-status` | `message_template_status_update`, which has a different `value` from a message |
+
+Samples use your configured WABA and phone number ids when there are any, the current time,
+and a new message id each time, so an endpoint that deduplicates won't drop a repeat.
+
+To test that your endpoint checks signatures, send a bad one. `--signature wrong` signs with a
+random key, and `--signature missing` leaves the header out. Neither needs the app secret, and
+they pass when the endpoint answers anything but `200`:
+
+```bash
+export PALOMA_APP_SECRET=...   # or an app_secret_ref in your profile
+paloma webhook simulate https://example.com/hook
+paloma webhook simulate https://example.com/hook --event text-username
+paloma webhook simulate https://example.com/hook --file ./captured-event.json
+paloma webhook simulate https://example.com/hook --signature wrong
+
+# show the request without sending it or reading the app secret
+paloma webhook simulate https://example.com/hook --event status-paid-exempt --dry-run
+```
+
+stdout shows `url`, `event`, `signature`, `status` and `passed`, and `-q` prints nothing:
+
+| Exit | Meaning |
+|------|---------|
+| `0` | Passed |
+| `1` | Failed (including a bad signature answered with `200`), or the endpoint couldn't be reached |
+| `3` | `--signature valid` with no app secret |
+| `5` | Not an http or https URL, or a `--file` that's missing, over 3 MB or not JSON |
+
+## `paloma webhook listen`
+
+Run a temporary webhook receiver on your machine. It answers Meta's verification handshake,
+checks each POST's signature, and prints each event to stdout as one line of JSON.
+
+| Flag | Meaning |
+|------|---------|
+| `--host <ip>` | IP address to bind (default `127.0.0.1`). Anything but loopback warns, because it's reachable from your network without TLS |
+| `--port <port>` | Port to bind (default `8080`; `0` picks a free one, shown on stderr) |
+| `--verify-token-stdin` | Read the verify token from stdin |
+
+```bash
+export PALOMA_VERIFY_TOKEN=t PALOMA_APP_SECRET=...
+paloma webhook listen --port 9000 | jq -c '.entry[].changes[].value.messages[]?'
+
+# in another terminal
+paloma webhook simulate http://127.0.0.1:9000/webhook --event text-username
+```
+
+It only listens locally, and it doesn't create a tunnel. For Meta to reach it you need your own
+public HTTPS address in front of it.
+
+**Any path works.** How it answers:
+
+| Request | Answer |
+|---------|--------|
+| `GET` with `hub.mode=subscribe` and the right `hub.verify_token` | `200` and the challenge |
+| `GET` with anything else | `403` |
+| `POST` with a good signature, or any `POST` if there's no app secret | `200`, and the event goes to stdout |
+| `POST` with a bad or missing signature | `403`, and a warning on stderr |
+| `POST` whose body isn't JSON | `400`, and a warning on stderr |
+| `POST` over 3 MB, Meta's payload limit | `413`, and a warning on stderr |
+| Any other method | `405` |
+
+**stdout is one JSON document per line, whatever `-o` says.** A line is one delivery, exactly as
+Meta sent it apart from the whitespace between tokens. Nothing is modelled, so the BSUID fields,
+`user_changed_user_id`, `pricing.subtype`, `marketing_lite_dynamic` and anything Meta adds later
+pass through. Meta can batch several changes into one delivery, so read `entry[].changes[]`
+rather than assuming one event per line. A username user's event has no `wa_id` or `from`. With
+`-q`, each delivery prints only its message and status ids, one per line. Everything else,
+including the listening address and rejections, goes to stderr.
+
+**Secrets.** The verify token comes from the same sources as for `subscribe`, so without
+`PALOMA_VERIFY_TOKEN` or `--verify-token-stdin` it prompts, or exits `5` with no terminal. The
+app secret comes from `PALOMA_APP_SECRET` or `app_secret_ref`. Without one, the listener warns
+and accepts every POST unchecked. Neither is ever printed.
+
+**Stopping.** Ctrl-C exits `0`. So does the reader going away, as in `… | head -1`: that event
+gets a `503` so it isn't lost, and the listener stops. Any other failure writing to stdout, such
+as a full disk, also answers that event with `503`, but reports the error and exits `1`.
+
+**A stalled reader blocks the listener.** Events are written to stdout as they arrive, with no
+queue, so a reader that stops reading without closing the pipe holds up the listener, Ctrl-C
+included, until it reads again. Deliveries wait meanwhile, and Meta retries those that time out.
+
+`--dry-run`: a listener has nothing to send, so it says what it would bind on stderr, binds
+nothing, reads no secrets and exits `0`.
+
+A port already in use exits `1`.
 
 ## Declarative config
 
