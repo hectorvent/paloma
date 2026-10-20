@@ -13,8 +13,8 @@ const COLUMNS: &[&str] = &["code", "prefilled_message", "deep_link_url"];
 pub enum QrCommand {
     /// Create a message QR code and optional image file.
     Create {
-        #[arg(long)]
-        message: String,
+        #[command(flatten)]
+        message: MessageArgs,
         #[command(flatten)]
         image: ImageArgs,
     },
@@ -37,11 +37,33 @@ pub enum QrCommand {
     /// Change a QR code's prefilled message.
     Update {
         code: String,
-        #[arg(long)]
-        message: String,
+        #[command(flatten)]
+        message: MessageArgs,
     },
     /// Delete a message QR code and expire its short link.
     Delete { code: String },
+}
+
+#[derive(Debug, Args)]
+pub struct MessageArgs {
+    /// Prefilled message (alternative to --message).
+    #[arg(
+        value_name = "MESSAGE",
+        required_unless_present = "message",
+        conflicts_with = "message"
+    )]
+    text: Option<String>,
+    #[arg(long, required_unless_present = "text")]
+    message: Option<String>,
+}
+
+impl MessageArgs {
+    fn value(&self) -> &str {
+        self.message
+            .as_deref()
+            .or(self.text.as_deref())
+            .expect("clap requires a message")
+    }
 }
 
 #[derive(Debug, Clone, Copy, ValueEnum)]
@@ -60,16 +82,19 @@ impl ImageFormat {
 
 #[derive(Debug, Args)]
 pub struct ImageArgs {
-    /// Generate an image in this format and save it with --out.
-    #[arg(long, requires = "out")]
+    /// Generate an image; defaults to CODE.svg or CODE.png unless --out is set.
+    #[arg(long, ignore_case = true)]
     image: Option<ImageFormat>,
     /// New destination file; existing files are refused.
-    #[arg(long, requires = "image")]
+    #[arg(long, short = 'O', requires = "image")]
     out: Option<PathBuf>,
 }
 impl ImageArgs {
-    fn validate(&self) -> Result<()> {
-        if let Some(path) = &self.out {
+    fn validate(&self, code: Option<&str>) -> Result<()> {
+        let default = code
+            .zip(self.image)
+            .map(|(code, format)| image_path(code, format));
+        if let Some(path) = self.out.as_ref().or(default.as_ref()) {
             if path.as_os_str().is_empty() || path.symlink_metadata().is_ok() {
                 return Err(Error::validation("--out must name a new file"));
             }
@@ -89,16 +114,16 @@ impl QrCommand {
     pub async fn run(self, app: &App) -> Result<()> {
         match &self {
             Self::Create { message, image } => {
-                validate::max_chars(message, limits::MAX_QR_MESSAGE, "QR message")?;
-                image.validate()?;
+                validate::qr_message(message.value())?;
+                image.validate(None)?;
             }
             Self::Get { code, image } => {
                 validate::qr_code(code)?;
-                image.validate()?;
+                image.validate(Some(code))?;
             }
             Self::Update { code, message } => {
                 validate::qr_code(code)?;
-                validate::max_chars(message, limits::MAX_QR_MESSAGE, "QR message")?;
+                validate::qr_message(message.value())?;
             }
             Self::Delete { code } => validate::qr_code(code)?,
             Self::List { limit, .. } => validate::page_size(*limit, Some(limits::MAX_QR_PAGE))?,
@@ -108,7 +133,7 @@ impl QrCommand {
             Self::Create { message, image } => {
                 emit(
                     app,
-                    qr::create(&phone, &message, image.image.map(ImageFormat::api)),
+                    qr::create(&phone, message.value(), image.image.map(ImageFormat::api)),
                     image,
                     true,
                 )
@@ -124,7 +149,7 @@ impl QrCommand {
                 .await
             }
             Self::Update { code, message } => {
-                app.send_and_emit(&qr::update(&phone, &code, &message), qr::code)
+                app.send_and_emit(&qr::update(&phone, &code, message.value()), qr::code)
                     .await
             }
             Self::Delete { code } => {
@@ -150,10 +175,14 @@ impl QrCommand {
     }
 }
 
+fn image_path(code: &str, format: ImageFormat) -> PathBuf {
+    PathBuf::from(format!("{code}.{}", format.api().to_ascii_lowercase()))
+}
+
 async fn emit(app: &App, request: Request, image: ImageArgs, created: bool) -> Result<()> {
     if app.dry_run() {
         let mut requests = vec![request];
-        if image.out.is_some() {
+        if image.image.is_some() {
             requests
                 .push(Request::get_url("<qr_image_url from the QR response>").unauthenticated());
         }
@@ -162,7 +191,18 @@ async fn emit(app: &App, request: Request, image: ImageArgs, created: bool) -> R
     let response = app.fetch(&request).await?;
     let output = Output::response(&response)?;
     let code = qr::code(&output.data);
-    if let Some(path) = image.out {
+    let path = match (image.out, image.image) {
+        (Some(path), _) => Some(path),
+        (None, Some(format)) => {
+            let code = code
+                .as_deref()
+                .ok_or_else(|| Error::other("QR response has no code"))?;
+            validate::qr_code(code)?;
+            Some(image_path(code, format))
+        }
+        (None, None) => None,
+    };
+    if let Some(path) = path {
         let result: Result<()> = async {
             let url = qr::image_url(&output.data)
                 .ok_or_else(|| Error::other("QR response has no image URL"))?;

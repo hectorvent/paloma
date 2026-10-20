@@ -233,16 +233,6 @@ pub fn template_ids_within(ids: &[String], max: usize) -> Result<()> {
     ids.iter().try_for_each(|id| template_id(id))
 }
 
-/// A Graph node id that ends up in a request path.
-pub fn numeric_id(id: &str, what: &str) -> Result<()> {
-    if id.is_empty() || !id.bytes().all(|b| b.is_ascii_digit()) {
-        return Err(Error::validation(format!(
-            "{what} '{id}' must contain only digits"
-        )));
-    }
-    Ok(())
-}
-
 /// A template analytics `start` or `end` as Unix seconds: a UNIX timestamp or `YYYY-MM-DD`, and
 /// only the date when the metrics use the account's timezone.
 pub fn template_analytics_time(value: &str, what: &str, date_only: bool) -> Result<i64> {
@@ -495,6 +485,27 @@ fn size_label(bytes: u64) -> String {
     } else {
         format!("{} KB", bytes / 1024)
     }
+}
+
+/// Graph object identifiers are decimal; reject path syntax before context resolution.
+pub fn numeric_id(id: &str, what: &str) -> Result<()> {
+    if id.is_empty() || !id.bytes().all(|c| c.is_ascii_digit()) {
+        return Err(Error::validation(format!(
+            "{what} must contain only digits"
+        )));
+    }
+    Ok(())
+}
+
+/// Meta defines timezone identifiers; IANA names are not accepted by this endpoint.
+pub fn timezone_id(id: &str) -> Result<()> {
+    numeric_id(id, "timezone id")
+}
+
+/// QR codes require a useful prefilled message within Meta's limit.
+pub fn qr_message(message: &str) -> Result<()> {
+    not_blank(message, "QR message")?;
+    max_chars(message, crate::limits::MAX_QR_MESSAGE, "QR message")
 }
 
 #[cfg(test)]

@@ -226,3 +226,6 @@ pub const MAX_WEBHOOK_CALLBACK_URL: usize = 200;
 
 /// Meta accepts webhook payloads up to 3 MiB.
 pub const MAX_WEBHOOK_PAYLOAD: usize = 3 * 1024 * 1024;
+
+/// Maximum number of account activities per Graph page.
+pub const MAX_ACTIVITIES_PAGE: u32 = 100;

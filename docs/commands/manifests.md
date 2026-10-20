@@ -31,8 +31,8 @@ spec:
 ```
 
 Supported `kind`s: **Calling**, **Profile**, **Number**, **Commerce**,
-**ConversationalAutomation**, **Template**, **Webhook**. A file may hold several
-manifests separated by `---`.
+**ConversationalAutomation**, **Account**, **QrCode**, **Template**, **Webhook**.
+A file may hold several manifests separated by `---`.
 
 ## Variables & secrets
 
@@ -138,8 +138,9 @@ compared whole, since Meta replaces them wholesale). Read-only, Meta-managed fie
   verification `pin`. A PIN is a secret, so `export` never includes it and you should
   not commit one; read-only fields are ignored on apply.
 - **Commerce** maps to `whatsapp_commerce_settings`: `isCartEnabled`, `isCatalogVisible`.
-- **ConversationalAutomation** maps to `conversational_automation`: `prompts` (ice
-  breakers) and `commands`. Arrays are full-replace; send the complete desired set.
+- **ConversationalAutomation** maps to `conversational_automation`: `enableWelcomeMessage`,
+  `prompts` (ice breakers) and `commands`. Arrays are full-replace; send the complete
+  desired set.
 - **Template** is a managed *set* (WABA-scoped), one manifest per template keyed by
   `name` + `language`. `export template` snapshots every template as a multi-document
   file. `apply` creates a missing template or edits a changed one (an **edit
@@ -168,8 +169,13 @@ compared whole, since Meta replaces them wholesale). Read-only, Meta-managed fie
   supply it at change time, or use `paloma webhook subscribe`. `fields` are app-level, so reading/diffing them needs an app
   access token: configure `PALOMA_APP_SECRET` (or `app_secret_ref`) and `--app-id` /
   `PALOMA_APP_ID` (or rely on auto-discovery). `export` omits `fields` when no app secret
-  is configured. There is no deletion semantics; remove a webhook with
-  `paloma webhook unsubscribe`.
+  is configured. A newly added field must appear in
+  [`webhook fields available`](webhook.md#paloma-webhook-fields), or `diff` and `apply`
+  exit `5`. Already-subscribed fields remain valid even if the local available list
+  does not recognize them, so exporting and reapplying does not drop newer fields.
+  Phone-number callback overrides are outside this WABA-scoped kind; manage them with
+  `paloma webhook subscribe --number`. There is no deletion semantics; remove a webhook
+  with `paloma webhook unsubscribe`.
 
   ```yaml
   apiVersion: paloma/v1
@@ -183,3 +189,37 @@ compared whole, since Meta replaces them wholesale). Read-only, Meta-managed fie
   ```
 
 Dry-run previews and drift diagnostics mask sensitive fields, including nested SIP passwords. Sensitive-only updates still report drift and are applied with their original values.
+
+### Account
+
+`Account` manages only the WABA name and numeric Graph timezone identifier. It is WABA
+scoped; `metadata.phoneNumberId` is unnecessary. Bare numeric timezone values are
+normalized to strings, avoiding perpetual drift against Meta's response. Unknown fields
+are refused before a read. Insights enrollment, the Cloud API marketing toggle and
+billing stay explicit commands because they affect enrollment, sending or billing.
+
+```yaml
+apiVersion: paloma/v1
+kind: Account
+spec:
+  name: Acme Support
+  timezoneId: 7
+```
+
+### QrCode
+
+`QrCode` manages the prefilled message of an existing phone-scoped code. Meta assigns
+code identities, so create one with `paloma qr create`, then `paloma export qrcode`.
+Apply updates only that code; it never creates or deletes a code. Ambiguous, malformed
+or mismatched lookup responses fail before any write. Export includes only
+the code and message, leaving out generated links and image URLs.
+
+```yaml
+apiVersion: paloma/v1
+kind: QrCode
+metadata:
+  phoneNumberId: '111'
+spec:
+  code: WOMVT6TJ2BP7A1
+  prefilledMessage: Tell me more
+```

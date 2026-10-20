@@ -20,10 +20,10 @@ pub enum AutomationCommand {
 #[derive(Debug, Args)]
 pub struct SetArgs {
     /// Enable or disable the welcome message.
-    #[arg(long, action = clap::ArgAction::Set)]
+    #[arg(long, visible_alias = "welcome-message", action = clap::ArgAction::Set)]
     welcome: Option<bool>,
     /// Ice breaker; repeat for up to four prompts.
-    #[arg(long)]
+    #[arg(long, visible_alias = "ice-breaker")]
     prompt: Vec<String>,
     /// Command without leading slash, followed by its hint; repeatable.
     #[arg(long, value_name = "NAME:DESCRIPTION")]
@@ -46,9 +46,9 @@ impl SetArgs {
                 .command
                 .iter()
                 .map(|value| {
-                    let (name, description) = value
-                        .split_once(':')
-                        .ok_or_else(|| Error::validation("--command must be NAME:DESCRIPTION"))?;
+                    let (name, description) = value.split_once([':', '=']).ok_or_else(|| {
+                        Error::validation("--command must be NAME:DESCRIPTION or NAME=DESCRIPTION")
+                    })?;
                     Ok(Command {
                         command_name: name.to_owned(),
                         command_description: description.to_owned(),
@@ -107,6 +107,7 @@ fn validate_body(body: &Value) -> Result<()> {
                 limits::MAX_AUTOMATION_COMMANDS
             )));
         }
+        let mut names = std::collections::HashSet::new();
         for command in commands {
             let name = command
                 .get("command_name")
@@ -119,6 +120,12 @@ fn validate_body(body: &Value) -> Result<()> {
                     Error::validation("each command needs a command_description string")
                 })?;
             validate::not_blank(name, "command name")?;
+            validate::not_blank(hint, "command description")?;
+            if !names.insert(name) {
+                return Err(Error::validation(format!(
+                    "duplicate command name '{name}'"
+                )));
+            }
             if name.starts_with('/') {
                 return Err(Error::validation(
                     "command names must omit the leading slash",

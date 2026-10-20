@@ -142,6 +142,8 @@ live in one `whatsapp.yaml`.
 
 | Kind | Manages |
 |------|---------|
+| `Account` | WABA name and timezone (excludes irreversible enrollment and billing) |
+| `QrCode` | Prefilled messages for existing QR codes |
 | `Calling` | Voice calling: status, call icon, callback permission, SIP servers, codecs |
 | `Profile` | Business profile: about, address, description, email, websites, vertical |
 | `Template` | Message templates as a managed set. Missing ones are created; changed ones are edited and go back to Meta for approval |
@@ -285,7 +287,7 @@ error: text body is 5000 chars; max is 4096        # exit 5
 | `block` | add · remove · list |
 | `qr` | create · list · get · update · delete |
 | `automation` | get · set |
-| `export` · `apply` · `diff` | your setup as code: declarative YAML for the seven kinds above |
+| `export` · `apply` · `diff` | your setup as code: declarative YAML for the nine kinds above |
 | `auth` | login · status · whoami · logout |
 | `config` · `configure` | profiles and settings |
 | `link` | `wa.me` click-to-chat links, offline, no token needed |

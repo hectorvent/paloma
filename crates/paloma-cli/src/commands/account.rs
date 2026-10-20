@@ -4,10 +4,13 @@
 use std::path::PathBuf;
 
 use clap::{Args, Subcommand};
-use paloma_core::{Error, Result, validate};
+use paloma_core::{Error, Result, limits, validate};
 use paloma_graph::api::{account, webhook};
 
 use super::read_json;
+use crate::{cli::Format, output::Output};
+use paloma_graph::Request;
+use serde_json::json;
 
 mod analytics;
 mod billing_currency;
@@ -23,6 +26,7 @@ const LIMIT_COLUMNS: &[&str] = &[
 const APP_COLUMNS: &[&str] = &[
     "/whatsapp_business_api_data/id",
     "/whatsapp_business_api_data/name",
+    "/whatsapp_business_api_data/link",
     "override_callback_uri",
 ];
 
@@ -37,12 +41,12 @@ pub enum AccountCommand {
     /// Update account settings.
     Set(SetArgs),
     /// List account activity history.
-    Activities(PageArgs),
+    Activities(ActivitiesArgs),
     /// Clone an account and explicitly switch billing currency.
     #[command(subcommand)]
     BillingCurrency(BillingCurrency),
     /// Show the shared portfolio messaging limit reported by each WABA number.
-    Limits(PageArgs),
+    Limits(LimitsArgs),
     /// Show the WABA's messaging and calling health.
     Health,
     /// Report messaging counts or pricing analytics.
@@ -62,20 +66,41 @@ pub struct PageArgs {
 }
 
 #[derive(Debug, Args)]
+pub struct ActivitiesArgs {
+    #[command(flatten)]
+    page: PageArgs,
+    /// Page size, at most 100.
+    #[arg(long)]
+    limit: Option<u32>,
+}
+
+#[derive(Debug, Args)]
+pub struct LimitsArgs {
+    #[command(flatten)]
+    page: PageArgs,
+    /// Read the shared limit directly from this business portfolio.
+    #[arg(long, conflicts_with_all = ["all", "after"])]
+    business_id: Option<String>,
+}
+
+#[derive(Debug, Args)]
 pub struct SetArgs {
     #[arg(long)]
     name: Option<String>,
     /// Graph timezone identifier (not an IANA timezone name).
     #[arg(long)]
     timezone_id: Option<String>,
-    /// Enable or disable template insights.
+    /// Enroll in template insights (irreversible); false is refused.
     #[arg(long, action = clap::ArgAction::Set)]
     insights: Option<bool>,
+    /// Enroll in template insights (irreversible), exclusive with other settings.
+    #[arg(long, conflicts_with_all = ["name", "timezone_id", "insights", "disable_cloud_marketing", "file"])]
+    enable_insights: bool,
     /// Reject marketing templates on Cloud API; onboard to MM API first.
-    #[arg(long, action = clap::ArgAction::Set)]
+    #[arg(long, visible_alias = "disable-marketing-messages-on-cloud-api", action = clap::ArgAction::Set)]
     disable_cloud_marketing: Option<bool>,
     /// Full writable account object (JSON), exclusive with typed settings.
-    #[arg(long, conflicts_with_all = ["name", "timezone_id", "insights", "disable_cloud_marketing"])]
+    #[arg(long, conflicts_with_all = ["name", "timezone_id", "insights", "disable_cloud_marketing", "enable_insights"])]
     file: Option<PathBuf>,
 }
 
@@ -85,7 +110,7 @@ impl SetArgs {
             validate::not_blank(name, "name")?;
         }
         if let Some(timezone) = &self.timezone_id {
-            validate::not_blank(timezone, "timezone id")?;
+            validate::timezone_id(timezone)?;
         }
         let body = if let Some(file) = self.file {
             read_json(&file)?
@@ -93,7 +118,11 @@ impl SetArgs {
             account::Settings {
                 name: self.name,
                 timezone_id: self.timezone_id,
-                insights: self.insights,
+                insights: if self.enable_insights {
+                    Some(true)
+                } else {
+                    self.insights
+                },
                 disable_cloud_marketing: self.disable_cloud_marketing,
             }
             .body()
@@ -108,7 +137,11 @@ impl SetArgs {
                 let text = value
                     .as_str()
                     .ok_or_else(|| Error::validation(format!("{key} must be a string")))?;
-                validate::not_blank(text, key)?;
+                if key == "timezone_id" {
+                    validate::timezone_id(text)?;
+                } else {
+                    validate::not_blank(text, key)?;
+                }
             }
         }
         for key in [
@@ -117,6 +150,18 @@ impl SetArgs {
         ] {
             if body.get(key).is_some_and(|v| !v.is_boolean()) {
                 return Err(Error::validation(format!("{key} must be boolean")));
+            }
+        }
+        if let Some(enabled) = body.get("is_enabled_for_insights") {
+            if enabled != &serde_json::Value::Bool(true) {
+                return Err(Error::validation(
+                    "insights enrollment is irreversible and cannot be disabled",
+                ));
+            }
+            if body.as_object().is_some_and(|object| object.len() != 1) {
+                return Err(Error::validation(
+                    "enable insights separately from other account settings",
+                ));
             }
         }
         Ok(body)
@@ -131,6 +176,16 @@ impl AccountCommand {
         if let Self::Set(args) = self {
             let body = args.body()?;
             let waba = app.ctx()?.require_waba_id()?.to_owned();
+            if body.get("is_enabled_for_insights") == Some(&serde_json::Value::Bool(true)) {
+                if !app.confirm_or_abort(
+                    "enable template insights permanently (this cannot be undone)",
+                )? {
+                    return Ok(());
+                }
+                return app
+                    .send_and_emit(&account::enable_insights(&waba), no_id)
+                    .await;
+            }
             if body
                 .get("disable_marketing_messages_on_cloud_api")
                 .and_then(serde_json::Value::as_bool)
@@ -152,20 +207,32 @@ impl AccountCommand {
         if let Self::Analytics(args) = self {
             return args.run(app).await;
         }
+        if let Self::Limits(args) = &self
+            && let Some(id) = &args.business_id
+        {
+            validate::numeric_id(id, "business id")?;
+            return app
+                .send_and_emit(&account::portfolio_limit(id), no_id)
+                .await;
+        }
+        if let Self::Activities(args) = &self {
+            validate::page_size(args.limit, Some(limits::MAX_ACTIVITIES_PAGE))?;
+        }
         let waba = app.ctx()?.require_waba_id()?.to_owned();
         match self {
             Self::Activities(a) => {
                 super::template::list(
                     app,
-                    a.all,
-                    a.after,
-                    |after| account::activities(&waba, after),
+                    a.page.all,
+                    a.page.after,
+                    |after| account::activities_page(&waba, after, a.limit),
                     &[
                         "event_type",
                         "timestamp",
                         "actor_id",
                         "actor_business_id",
                         "category",
+                        "id",
                     ],
                 )
                 .await
@@ -180,15 +247,12 @@ impl AccountCommand {
                 )
                 .await
             }
-            Self::Health => {
-                app.send_and_emit(&account::get(&waba, account::HEALTH_FIELDS), field_id)
-                    .await
-            }
+            Self::Health => show_health(app, &account::get(&waba, account::HEALTH_FIELDS)).await,
             Self::Limits(a) => {
                 super::template::list(
                     app,
-                    a.all,
-                    a.after,
+                    a.page.all,
+                    a.page.after,
                     |after| account::limits(&waba, after),
                     LIMIT_COLUMNS,
                 )
@@ -206,4 +270,28 @@ impl AccountCommand {
             }
         }
     }
+}
+
+/// Only table output flattens health entities; scripting keeps the Graph response.
+pub(super) async fn show_health(app: &App, req: &Request) -> Result<()> {
+    let Some(response) = app.send(req).await? else {
+        return Ok(());
+    };
+    let mut output = Output::response(&response)?;
+    let id = field_id(&output.data);
+    if app.out.format() == Format::Table {
+        output.data = json!({"rows": account::health_rows(&output.data)});
+        output = output.table(
+            "/rows",
+            &[
+                "entity_type",
+                "id",
+                "can_send_message",
+                "can_receive_call_sip",
+                "details",
+            ],
+        );
+    }
+    app.out.emit(&output.id(id));
+    Ok(())
 }

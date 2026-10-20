@@ -12,7 +12,8 @@ paloma qr update 4O4YGZEG3RIVE1 --message 'Book an appointment'
 paloma qr delete 4O4YGZEG3RIVE1 --yes
 ```
 
-`create` and `update` take `--message`, limited to 140 characters. Codes are opaque
+`create` and `update` take a positional message or `--message`, limited to 140
+characters; blank messages are refused. Codes are opaque
 14-character alphanumeric identifiers. Invalid codes, oversized messages and invalid
 page sizes exit `5` before context resolution or an API call.
 
@@ -28,8 +29,9 @@ paloma qr create --message 'Support' --image svg --out support.svg
 paloma qr get 4O4YGZEG3RIVE1 --image png --out support.png
 ```
 
-`--image svg|png` and `--out` must be used together. The destination must be new and
-its parent directory must exist; existing files and symlinks are refused. The response
+`--image svg|png` accepts either case and defaults to `CODE.svg` or `CODE.png`.
+Use `--out` (or `-O`) to choose a destination. `--out` requires `--image`. The destination
+must be new and its parent directory must exist; existing files and symlinks are refused. The response
 continues to describe the Graph resource, while the saved-file diagnostic goes to stderr.
 The signed/public image URL is downloaded without forwarding the Graph token.
 

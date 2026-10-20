@@ -68,7 +68,12 @@ async fn history(app: &App, wamid: &str) -> Result<()> {
     .await?;
     let id = page
         .and_then(|page| message_history::history_id(&page, wamid))
-        .ok_or_else(|| Error::other(format!("no message history for {wamid}")))?;
+        .ok_or_else(|| {
+            Error::other(format!(
+                "Meta returned no message history for {wamid}. This can happen for a message \
+                 it delivered, so it doesn't mean the message doesn't exist"
+            ))
+        })?;
     let trail =
         paging::collect_all(client, None, |after| message_history::events(&id, after)).await?;
     app.out.emit(

@@ -7870,7 +7870,7 @@ async fn account_set_shapes_settings_including_false_and_supports_file() {
     let home = TempDir::new().unwrap();
     Mock::given(method("POST"))
         .and(path(format!("/v26.0/{WABA}")))
-        .and(body_json(json!({"name":"New name", "timezone_id":"1", "is_enabled_for_insights":false, "disable_marketing_messages_on_cloud_api":false})))
+        .and(body_json(json!({"name":"New name", "timezone_id":"1", "disable_marketing_messages_on_cloud_api":false})))
         .respond_with(ResponseTemplate::new(200).set_body_json(json!({"success":true})))
         .expect(1).mount(&graph).await;
     paloma(Some(&graph), &home)
@@ -7881,8 +7881,6 @@ async fn account_set_shapes_settings_including_false_and_supports_file() {
             "New name",
             "--timezone-id",
             "1",
-            "--insights",
-            "false",
             "--disable-cloud-marketing",
             "false",
             "-q",
@@ -11496,4 +11494,692 @@ fn webhook_listen_reports_a_failed_write_and_exits_1() {
     stderr.read_to_string(&mut rest).unwrap();
     assert!(rest.contains("cannot write the event to stdout"), "{rest}");
     assert!(!rest.contains("stopped"), "{rest}");
+}
+
+fn account_manifest(home: &TempDir, spec: &str) -> std::path::PathBuf {
+    let file = home.path().join("account.yaml");
+    std::fs::write(
+        &file,
+        format!("apiVersion: paloma/v1\nkind: Account\nmetadata: {{}}\nspec:\n{spec}"),
+    )
+    .unwrap();
+    file
+}
+
+async fn mock_account_settings(graph: &MockServer) {
+    Mock::given(method("GET"))
+        .and(path(format!("/v26.0/{WABA}")))
+        .and(query_param("fields", "name,timezone_id"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "name": "Acme",
+            "timezone_id": "7",
+            "id": WABA,
+        })))
+        .mount(graph)
+        .await;
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn account_manifest_diff_compares_a_bare_timezone_with_metas_string() {
+    let graph = MockServer::start().await;
+    mock_account_settings(&graph).await;
+    let home = TempDir::new().unwrap();
+    let file = account_manifest(&home, "  name: Acme\n  timezoneId: 7\n");
+    paloma(Some(&graph), &home)
+        .args(["diff", "-f"])
+        .arg(&file)
+        .assert()
+        .success();
+    let file = account_manifest(&home, "  name: Acme Inc\n  timezoneId: 7\n");
+    paloma(Some(&graph), &home)
+        .args(["diff", "-f"])
+        .arg(&file)
+        .assert()
+        .code(1)
+        .stderr(predicate::str::contains("Account/222"));
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn account_manifest_apply_dry_run_reads_but_never_writes() {
+    let graph = MockServer::start().await;
+    mock_account_settings(&graph).await;
+    Mock::given(method("POST"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({ "success": true })))
+        .expect(0)
+        .mount(&graph)
+        .await;
+    let home = TempDir::new().unwrap();
+    let file = account_manifest(&home, "  name: Acme Inc\n");
+    paloma(Some(&graph), &home)
+        .args(["apply", "--dry-run", "-f"])
+        .arg(&file)
+        .assert()
+        .success();
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn account_manifest_apply_writes_only_on_drift() {
+    let graph = MockServer::start().await;
+    mock_account_settings(&graph).await;
+    Mock::given(method("POST"))
+        .and(path(format!("/v26.0/{WABA}")))
+        .and(body_json(json!({ "name": "Acme Inc", "timezone_id": "7" })))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({ "success": true })))
+        .expect(1)
+        .mount(&graph)
+        .await;
+    let home = TempDir::new().unwrap();
+    let file = account_manifest(&home, "  name: Acme Inc\n  timezoneId: \"7\"\n");
+    paloma(Some(&graph), &home)
+        .args(["apply", "-f"])
+        .arg(&file)
+        .assert()
+        .success()
+        .stderr(predicate::str::contains("Account/222 configured"));
+    let file = account_manifest(&home, "  name: Acme\n");
+    paloma(Some(&graph), &home)
+        .args(["apply", "-f"])
+        .arg(&file)
+        .assert()
+        .success()
+        .stderr(predicate::str::contains("Account/222 unchanged"));
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn account_manifest_refuses_the_toggle_insights_and_billing_before_any_call() {
+    let graph = MockServer::start().await;
+    Mock::given(wiremock::matchers::any())
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({})))
+        .expect(0)
+        .mount(&graph)
+        .await;
+    let home = TempDir::new().unwrap();
+    for spec in [
+        "  disableMarketingMessagesOnCloudApi: true\n",
+        "  isEnabledForInsights: true\n",
+        "  currency: INR\n",
+        "  name: Acme\n  disableMarketingMessagesOnCloudApi: false\n",
+    ] {
+        let file = account_manifest(&home, spec);
+        paloma(Some(&graph), &home)
+            .args(["apply", "-f"])
+            .arg(&file)
+            .assert()
+            .code(5)
+            .stderr(predicate::str::contains("manages name and timezoneId"));
+    }
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn account_manifest_export_keeps_only_the_settings() {
+    let graph = MockServer::start().await;
+    mock_account_settings(&graph).await;
+    let home = TempDir::new().unwrap();
+    let out = paloma(Some(&graph), &home)
+        .args(["export", "account", "-o", "json"])
+        .output()
+        .unwrap();
+    assert!(out.status.success());
+    let manifest = stdout_json(&out);
+    assert_eq!(manifest["kind"], "Account");
+    assert_eq!(manifest["metadata"], json!({}));
+    assert_eq!(
+        manifest["spec"],
+        json!({ "name": "Acme", "timezoneId": "7" })
+    );
+    paloma(None, &home)
+        .env_remove("PALOMA_TOKEN")
+        .args(["export", "account", "--template"])
+        .assert()
+        .success()
+        .stdout(
+            predicate::str::contains("kind: Account")
+                .and(predicate::str::contains("# timezoneId:"))
+                .and(predicate::str::contains("phoneNumberId").not())
+                .and(predicate::str::contains("disableMarketing").not()),
+        );
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn message_history_with_no_entry_says_a_delivered_message_can_have_none() {
+    let graph = MockServer::start().await;
+    Mock::given(method("GET"))
+        .and(path(format!("/v26.0/{PHONE}/message_history")))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({ "data": [] })))
+        .expect(1)
+        .mount(&graph)
+        .await;
+    let home = TempDir::new().unwrap();
+    paloma(Some(&graph), &home)
+        .args(["message", "history", "wamid.DELIVERED"])
+        .assert()
+        .code(1)
+        .stdout(predicate::str::is_empty())
+        .stderr(
+            predicate::str::contains("Meta returned no message history for wamid.DELIVERED")
+                .and(predicate::str::contains("a message it delivered"))
+                .and(predicate::str::contains(
+                    "doesn't mean the message doesn't exist",
+                )),
+        );
+}
+
+const QR_CODE: &str = "WOMVT6TJ2BP7A1";
+fn qr_manifest(home: &TempDir, spec: &str) -> std::path::PathBuf {
+    let file = home.path().join("qr.yaml");
+    std::fs::write(
+        &file,
+        format!("apiVersion: paloma/v1\nkind: QrCode\nspec:\n{spec}\n"),
+    )
+    .unwrap();
+    file
+}
+
+async fn mock_qr_get(graph: &MockServer) {
+    Mock::given(method("GET"))
+        .and(path(format!("/v26.0/{PHONE}/message_qrdls/{QR_CODE}")))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({ "data": [json!({"code": QR_CODE, "prefilled_message": "Cyber Monday", "deep_link_url":"https://wa.me/message/example"})] })))
+        .mount(graph)
+        .await;
+}
+
+fn qr_spec(message: &str) -> String {
+    format!("  code: {QR_CODE}\n  prefilledMessage: {message}")
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn qr_code_export_emits_only_the_code_and_message_and_round_trips() {
+    let graph = MockServer::start().await;
+    Mock::given(method("GET"))
+        .and(path(format!("/v26.0/{PHONE}/message_qrdls")))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "data": [json!({"code": QR_CODE, "prefilled_message": "Cyber Monday", "deep_link_url":"https://wa.me/message/example"}), { "code": "WOMVT6TJ2BP7A1", "prefilled_message": "Hello" }],
+        })))
+        .expect(1)
+        .mount(&graph)
+        .await;
+    mock_qr_get(&graph).await;
+    let home = TempDir::new().unwrap();
+    let out = paloma(Some(&graph), &home)
+        .args(["export", "qrcode"])
+        .output()
+        .unwrap();
+    assert!(out.status.success());
+    let exported = String::from_utf8_lossy(&out.stdout).into_owned();
+    assert_eq!(exported.matches("kind: QrCode").count(), 2, "{exported}");
+    assert!(exported.contains(&format!("code: {QR_CODE}")), "{exported}");
+    assert!(
+        exported.contains("prefilledMessage: Cyber Monday"),
+        "{exported}"
+    );
+    assert!(
+        exported.contains(&format!("phoneNumberId: '{PHONE}'")),
+        "{exported}"
+    );
+    assert!(!exported.contains("deepLinkUrl"), "{exported}");
+
+    let first = exported.split("---").next().unwrap();
+    let file = home.path().join("exported.yaml");
+    std::fs::write(&file, first).unwrap();
+    paloma(Some(&graph), &home)
+        .args(["apply", "-f"])
+        .arg(&file)
+        .assert()
+        .success()
+        .stderr(predicate::str::contains("QrCode/111 unchanged"));
+}
+
+#[test]
+fn qr_code_export_template_is_offline() {
+    let home = TempDir::new().unwrap();
+    paloma(None, &home)
+        .args(["export", "qrcode", "--template"])
+        .assert()
+        .success()
+        .stdout(
+            predicate::str::contains("kind: QrCode")
+                .and(predicate::str::contains("# code:"))
+                .and(predicate::str::contains("# prefilledMessage:")),
+        );
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn qr_code_diff_exits_1_on_drift_and_0_in_sync() {
+    let graph = MockServer::start().await;
+    mock_qr_get(&graph).await;
+    let home = TempDir::new().unwrap();
+    let file = qr_manifest(&home, &qr_spec("Cyber Monday"));
+    paloma(Some(&graph), &home)
+        .args(["diff", "-f"])
+        .arg(&file)
+        .assert()
+        .success()
+        .stderr(predicate::str::contains("QrCode/111 in sync"));
+    let file = qr_manifest(&home, &qr_spec("Cyber Tuesday"));
+    paloma(Some(&graph), &home)
+        .args(["diff", "-f"])
+        .arg(&file)
+        .assert()
+        .code(1)
+        .stderr(predicate::str::contains(format!(
+            r#"{QR_CODE} prefilled_message: "Cyber Monday" -> "Cyber Tuesday""#
+        )));
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn qr_code_apply_dry_run_reads_but_never_writes() {
+    let graph = MockServer::start().await;
+    mock_qr_get(&graph).await;
+    Mock::given(method("POST"))
+        .respond_with(ResponseTemplate::new(200))
+        .expect(0)
+        .mount(&graph)
+        .await;
+    let home = TempDir::new().unwrap();
+    let file = qr_manifest(&home, &qr_spec("Cyber Tuesday"));
+    let out = paloma(Some(&graph), &home)
+        .args(["apply", "--dry-run", "-f"])
+        .arg(&file)
+        .output()
+        .unwrap();
+    assert!(out.status.success());
+    assert_eq!(
+        stdout_json(&out),
+        json!({ "code": QR_CODE, "prefilled_message": "Cyber Tuesday" })
+    );
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn qr_code_apply_writes_only_drift_through_the_update() {
+    let graph = MockServer::start().await;
+    mock_qr_get(&graph).await;
+    Mock::given(method("POST"))
+        .and(path(format!("/v26.0/{PHONE}/message_qrdls")))
+        .and(body_json(
+            json!({ "code": QR_CODE, "prefilled_message": "Cyber Tuesday" }),
+        ))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({"code": QR_CODE, "prefilled_message": "Cyber Monday", "deep_link_url":"https://wa.me/message/example"})))
+        .expect(1)
+        .mount(&graph)
+        .await;
+    let home = TempDir::new().unwrap();
+    let file = qr_manifest(&home, &qr_spec("Cyber Monday"));
+    paloma(Some(&graph), &home)
+        .args(["apply", "-f"])
+        .arg(&file)
+        .assert()
+        .success()
+        .stderr(predicate::str::contains("QrCode/111 unchanged"));
+    let file = qr_manifest(&home, &qr_spec("Cyber Tuesday"));
+    paloma(Some(&graph), &home)
+        .args(["apply", "-f"])
+        .arg(&file)
+        .assert()
+        .success()
+        .stderr(predicate::str::contains("QrCode/111 configured"));
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn account_insights_is_confirmed_one_way_and_uses_query() {
+    let graph = MockServer::start().await;
+    let home = TempDir::new().unwrap();
+    Mock::given(method("POST"))
+        .and(path(format!("/v26.0/{WABA}")))
+        .and(query_param("is_enabled_for_insights", "true"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({"success":true})))
+        .expect(3)
+        .mount(&graph)
+        .await;
+    paloma(Some(&graph), &home)
+        .args(["account", "set", "--enable-insights"])
+        .assert()
+        .code(5)
+        .stdout("")
+        .stderr(predicate::str::contains("--yes"));
+    for args in [
+        vec!["--enable-insights", "--yes"],
+        vec!["--insights", "true", "--yes"],
+    ] {
+        paloma(Some(&graph), &home)
+            .args(["account", "set"])
+            .args(args)
+            .assert()
+            .success()
+            .stderr("");
+    }
+    for args in [
+        vec!["--insights", "false"],
+        vec!["--insights", "true", "--name", "Acme"],
+    ] {
+        paloma(Some(&graph), &home)
+            .env_remove("PALOMA_WABA_ID")
+            .args(["account", "set"])
+            .args(args)
+            .assert()
+            .code(5)
+            .stdout("");
+    }
+    let file = home.path().join("insights.json");
+    for body in [
+        r#"{"is_enabled_for_insights":false}"#,
+        r#"{"is_enabled_for_insights":true,"name":"Acme"}"#,
+    ] {
+        std::fs::write(&file, body).unwrap();
+        paloma(Some(&graph), &home)
+            .env_remove("PALOMA_WABA_ID")
+            .args(["account", "set", "--file"])
+            .arg(&file)
+            .assert()
+            .code(5)
+            .stdout("");
+    }
+    std::fs::write(&file, r#"{"is_enabled_for_insights":true}"#).unwrap();
+    paloma(Some(&graph), &home)
+        .args(["account", "set", "--file"])
+        .arg(&file)
+        .arg("--yes")
+        .assert()
+        .success();
+    let requests = graph.received_requests().await.unwrap();
+    assert!(requests.iter().all(|request| request.body.is_empty()));
+    let out = paloma(Some(&graph), &home)
+        .args([
+            "account",
+            "set",
+            "--enable-insights",
+            "--dry-run",
+            "-o",
+            "json",
+        ])
+        .output()
+        .unwrap();
+    assert!(out.status.success());
+    assert!(
+        stdout_json(&out)["url"]
+            .as_str()
+            .unwrap()
+            .contains("is_enabled_for_insights=true")
+    );
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn account_limits_portfolio_and_activities_limit_are_validated() {
+    let graph = MockServer::start().await;
+    let home = TempDir::new().unwrap();
+    Mock::given(method("GET"))
+        .and(path("/v26.0/333"))
+        .and(query_param(
+            "fields",
+            "whatsapp_business_manager_messaging_limit",
+        ))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .set_body_json(json!({"whatsapp_business_manager_messaging_limit":"TIER_250"})),
+        )
+        .expect(1)
+        .mount(&graph)
+        .await;
+    paloma(Some(&graph), &home)
+        .env_remove("PALOMA_WABA_ID")
+        .args(["account", "limits", "--business-id", "333"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("TIER_250"));
+    Mock::given(method("GET"))
+        .and(path(format!("/v26.0/{WABA}/activities")))
+        .and(query_param("limit", "100"))
+        .and(query_param("after", "cursor"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({"data":[]})))
+        .expect(1)
+        .mount(&graph)
+        .await;
+    paloma(Some(&graph), &home)
+        .args([
+            "account",
+            "activities",
+            "--limit",
+            "100",
+            "--after",
+            "cursor",
+        ])
+        .assert()
+        .success();
+    for args in [
+        vec!["limits", "--business-id", "x/y"],
+        vec!["activities", "--limit", "101"],
+    ] {
+        paloma(Some(&graph), &home)
+            .env_remove("PALOMA_WABA_ID")
+            .args(["account"])
+            .args(args)
+            .assert()
+            .code(5)
+            .stdout("");
+    }
+}
+
+#[test]
+fn automation_rejects_duplicate_commands_and_accepts_source_aliases() {
+    let home = TempDir::new().unwrap();
+    paloma(None, &home)
+        .env_remove("PALOMA_PHONE_NUMBER_ID")
+        .args([
+            "automation",
+            "set",
+            "--command",
+            "help:First",
+            "--command",
+            "help=Second",
+        ])
+        .assert()
+        .code(5)
+        .stdout("")
+        .stderr(predicate::str::contains("duplicate command"));
+    let out = paloma(None, &home)
+        .args([
+            "automation",
+            "set",
+            "--welcome-message",
+            "false",
+            "--ice-breaker",
+            "Hello",
+            "--command",
+            "help=Talk: support",
+            "--dry-run",
+            "-o",
+            "json",
+        ])
+        .output()
+        .unwrap();
+    assert!(out.status.success());
+    assert_eq!(
+        stdout_json(&out)["body"],
+        json!({"enable_welcome_message":false,"prompts":["Hello"],"commands":[{"command_name":"help","command_description":"Talk: support"}]})
+    );
+}
+
+#[test]
+fn qr_positional_message_and_default_image_are_previewed_offline() {
+    let home = TempDir::new().unwrap();
+    let out = paloma(None, &home)
+        .args([
+            "qr",
+            "create",
+            "Hello",
+            "--image",
+            "SVG",
+            "--dry-run",
+            "-o",
+            "json",
+        ])
+        .output()
+        .unwrap();
+    assert!(out.status.success());
+    let requests = stdout_json(&out);
+    assert_eq!(
+        requests[0]["body"],
+        json!({"prefilled_message":"Hello","generate_qr_image":"SVG"})
+    );
+    assert_eq!(requests.as_array().unwrap().len(), 2);
+    paloma(None, &home)
+        .env_remove("PALOMA_PHONE_NUMBER_ID")
+        .args(["qr", "create", " "])
+        .assert()
+        .code(5)
+        .stdout("");
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn qr_default_image_uses_a_safe_filename_without_sending_the_token() {
+    let graph = MockServer::start().await;
+    let home = TempDir::new().unwrap();
+    Mock::given(method("GET"))
+        .and(path(format!("/v26.0/{PHONE}/message_qrdls/{QR_CODE}")))
+        .respond_with(ResponseTemplate::new(200).set_body_json(
+            json!({"data":[{"code":QR_CODE,"qr_image_url":format!("{}/image",graph.uri())}]}),
+        ))
+        .mount(&graph)
+        .await;
+    Mock::given(method("GET"))
+        .and(path("/image"))
+        .and(|request: &wiremock::Request| !request.headers.contains_key("authorization"))
+        .respond_with(ResponseTemplate::new(200).set_body_bytes(b"image".to_vec()))
+        .expect(1)
+        .mount(&graph)
+        .await;
+    paloma(Some(&graph), &home)
+        .current_dir(home.path())
+        .args(["qr", "get", QR_CODE, "--image", "png", "-q"])
+        .assert()
+        .success()
+        .stdout(format!("{QR_CODE}\n"));
+    let saved = home.path().join(format!("{QR_CODE}.png"));
+    assert_eq!(std::fs::read(&saved).unwrap(), b"image");
+    paloma(Some(&graph), &home)
+        .current_dir(home.path())
+        .args(["qr", "get", QR_CODE, "--image", "png", "-q"])
+        .assert()
+        .code(5)
+        .stdout("");
+    assert_eq!(std::fs::read(saved).unwrap(), b"image");
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn health_tables_show_entity_diagnostics_but_quiet_keeps_the_id() {
+    let graph = MockServer::start().await;
+    let home = TempDir::new().unwrap();
+    Mock::given(method("GET")).and(path(format!("/v26.0/{WABA}")))
+        .and(query_param("fields", "health_status"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({"id":WABA,"health_status":{"can_send_message":"LIMITED","entities":[{"entity_type":"WABA","id":WABA,"can_send_message":"BLOCKED","errors":[{"error_code":42,"error_description":"Payment missing","possible_solution":"Add payment"}]}]}})))
+        .mount(&graph).await;
+    paloma(Some(&graph), &home)
+        .args(["account", "health"])
+        .assert()
+        .success()
+        .stdout(
+            predicate::str::contains("Payment missing")
+                .and(predicate::str::contains("Add payment")),
+        );
+    paloma(Some(&graph), &home)
+        .args(["account", "health", "-q"])
+        .assert()
+        .success()
+        .stdout(format!("{WABA}\n"))
+        .stderr("");
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn qr_manifest_rejects_invalid_inputs_before_any_request() {
+    let graph = MockServer::start().await;
+    let home = TempDir::new().unwrap();
+    for spec in [
+        "  prefilledMessage: Hi".to_owned(),
+        "  code: bad\n  prefilledMessage: Hi".to_owned(),
+        format!("  code: {QR_CODE}\n  prefilledMessage: ''"),
+    ] {
+        let file = qr_manifest(&home, &spec);
+        paloma(Some(&graph), &home)
+            .args(["apply", "-f"])
+            .arg(file)
+            .assert()
+            .code(5)
+            .stdout("");
+    }
+    assert!(graph.received_requests().await.unwrap().is_empty());
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn qr_manifest_missing_live_code_never_creates_one() {
+    let graph = MockServer::start().await;
+    let home = TempDir::new().unwrap();
+    Mock::given(method("GET"))
+        .and(path(format!("/v26.0/{PHONE}/message_qrdls/{QR_CODE}")))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({"data":[]})))
+        .expect(1)
+        .mount(&graph)
+        .await;
+    Mock::given(method("POST"))
+        .respond_with(ResponseTemplate::new(200))
+        .expect(0)
+        .mount(&graph)
+        .await;
+    let file = qr_manifest(&home, &qr_spec("Hello"));
+    paloma(Some(&graph), &home)
+        .args(["apply", "-f"])
+        .arg(file)
+        .assert()
+        .code(5)
+        .stdout("")
+        .stderr(predicate::str::contains("create it with"));
+}
+
+#[test]
+fn number_explicit_id_validation_precedes_context() {
+    let home = TempDir::new().unwrap();
+    for verb in ["get", "quality", "health"] {
+        paloma(None, &home)
+            .env_remove("PALOMA_PHONE_NUMBER_ID")
+            .args(["number", verb, "../bad"])
+            .assert()
+            .code(5)
+            .stdout("");
+    }
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn qr_manifest_rejects_wrong_ambiguous_or_malformed_live_state() {
+    let home = TempDir::new().unwrap();
+    let file = qr_manifest(&home, &qr_spec("Hello"));
+    let node = json!({"code":QR_CODE,"prefilled_message":"Hello"});
+    for body in [
+        json!({"code":"4O4YGZEG3RIVE1","prefilled_message":"Hello"}),
+        json!({"data":[{"code":"4O4YGZEG3RIVE1","prefilled_message":"Hello"}]}),
+        json!({"data":[node.clone(),node.clone()]}),
+        json!({"data":[{}]}),
+        json!({"data":null}),
+        json!({"code":QR_CODE,"data":[node],"prefilled_message":"Hello"}),
+        json!({"code":QR_CODE}),
+    ] {
+        let graph = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path(format!("/v26.0/{PHONE}/message_qrdls/{QR_CODE}")))
+            .respond_with(ResponseTemplate::new(200).set_body_json(body))
+            .expect(2)
+            .mount(&graph)
+            .await;
+        Mock::given(method("POST"))
+            .respond_with(ResponseTemplate::new(200))
+            .expect(0)
+            .mount(&graph)
+            .await;
+        for verb in ["apply", "diff"] {
+            paloma(Some(&graph), &home)
+                .args([verb, "-f"])
+                .arg(&file)
+                .assert()
+                .code(1)
+                .stdout("")
+                .stderr(predicate::str::contains("invalid QR lookup response"));
+        }
+    }
 }

@@ -152,8 +152,7 @@ impl NumberCommand {
             }
             Self::Health { phone_number_id } => {
                 let id = target(app, phone_number_id)?;
-                app.send_and_emit(&phone_numbers::get(&id, "health_status"), field_id)
-                    .await
+                super::account::show_health(app, &phone_numbers::get(&id, "health_status")).await
             }
             Self::Register(a) => {
                 if let Some(region) = &a.data_localization_region {
@@ -187,8 +186,11 @@ impl NumberCommand {
 }
 
 fn target(app: &App, explicit: Option<String>) -> Result<String> {
-    match explicit.filter(|s| !s.trim().is_empty()) {
-        Some(id) => Ok(id),
+    match explicit {
+        Some(id) => {
+            validate::numeric_id(&id, "phone number id")?;
+            Ok(id)
+        }
         None => Ok(app.ctx()?.require_phone_number_id()?.to_owned()),
     }
 }

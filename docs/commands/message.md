@@ -55,3 +55,6 @@ It uses two endpoints, both reads:
 the first call would return. `-q` prints the history id. See Meta's
 [message history events](https://developers.facebook.com/documentation/business-messaging/whatsapp/reference/message-history/whatsapp-business-message-history-events-api)
 reference.
+
+Meta can return no history even for a delivered message. This does not prove the
+message does not exist; the command reports the missing history on stderr and exits `1`.

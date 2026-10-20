@@ -101,3 +101,9 @@ six digits will do because the output masks them. The older `--pin <value>` flag
 works, but it warns, because other processes can read a command line.
 
 PIN values are redacted from dry-run output and verbose request diagnostics. The real request sends the supplied PIN.
+
+Explicit phone-number Graph ids must contain only digits; invalid ids exit `5` before
+context resolution or an API call.
+
+`health` tables show the overall status plus entity diagnostics and suggested fixes.
+JSON, YAML and raw keep Meta's full response, and quiet output remains the number id.

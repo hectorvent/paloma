@@ -41,33 +41,39 @@ pub struct Cx<'a> {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Kind {
+    Account,
     Calling,
     Commerce,
     ConversationalAutomation,
     Number,
     Profile,
+    QrCode,
     Template,
     Webhook,
 }
 
 impl Kind {
-    pub const ALL: [Self; 7] = [
+    pub const ALL: [Self; 9] = [
+        Self::Account,
         Self::Calling,
         Self::Commerce,
         Self::ConversationalAutomation,
         Self::Number,
         Self::Profile,
+        Self::QrCode,
         Self::Template,
         Self::Webhook,
     ];
 
     pub const fn name(self) -> &'static str {
         match self {
+            Self::Account => "Account",
             Self::Calling => "Calling",
             Self::Commerce => "Commerce",
             Self::ConversationalAutomation => "ConversationalAutomation",
             Self::Number => "Number",
             Self::Profile => "Profile",
+            Self::QrCode => "QrCode",
             Self::Template => "Template",
             Self::Webhook => "Webhook",
         }
@@ -89,18 +95,20 @@ impl Kind {
 
     /// Whether the kind lives on a phone number (else on the WABA/app).
     pub const fn phone_scoped(self) -> bool {
-        !matches!(self, Self::Template | Self::Webhook)
+        !matches!(self, Self::Account | Self::Template | Self::Webhook)
     }
 
     /// Every writable spec field (camelCase) with a typed stub value; unset ones are
     /// rendered as comments on export.
     pub fn spec_template(self) -> Value {
         match self {
+            Self::Account => kinds::account::template(),
             Self::Calling => kinds::calling::template(),
             Self::Commerce => kinds::commerce::template(),
             Self::ConversationalAutomation => kinds::conversational_automation::template(),
             Self::Number => kinds::number::template(),
             Self::Profile => kinds::profile::template(),
+            Self::QrCode => kinds::qr_code::template(),
             Self::Template => kinds::template::template(),
             Self::Webhook => kinds::webhook::template(),
         }
@@ -109,11 +117,13 @@ impl Kind {
     /// Current state as 0..n snake_case specs.
     pub async fn export(self, cx: Cx<'_>) -> Result<Vec<Value>> {
         match self {
+            Self::Account => kinds::account::export(cx).await,
             Self::Calling => kinds::calling::export(cx).await,
             Self::Commerce => kinds::commerce::export(cx).await,
             Self::ConversationalAutomation => kinds::conversational_automation::export(cx).await,
             Self::Number => kinds::number::export(cx).await,
             Self::Profile => kinds::profile::export(cx).await,
+            Self::QrCode => kinds::qr_code::export(cx).await,
             Self::Template => kinds::template::export(cx).await,
             Self::Webhook => kinds::webhook::export(cx).await,
         }
@@ -122,6 +132,7 @@ impl Kind {
     /// Reconcile a desired snake_case spec against live config.
     pub async fn plan(self, cx: Cx<'_>, spec: &Value) -> Result<KindPlan> {
         match self {
+            Self::Account => kinds::account::plan(cx, spec).await,
             Self::Calling => kinds::calling::plan(cx, spec).await,
             Self::Commerce => kinds::commerce::plan(cx, spec).await,
             Self::ConversationalAutomation => {
@@ -129,6 +140,7 @@ impl Kind {
             }
             Self::Number => kinds::number::plan(cx, spec),
             Self::Profile => kinds::profile::plan(cx, spec).await,
+            Self::QrCode => kinds::qr_code::plan(cx, spec).await,
             Self::Template => kinds::template::plan(cx, spec).await,
             Self::Webhook => kinds::webhook::plan(cx, spec).await,
         }

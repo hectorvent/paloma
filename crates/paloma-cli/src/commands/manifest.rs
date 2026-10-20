@@ -13,7 +13,7 @@ use crate::cli::Format;
 
 #[derive(Debug, Args)]
 pub struct Export {
-    /// Calling, Commerce, ConversationalAutomation, Number, Profile, Template or Webhook.
+    /// Account, Calling, Commerce, ConversationalAutomation, Number, Profile, QrCode, Template or Webhook.
     kind: String,
     /// Emit a skeleton manifest without calling the API.
     #[arg(long)]

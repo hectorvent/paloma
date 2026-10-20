@@ -31,8 +31,9 @@ opt-in because newer account fields may not be available in older Graph versions
 ## `paloma account health`
 
 Requests the WABA's `health_status`, including the messaging and calling diagnostics
-Meta returns for related entities. A reported `BLOCKED` or `LIMITED` state remains
-response data: a successful read exits `0`. With `-q`, prints the returned WABA id.
+Meta returns for related entities. Table output lists the overall status and each entity,
+including error descriptions and suggested fixes; other formats keep the response.
+A reported `BLOCKED` or `LIMITED` state remains response data: a successful read exits `0`. With `-q`, prints the returned WABA id.
 
 ```bash
 paloma account health -o json | jq '.health_status'
@@ -48,12 +49,16 @@ as separate allowances. This read does not report remaining capacity or usage.
 
 ```bash
 paloma account limits --all -o json
+paloma account limits --business-id 123456789
 ```
+
+`--business-id` reads the shared limit directly from a business portfolio without WABA
+context. It is exclusive with paging flags; the id must contain only digits.
 
 ## `paloma account subscribed-apps`
 
-Lists apps subscribed to the WABA, showing each app's id, name and any override callback
-URL. Uses the same `subscribed_apps` endpoint as `webhook get`; `webhook get` also
+Lists apps subscribed to the WABA, showing each app's id, name, link and any override
+callback URL. Uses the same `subscribed_apps` endpoint as `webhook get`; `webhook get` also
 resolves the effective callback. Use `webhook fields` to read the app's field
 subscriptions.
 
@@ -85,14 +90,18 @@ empty/non-object JSON and blank names/timezone ids exit `5` before an API call.
 
 ```bash
 paloma account set --name 'Acme Support' --timezone-id 1 --dry-run
-paloma account set --insights true
+paloma account set --enable-insights --yes
 paloma account set --file account-settings.json --dry-run
 ```
 
-`--insights true|false` controls `is_enabled_for_insights`. `--timezone-id` takes Meta's
-Graph timezone identifier. Supported settings and permissions are account-dependent.
+`--enable-insights` (also `--insights true`) permanently enrolls the account in template
+insights. It requires confirmation or `--yes` and must be sent separately from other
+settings. Meta does not support disabling enrollment, so `--insights false` exits `5`.
+The same checks apply to JSON files. Dry-run previews the enrollment query parameter.
+`--timezone-id` takes Meta's numeric Graph timezone identifier, not an IANA timezone
+name. Supported settings and permissions are account-dependent.
 
-`--disable-cloud-marketing true|false` controls
+`--disable-cloud-marketing true|false` (alias `--disable-marketing-messages-on-cloud-api`) controls
 `disable_marketing_messages_on_cloud_api`. Enabling it requires confirmation (or `--yes`)
 because `/messages` then refuses marketing templates, including Cloud API fallback from
 the Marketing Messages API. Complete MM API onboarding first. To inspect eligibility:
@@ -107,8 +116,8 @@ A successful settings write has no primary id, so `-q` produces no output.
 ## `paloma account activities`
 
 Read the WABA activity log, including event type, timestamp, actor ids and category.
-Supports `--all` and `--after`, with the same paging and quiet-output behavior as the
-other account lists.
+Supports `--all`, `--after` and `--limit <1..100>`, with the same paging and
+quiet-output behavior as the other account lists.
 
 ```bash
 paloma account activities --all -o json
