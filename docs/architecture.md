@@ -11,13 +11,13 @@ paloma-cli ──► paloma-manifest ──► paloma-graph ──► paloma-cor
 
 | Crate | Owns | Knows nothing about |
 |-------|------|---------------------|
-| `paloma-core` | `Error` + exit codes, pre-flight validation and limits, the 24h-window policy, the `Credentials` trait | I/O, HTTP, clap |
+| `paloma-core` | `Error` + exit codes, pre-flight validation and limits, the 24h-window policy, the `Credentials` trait | HTTP, clap. Its only I/O is stat-ing files for validation |
 | `paloma-config` | `config.toml` (read with `toml`, edited in place with `toml_edit`), profiles, the OS keyring, context resolution | HTTP, output |
-| `paloma-graph` | the Graph API: `Request` (a call as data), `Client` (reqwest/rustls), error mapping, paging, one `api::*` module per resource | the CLI, config files |
-| `paloma-manifest` | the YAML manifest envelope, `${...}` interpolation, camel/snake conversion, drift diff, the seven kinds | clap, output |
+| `paloma-graph` | the Graph API: `Request` (a call as data), `Client` (reqwest/rustls), error mapping, paging, one `api::*` module per resource, `callback` (calling webhook endpoints), `webhook_samples` | the CLI, config files |
+| `paloma-manifest` | the YAML manifest envelope, `${...}` interpolation, camel/snake conversion, drift diff, the nine kinds | clap, output |
 | `paloma-cli` | the clap tree, `App` wiring, the output contract, prompts | — |
 
-The pure parts (`paloma-core`, `case`/`diff`/`interpolate`/`yaml` in
+The pure parts (`paloma-core` validation rules, `case`/`diff`/`interpolate`/`yaml` in
 `paloma-manifest`) are synchronous and unit-test without a runtime.
 
 ## A request's life
@@ -29,21 +29,22 @@ commands/send.rs        parse args (clap) → validate locally (paloma_core::val
 App::send(&Request)     --dry-run?  print Request::describe() and stop
         │               otherwise   lazily resolve Context → build Client → execute
         ▼
-Client::execute         bearer from Credentials (keyring read here, not earlier)
+Client::execute         bearer from Credentials unless Auth::None (keyring read here,
+        │               not earlier)
         │               non-2xx → error_map::map_error → Error with its exit code
         ▼
 Printer::emit(Output)   stdout per --output / --quiet; diagnostics to stderr
 ```
 
 **Requests are data.** Endpoint functions in `paloma_graph::api` are pure: they return
-a `Request { method, target, query, body, auth }`. That is what makes `--dry-run`
+a `Request { method, target, query, headers, body, auth }`. That is what makes `--dry-run`
 impossible to forget (`App::send` enforces it centrally), keeps dry-run output identical
 to what is sent (query parameters included), and lets manifest kinds plan writes that
 `apply` executes later through the same path.
 
 **Laziness.** `App` holds `OnceLock`s for the config file, the resolved `Context` and the
 `Client`. Offline commands (`link create`, `config path`, `--help`) never read config,
-and nothing touches the keyring until a request is actually sent.
+and nothing touches the keyring until a request is actually sent, or a listener starts.
 
 ## Cross-cutting concerns, one place each
 
@@ -54,9 +55,9 @@ and nothing touches the keyring until a request is actually sent.
 | Context precedence (flag/env → profile → keyring) | `paloma_config::resolve::Context::resolve` |
 | Secret storage | `paloma_config::secrets::SecretStore` (keyring; `MemoryStore` in tests) |
 | Output (`--output`, `--quiet`, stdout vs stderr) | `paloma_cli::output::Printer` |
-| `--dry-run`, confirmations | `paloma_cli::app::App::{send, fetch, confirm}` |
+| `--dry-run`, confirmations | `paloma_cli::app::App::{send, fetch, confirm}`. Webhook endpoint probes aren't Graph calls, so they check `app.dry_run()` themselves |
 | Cloud API limits | `paloma_core::limits` |
-| 24-hour window | `paloma_core::compliance` (`WindowTracker` seam for v1.0 tracking) |
+| 24-hour window | `paloma_core::compliance` (`WindowTracker` seam for future tracking) |
 | Paging | `paloma_graph::paging` |
 
 ## Adding a command
@@ -81,8 +82,8 @@ module under `kinds/` with `template()` (camelCase writable fields), `export()` 
 ## Async
 
 One current-thread tokio runtime, built in `main`. The CLI is I/O-bound and runs one
-request at a time, so a thread pool would only cost startup time; the same runtime will
-host `webhook listen` (axum) later.
+request at a time, so a thread pool would only cost startup time. The same runtime hosts
+`webhook listen` (axum, HTTP/1 only).
 
 ## Release build
 

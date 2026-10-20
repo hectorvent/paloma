@@ -14,7 +14,7 @@ token_ref       = "keyring:paloma/acme"        # handle into the OS keyring
 waba_id         = "1029384756"
 phone_number_id = "1556677889900"
 api_version     = "v26.0"
-app_secret_ref  = "keyring:paloma/acme-secret" # optional; for app-level webhook field subscriptions
+app_secret_ref  = "keyring:paloma/acme-secret" # optional; for webhook field subscriptions and signatures
 ```
 
 Find the resolved path on your system:
@@ -50,7 +50,7 @@ or `paloma config set` (individual keys). See [commands/config.md](commands/conf
 | `waba_id` | WhatsApp Business Account ID |
 | `phone_number_id` | Sender phone number ID |
 | `api_version` | Graph API version, e.g. `v26.0` (defaults to `v26.0`) |
-| `app_secret_ref` | Keyring handle for the app secret (app-level webhook field subscriptions) |
+| `app_secret_ref` | Keyring handle for the app secret (app-level webhook field subscriptions, and signing or checking webhooks in `webhook simulate` and `listen`) |
 | `messaging_account_id` | Messaging account to bill for `send` commands, if your token reaches more than one on the phone number |
 
 ```bash
@@ -80,10 +80,10 @@ These override the config file (and are themselves overridden by flags):
 | `PALOMA_WABA_ID` | WABA ID |
 | `PALOMA_MESSAGING_ACCOUNT_ID` | Messaging account to bill for `send` commands |
 | `PALOMA_PIN` | two-step verification PIN for `number register` and `number set-pin` |
-| `PALOMA_VERIFY_TOKEN` | verify token for `webhook subscribe` and `webhook fields set --callback-url` |
+| `PALOMA_VERIFY_TOKEN` | verify token for `webhook subscribe`, `webhook fields set --callback-url`, `webhook verify-url` and `webhook listen` |
 | `PALOMA_API_VERSION` | Graph API version |
 | `PALOMA_APP_ID` | Meta App ID (app-level webhook field subscriptions and upload handles; also `--app-id`) |
-| `PALOMA_APP_SECRET` | app secret (app-level webhook field subscriptions) |
+| `PALOMA_APP_SECRET` | app secret (app-level webhook field subscriptions); also signs and checks webhooks in `webhook simulate` and `webhook listen` |
 | `PALOMA_OUTPUT` | default `--output` format |
 | `PALOMA_CONFIG` | config file path |
 | `NO_COLOR` | disables ANSI color |

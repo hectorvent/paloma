@@ -48,10 +48,11 @@ paloma send text US.13491208655302741918 "Your order is ready"
   BSUID works from any portfolio enrolled in its parent account.
 - Meta also accepts both fields at once, in which case `to` wins. Paloma writes one, so use
   [`send raw`](#paloma-send-raw) if you want to send both.
-- One-tap, zero-tap and copy code authentication templates need a phone number. Paloma
-  can't see a template's category without another API call, so it sends the message and
-  Meta's error `131062` comes back with exit `1` and a hint. A marketing template sent with
-  a max price can fail the same way.
+- One-tap, zero-tap and copy code authentication templates need a phone number.
+  Meta enforces BSUID eligibility and returns error `131062` with exit `1` and a hint.
+  A marketing template sent with a max price can fail the same way. Default `--via auto`
+  looks up the latest template category to select the sending endpoint; that lookup
+  does not replace Meta's eligibility checks.
 - `-q` still prints the wamid. The rest of the response differs: `contacts[]` carries
   `user_id` and no `wa_id` when you sent to a BSUID, and `wa_id` and no `user_id` when you
   sent to a number. Read `.contacts[0].wa_id` only if you know which you sent.

@@ -44,7 +44,7 @@ pub struct ClientConfig {
     /// Graph host, overridable for tests (`PALOMA_GRAPH_URL`).
     pub base_url: String,
     pub api_version: String,
-    /// Whole-request timeout for API calls (downloads only bound the connect phase). It
+    /// Whole-request timeout for API calls and streamed downloads. It
     /// applies per try.
     pub timeout: Duration,
     pub user_agent: String,

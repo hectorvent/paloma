@@ -22,6 +22,7 @@ equivalent).
 | `--no-color` | | Disable ANSI colors (`NO_COLOR` is honored too) |
 | `--config <path>` | | Config file path (default: `~/.config/paloma/config.toml`) |
 | `--token <value>` | | Access token (hidden; prefer `PALOMA_TOKEN`/keyring) |
+| `--app-secret <value>` | | App secret (hidden; prefer `PALOMA_APP_SECRET` or a keyring reference to keep it out of argv) |
 | `--yes` | `-y` | Skip confirmation prompts for destructive ops |
 | `--help` | `-h` | Show help for any command |
 | `--version` | `-V` | Print version |
@@ -41,8 +42,11 @@ Most flags also read an environment variable: `PALOMA_PROFILE`, `PALOMA_TOKEN`,
 request still read it: `apply --dry-run` compares against live config, and
 `webhook fields set --dry-run`, `media upload --handle --dry-run` and
 `profile photo --dry-run` look up the app id unless you set it, and `template status` and
-`template watch` read the template, since reading is all they do. Everything else prints the
-request without any network call. Multi-step commands (`send image --file`, `flow update`
+`template watch` read the template, since reading is all they do. Template upsert reads
+existing translations to plan creates and edits. `webhook listen --dry-run` only notes
+the bind address; it does not open a socket or read verification secrets. Other commands
+print requests or a multi-step plan without sending them; command pages describe any
+required live lookups. Multi-step commands (`send image --file`, `flow update`
 with metadata and Flow JSON) print every request as a JSON array.
 
 Dry-run output in every format, including `raw`, masks PINs, authorization values,
@@ -59,6 +63,9 @@ and normal response stdout is unchanged.
 | `json` | The raw Cloud API response, pretty-printed — pipe to `jq` |
 | `yaml` | YAML |
 | `raw` | The response body verbatim |
+
+`webhook listen` emits one JSON document per line regardless of `-o`; `-q` selects
+primary message IDs instead.
 
 Set a default with the `PALOMA_OUTPUT` environment variable. See
 [Scripting & automation](scripting.md) for patterns.
@@ -96,8 +103,9 @@ paloma send text "not-a-number" "hi" ; echo $?    # → 5
 
 ## Retries
 
-`paloma` tries a request up to 3 times when repeating it is safe, and notes each retry on
-stderr. A repeated message would reach the user twice, so the rules depend on whether the
+For Graph API requests, `paloma` tries up to 3 times when repeating the request is safe, and notes each retry on
+stderr. Webhook callback probes (`verify-url` and `simulate`) make one attempt.
+A repeated message would reach the user twice, so the rules depend on whether the
 request changes anything:
 
 | Failure | Reads (`GET`) | Writes (`POST`, `DELETE`) |
@@ -124,7 +132,6 @@ in total, each with its own `--timeout`, and the reads between them are retried 
 **Time limits.** `--timeout` applies to each try, and waits between tries are extra. A
 request can take up to 3 × `--timeout` plus 60 seconds of waits, and commands that make
 several requests, such as `template list --all`, can take that long per request. Connecting
-has its own 15-second limit. Downloads only have that connection limit, so `--timeout`
-doesn't stop a download that stalls.
+has its own 15-second limit. Downloads also honor `--timeout`, including streamed bodies.
 
 This doesn't throttle: each `paloma` run retries on its own, so it can't pace a shell loop.

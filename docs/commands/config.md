@@ -68,6 +68,17 @@ paloma config get waba_id --profile acme
 
 ---
 
+## `paloma config unset`
+
+Remove a key from the selected profile. Use `--profile` to select another profile.
+The key accepts the same names as `config set`.
+
+```bash
+paloma config unset messaging_account_id --profile acme
+```
+
+---
+
 ## `paloma config use`
 
 Set the active default profile.
