@@ -508,9 +508,72 @@ pub fn qr_message(message: &str) -> Result<()> {
     max_chars(message, crate::limits::MAX_QR_MESSAGE, "QR message")
 }
 
+/// Check syntax only; availability, eligibility and transfers remain Meta decisions.
+pub fn business_username(value: &str) -> Result<()> {
+    use crate::limits::{MAX_BUSINESS_USERNAME, MIN_BUSINESS_USERNAME};
+    let lower = value.to_ascii_lowercase();
+    let domain = [
+        ".com", ".org", ".net", ".int", ".edu", ".gov", ".mil", ".arpa", ".html", ".htm", ".txt",
+        ".xml",
+    ];
+    if !(MIN_BUSINESS_USERNAME..=MAX_BUSINESS_USERNAME).contains(&value.len())
+        || !value
+            .bytes()
+            .all(|b| b.is_ascii_alphanumeric() || b == b'.' || b == b'_')
+        || !value.bytes().any(|b| b.is_ascii_alphabetic())
+        || lower.starts_with('.')
+        || lower.ends_with('.')
+        || lower.contains("..")
+        || lower.starts_with("www.")
+        || domain.iter().any(|suffix| lower.ends_with(suffix))
+    {
+        return Err(Error::validation(
+            "username must be 3–35 ASCII letters, digits, periods or underscores, include a letter, and follow Meta's domain/period restrictions",
+        ));
+    }
+    Ok(())
+}
+
+/// Verification codes must never be included in a validation diagnostic.
+pub fn verification_code(value: &str) -> Result<()> {
+    if value.is_empty() || !value.bytes().all(|b| b.is_ascii_digit()) {
+        return Err(Error::validation(
+            "verification code must contain only digits",
+        ));
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn business_usernames_and_verification_codes_follow_their_own_rules() {
+        for username in ["Abc", "acme_store", "Acme.Shop"] {
+            assert!(business_username(username).is_ok());
+        }
+        for username in [
+            "ab",
+            "1234",
+            ".acme",
+            "acme.",
+            "acme..shop",
+            "www.acme",
+            "acme.com",
+            "école",
+        ] {
+            assert!(business_username(username).is_err());
+        }
+        assert!(business_username(&"a".repeat(crate::limits::MAX_BUSINESS_USERNAME)).is_ok());
+        assert!(business_username(&"a".repeat(crate::limits::MAX_BUSINESS_USERNAME + 1)).is_err());
+        for code in ["0", "12345", "01234567"] {
+            assert!(verification_code(code).is_ok());
+        }
+        for code in ["", "ABC", "12 34"] {
+            assert!(verification_code(code).is_err());
+        }
+    }
 
     #[test]
     fn recipient_accepts_e164() {

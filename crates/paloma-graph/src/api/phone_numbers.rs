@@ -86,3 +86,75 @@ pub fn deregister(phone_number_id: &str) -> Request {
 pub fn set_pin(phone_number_id: &str, pin: &str) -> Request {
     Request::post(phone_number_id).json(json!({ "pin": pin }))
 }
+
+/// Verification requests use the same phone node as registration.
+pub fn request_code(phone: &str, method: &str, language: &str) -> Request {
+    Request::post(format!("{phone}/request_code"))
+        .json(json!({"code_method": method, "language": language}))
+}
+
+pub fn verify_code(phone: &str, code: &str) -> Request {
+    Request::post(format!("{phone}/verify_code")).json(json!({"code": code}))
+}
+
+pub fn add(waba: &str, phone_number: &str, name: &str) -> Request {
+    Request::post(format!("{waba}/phone_numbers"))
+        .json(json!({"phone_number": phone_number, "verified_name": name}))
+}
+
+pub fn set_name(phone: &str, name: &str) -> Request {
+    Request::post(phone).json(json!({"new_display_name": name}))
+}
+
+pub fn search_visibility(phone: &str, value: &str) -> Request {
+    Request::post(phone).json(json!({"search_visibility": value}))
+}
+
+pub fn settings(phone: &str) -> Request {
+    // Do not request SIP credentials while reading non-calling settings.
+    Request::get(format!("{phone}/settings"))
+}
+
+pub fn set_settings(phone: &str, body: Value) -> Request {
+    Request::post(format!("{phone}/settings")).json(body)
+}
+
+pub fn username(phone: &str) -> Request {
+    Request::get(format!("{phone}/username"))
+}
+pub fn reserved_usernames(phone: &str) -> Request {
+    Request::get(format!("{phone}/username_suggestions"))
+}
+pub fn set_username(phone: &str, username: &str, transfer: bool) -> Request {
+    Request::post(format!("{phone}/username")).json(json!({
+        "username": username, "transfer_action": if transfer {"force_transfer"} else {"none"}
+    }))
+}
+pub fn delete_username(phone: &str) -> Request {
+    Request::delete(format!("{phone}/username"))
+}
+
+pub fn contact(phone: &str, bsuid: &str, delete: bool) -> Request {
+    let node = format!("{phone}/contact_book");
+    let req = if delete {
+        Request::delete(node)
+    } else {
+        Request::get(node)
+    };
+    req.query("messaging_product", MESSAGING_PRODUCT)
+        .query("bsuid", bsuid)
+}
+
+/// The OBA and regional compliance edges share the phone-scoped read/submit shape.
+pub fn administration(phone: &str, edge: &str, body: Option<Value>) -> Request {
+    let node = format!("{phone}/{edge}");
+    match body {
+        Some(body) => Request::post(node).json(body),
+        None => Request::get(node),
+    }
+}
+
+/// Partially update writable phone-node fields.
+pub fn update(phone: &str, body: Value) -> Request {
+    Request::post(phone).json(body)
+}

@@ -12183,3 +12183,331 @@ async fn qr_manifest_rejects_wrong_ambiguous_or_malformed_live_state() {
         }
     }
 }
+
+// ---- v1.5 identity, settings and administration contracts ----
+#[tokio::test(flavor = "multi_thread")]
+async fn number_onboarding_and_identity_writes_use_exact_payloads() {
+    let home = TempDir::new().unwrap();
+    for (args, node, body, id) in [
+        (
+            vec![
+                "number",
+                "request-code",
+                "--method",
+                "SMS",
+                "--language",
+                "es_ES",
+            ],
+            "111/request_code",
+            json!({"code_method":"SMS","language":"es_ES"}),
+            false,
+        ),
+        (
+            vec!["number", "add", "15551234567", "--name", "Acme"],
+            "222/phone_numbers",
+            json!({"phone_number":"15551234567","verified_name":"Acme"}),
+            true,
+        ),
+        (
+            vec!["number", "set-name", "Acme Support"],
+            "111",
+            json!({"new_display_name":"Acme Support"}),
+            false,
+        ),
+        (
+            vec!["number", "search-visibility", "HIDDEN"],
+            "111",
+            json!({"search_visibility":"HIDDEN"}),
+            false,
+        ),
+        (
+            vec![
+                "number",
+                "username",
+                "set",
+                "Acme_Store",
+                "--force-transfer",
+            ],
+            "111/username",
+            json!({"username":"Acme_Store","transfer_action":"force_transfer"}),
+            false,
+        ),
+        (
+            vec!["number", "settings", "storage", "--region", "IN"],
+            "111/settings",
+            json!({"storage_configuration":{"status":"IN_COUNTRY_STORAGE_ENABLED","data_localization_region":"IN"}}),
+            false,
+        ),
+        (
+            vec!["number", "settings", "storage", "--disable"],
+            "111/settings",
+            json!({"storage_configuration":{"status":"IN_COUNTRY_STORAGE_DISABLED"}}),
+            false,
+        ),
+        (
+            vec!["number", "settings", "identity-check", "--enabled", "false"],
+            "111/settings",
+            json!({"user_identity_change":{"enable_identity_key_check":false}}),
+            false,
+        ),
+    ] {
+        let graph = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(path(format!("/v26.0/{node}")))
+            .and(body_json(body.clone()))
+            .respond_with(ResponseTemplate::new(200).set_body_json(if id {
+                json!({"id":"444"})
+            } else {
+                json!({"success":true})
+            }))
+            .expect(1)
+            .mount(&graph)
+            .await;
+        paloma(Some(&graph), &home)
+            .args(&args)
+            .args(["--yes", "-q"])
+            .assert()
+            .success()
+            .stdout(if id { "444\n" } else { "" });
+        let preview = dry_run_request(&home, &args);
+        assert_eq!(preview["body"], body, "{args:?}");
+        assert_eq!(graph.received_requests().await.unwrap().len(), 1);
+    }
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn verification_code_uses_secret_sources_and_never_appears_in_diagnostics() {
+    let graph = MockServer::start().await;
+    let home = TempDir::new().unwrap();
+    Mock::given(method("POST"))
+        .and(path("/v26.0/111/verify_code"))
+        .and(body_json(json!({"code":"817263"})))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({"success":true})))
+        .expect(2)
+        .mount(&graph)
+        .await;
+    let out = paloma(Some(&graph), &home)
+        .env("PALOMA_VERIFICATION_CODE", "817263")
+        .args(["number", "verify-code", "-vv", "-q"])
+        .output()
+        .unwrap();
+    assert!(out.status.success());
+    assert!(out.stdout.is_empty());
+    assert!(!String::from_utf8_lossy(&out.stderr).contains("817263"));
+    paloma(Some(&graph), &home)
+        .args(["number", "verify-code", "--code-stdin", "-q"])
+        .write_stdin("817263\n")
+        .assert()
+        .success()
+        .stdout("");
+    let out = paloma(Some(&graph), &home)
+        .env("PALOMA_VERIFICATION_CODE", "817263")
+        .args(["number", "verify-code", "--dry-run", "-o", "json", "-vv"])
+        .output()
+        .unwrap();
+    assert!(out.status.success());
+    assert_eq!(stdout_json(&out)["body"]["code"], "<redacted>");
+    assert!(!String::from_utf8_lossy(&out.stdout).contains("817263"));
+    assert!(!String::from_utf8_lossy(&out.stderr).contains("817263"));
+    assert_eq!(graph.received_requests().await.unwrap().len(), 2);
+    // A template's language code has a different meaning and stays visible.
+    assert_eq!(
+        dry_run_request(
+            &home,
+            &[
+                "send",
+                "template",
+                "15551234567",
+                "hello",
+                "--lang",
+                "en_US",
+                "--via",
+                "cloud"
+            ]
+        )["body"]["template"]["language"]["code"],
+        "en_US"
+    );
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn usernames_contacts_and_settings_reads_and_deletes_keep_their_contracts() {
+    let home = TempDir::new().unwrap();
+    let graph = MockServer::start().await;
+    Mock::given(method("GET"))
+        .and(path("/v26.0/111/username"))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .set_body_json(json!({"username":"acme_shop","status":"approved"})),
+        )
+        .expect(1)
+        .mount(&graph)
+        .await;
+    paloma(Some(&graph), &home)
+        .args(["number", "username", "get", "-q"])
+        .assert()
+        .success()
+        .stdout("acme_shop\n")
+        .stderr("");
+    Mock::given(method("GET"))
+        .and(path("/v26.0/111/username_suggestions"))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .set_body_json(json!({"data":[{"username_suggestions":["acme_shop"]}]})),
+        )
+        .expect(1)
+        .mount(&graph)
+        .await;
+    paloma(Some(&graph), &home)
+        .args(["number", "username", "reserved", "-o", "json"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("acme_shop"));
+    Mock::given(method("DELETE"))
+        .and(path("/v26.0/111/username"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({"success":true})))
+        .expect(1)
+        .mount(&graph)
+        .await;
+    paloma(Some(&graph), &home)
+        .args(["number", "username", "delete", "--yes", "-q"])
+        .assert()
+        .success()
+        .stdout("");
+    for (verb, http) in [("get", "GET"), ("delete", "DELETE")] {
+        Mock::given(method(http))
+            .and(path("/v26.0/111/contact_book"))
+            .and(query_param("messaging_product", "whatsapp"))
+            .and(query_param("bsuid", "US.12345"))
+            .respond_with(
+                ResponseTemplate::new(200)
+                    .set_body_json(json!({"contacts":[{"user_id":"US.12345"}]})),
+            )
+            .expect(1)
+            .mount(&graph)
+            .await;
+        paloma(Some(&graph), &home)
+            .args([
+                "number", "contacts", verb, "US.12345", "--yes", "-o", "json",
+            ])
+            .assert()
+            .success()
+            .stdout(predicate::str::contains("US.12345"));
+        assert_eq!(
+            dry_run_request(&home, &["number", "contacts", verb, "US.12345"])["method"],
+            http
+        );
+    }
+    Mock::given(method("GET")).and(path("/v26.0/111/settings")).respond_with(ResponseTemplate::new(200).set_body_json(json!({"storage_configuration":{"status":"IN_COUNTRY_STORAGE_ENABLED","data_localization_region":"IN"}}))).expect(1).mount(&graph).await;
+    paloma(Some(&graph), &home)
+        .args(["number", "settings", "get", "-o", "raw"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("IN_COUNTRY_STORAGE_ENABLED"));
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn oba_and_india_compliance_submit_validated_documents_and_confirm() {
+    let home = TempDir::new().unwrap();
+    let graph = MockServer::start().await;
+    let file = home.path().join("document.json");
+    for (group, verb, edge, body) in [
+        (
+            "oba",
+            "apply",
+            "official_business_account",
+            json!({"business_website_url":"https://example.com","primary_country_of_operation":"US"}),
+        ),
+        (
+            "compliance",
+            "set",
+            "business_compliance_info",
+            json!({"messaging_product":"whatsapp","entity_name":"Acme","entity_type":"PRIVATE_COMPANY","grievance_officer_details":{"name":"Officer","email":"officer@example.com"},"customer_care_details":{"email":"care@example.com"}}),
+        ),
+    ] {
+        std::fs::write(&file, body.to_string()).unwrap();
+        Mock::given(method("POST"))
+            .and(path(format!("/v26.0/111/{edge}")))
+            .and(body_json(body.clone()))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({"success":true})))
+            .expect(1)
+            .mount(&graph)
+            .await;
+        Mock::given(method("GET"))
+            .and(path(format!("/v26.0/111/{edge}")))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({"data":[body.clone()]})))
+            .expect(1)
+            .mount(&graph)
+            .await;
+        paloma(Some(&graph), &home)
+            .args(["number", group, verb, "--file"])
+            .arg(&file)
+            .args(["--yes", "-q"])
+            .assert()
+            .success()
+            .stdout("");
+        paloma(Some(&graph), &home)
+            .args(["number", group, verb, "--file"])
+            .arg(&file)
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains("--yes"));
+        paloma(Some(&graph), &home)
+            .args(["number", group, verb, "--file"])
+            .arg(&file)
+            .args(["--dry-run", "-o", "json"])
+            .assert()
+            .success()
+            .stdout(predicate::str::contains("POST"));
+        paloma(Some(&graph), &home)
+            .args(["number", group, "get", "-o", "json"])
+            .assert()
+            .success()
+            .stdout(predicate::str::contains("data"));
+        std::fs::write(&file, "{}").unwrap();
+        paloma(Some(&graph), &home)
+            .env_remove("PALOMA_PHONE_NUMBER_ID")
+            .args(["number", group, verb, "--file"])
+            .arg(&file)
+            .assert()
+            .code(5)
+            .stdout("");
+    }
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn compliance_validation_rejects_wrong_entity_contacts_and_bounds_before_a_call() {
+    let graph = MockServer::start().await;
+    let home = TempDir::new().unwrap();
+    let file = home.path().join("compliance.json");
+    let valid = json!({"entity_name":"Acme","entity_type":"PRIVATE_COMPANY","grievance_officer_details":{"name":"Officer","email":"officer@example.com"},"customer_care_details":{"email":"care@example.com"}});
+    for (pointer, value) in [
+        ("/entity_name", json!("A")),
+        ("/entity_name", json!("a".repeat(129))),
+        ("/entity_type_custom", json!("Other")),
+        ("/is_registered", json!(true)),
+        ("/customer_care_details/email", json!("invalid")),
+        (
+            "/grievance_officer_details/mobile_number",
+            json!("US.12345"),
+        ),
+    ] {
+        let mut body = valid.clone();
+        let (parent, key) = pointer.rsplit_once('/').unwrap();
+        if parent.is_empty() {
+            body[key] = value;
+        } else {
+            body.pointer_mut(parent).unwrap()[key] = value;
+        }
+        std::fs::write(&file, body.to_string()).unwrap();
+        paloma(Some(&graph), &home)
+            .env_remove("PALOMA_PHONE_NUMBER_ID")
+            .args(["number", "compliance", "set", "--file"])
+            .arg(&file)
+            .arg("--yes")
+            .assert()
+            .code(5)
+            .stdout("");
+    }
+    assert!(graph.received_requests().await.unwrap().is_empty());
+}
+

@@ -281,7 +281,7 @@ error: text body is 5000 chars; max is 4096        # exit 5
 | `calling` | status · enable · disable · set · sip · codecs |
 | `flow` | list · get · create · update · publish · deprecate · delete · assets |
 | `webhook` | get · subscribe · unsubscribe · fields · listen · verify-url · simulate |
-| `number` | list · get · register · deregister · set-pin · quality · health |
+| `number` | list · get · register · deregister · set-pin · quality · health · request-code · verify-code · add · set-name · search-visibility · username · contacts · settings · oba · compliance |
 | `profile` | get · set · photo |
 | `account` | get · set · limits · health · activities · subscribed-apps · billing-currency · analytics |
 | `block` | add · remove · list |

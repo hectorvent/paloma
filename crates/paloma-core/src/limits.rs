@@ -229,3 +229,16 @@ pub const MAX_WEBHOOK_PAYLOAD: usize = 3 * 1024 * 1024;
 
 /// Maximum number of account activities per Graph page.
 pub const MAX_ACTIVITIES_PAGE: u32 = 100;
+
+/// Business usernames are 3–35 ASCII characters, with at least one letter.
+pub const MIN_BUSINESS_USERNAME: usize = 3;
+pub const MAX_BUSINESS_USERNAME: usize = 35;
+
+/// Evidence links for an Official Business Account application.
+pub const MIN_OBA_SUPPORTING_LINKS: usize = 5;
+pub const MAX_OBA_SUPPORTING_LINKS: usize = 10;
+
+/// Legal entity names and email addresses in India compliance submissions.
+pub const MIN_COMPLIANCE_ENTITY_NAME: usize = 2;
+pub const MAX_COMPLIANCE_ENTITY_NAME: usize = 128;
+pub const MAX_COMPLIANCE_EMAIL: usize = 127;

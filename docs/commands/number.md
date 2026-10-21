@@ -76,7 +76,7 @@ in uppercase. Any other value exits `5` before the PIN is read or a request is s
 The flag applies only when first registering a number. To enable, change or disable local
 storage on a registered number, deregister it, use the
 [Settings API](https://developers.facebook.com/documentation/business-messaging/whatsapp/reference/whatsapp-business-phone-number/settings-api),
-then register again without this flag. Paloma doesn't call the Settings API yet.
+then register again without this flag. Use `number settings storage` for that settings change.
 Deregistering doesn't turn local storage off.
 
 ## `paloma number set-pin`
@@ -107,3 +107,145 @@ context resolution or an API call.
 
 `health` tables show the overall status plus entity diagnostics and suggested fixes.
 JSON, YAML and raw keep Meta's full response, and quiet output remains the number id.
+
+## Verification and onboarding
+
+Add a number to the WABA, verify ownership, then register it for Cloud API use:
+
+```bash
+paloma number add 15551234567 --name 'Acme Support'
+paloma number request-code --method SMS --language en_US --yes
+# Put the returned number ID in the selected profile before verifying/registering.
+paloma number verify-code --code-stdin
+paloma number register --pin-stdin
+```
+
+`add <phone_number> --name <name>` takes international digits without `+` and prints
+the new number ID under `-q`. Adding a number does not register it. `request-code`
+uses the active phone-number ID, accepts `--method SMS|VOICE`, and defaults
+`--language` to `en_US`. It confirms before triggering a text or phone call; an
+already verified number can be refused by Meta.
+
+`verify-code` reads the numeric code from `PALOMA_VERIFICATION_CODE`, `--code-stdin`
+or a hidden prompt. Codes never belong in argv. Dry-run and verbose request output
+mask the code. The separate `register --pin-stdin` input is the two-step PIN.
+
+All writes support `--dry-run`. Validation failures exit `5`; closed-set argument
+errors exit `2`. Verification and registration success responses have no primary ID,
+so `-q` produces no stdout.
+
+## Display names and search visibility
+
+```bash
+paloma number set-name 'Acme Support' --dry-run
+paloma number search-visibility HIDDEN --yes
+```
+
+`set-name <name>` submits `new_display_name` for Meta's review. It does not promise
+approval or immediate activation. `search-visibility <VISIBLE|HIDDEN>` changes search
+visibility without changing the username. Both confirm before writing.
+
+## `paloma number username`
+
+```text
+paloma number username get
+paloma number username reserved
+paloma number username set <username> [--force-transfer]
+paloma number username delete
+```
+
+`get -q` prints the current username; JSON/raw preserve approval status.
+`reserved` reads the suggestions reserved for the portfolio. Adoption, transfer and
+deletion confirm and honor `--yes` and `--dry-run`.
+
+Usernames must contain 3–35 ASCII letters, digits, periods or underscores, with at
+least one letter. Leading/trailing periods, consecutive periods, `www.` prefixes and
+Meta's documented domain suffixes are refused locally. Availability and eligibility
+remain Meta decisions. `--force-transfer` can remove a username from another number
+in the same portfolio and assign it here; it is never an automatic fallback.
+
+Meta permits two changes per number in a rolling 14-day window (ten for a `reserved`
+username). Deleting does not reset the limit. Excess changes return rate-limit exit
+`4`; Meta does not provide a `Retry-After` header for this limit.
+
+## `paloma number contacts`
+
+```bash
+paloma number contacts get US.13491208655302741918 -o json
+paloma number contacts delete US.13491208655302741918 --yes
+```
+
+Checks or deletes one portfolio-scoped BSUID in Meta's contact book. Parent BSUIDs
+and phone numbers are refused. The contact book is scoped to the whole portfolio;
+deleting an entry affects all its numbers. Meta populates entries through qualifying
+interactions; these commands do not create or enumerate contact-book entries.
+Both preserve Meta's response, and deletion confirms before writing.
+
+## `paloma number settings`
+
+```bash
+paloma number settings get -o json
+paloma number settings identity-check --enabled true --dry-run
+paloma number settings storage --region IN --dry-run
+paloma number settings storage --disable --dry-run
+```
+
+`get` reads settings without requesting SIP credentials. Writes confirm; one feature
+is sent per request. `identity-check --enabled <true|false>` controls Meta's
+`user_identity_change.enable_identity_key_check`. Delivery with an identity hash is
+still subject to Meta's identity comparison.
+
+`storage` accepts exactly one of `--region <CC>` or `--disable`. Supported countries
+are the same as registration's `--data-localization-region`. **The number must already
+be deregistered.** After changing storage, register it again without the localization
+flag. Paloma does not automatically deregister or re-register it. The focused
+[local-storage guide](https://developers.facebook.com/documentation/business-messaging/whatsapp/local-storage)
+uses `status` and `data_localization_region`; these guide fields are used instead of
+the conflicting generated reference's `enabled`/`region` shape.
+
+## Official Business Account applications
+
+```bash
+paloma number oba get -o json
+paloma number oba apply --file oba.json --dry-run
+```
+
+The application document contains `business_website_url` and a two-letter uppercase
+`primary_country_of_operation`. Optional `supporting_links` must contain 5–10 HTTP(S)
+URLs. Other documented optional fields are `primary_language`,
+`parent_business_or_brand`, and `additional_supporting_information`. Submission
+confirms, and Meta determines eligibility, review and approval.
+
+```json
+{
+  "business_website_url": "https://example.com",
+  "primary_country_of_operation": "US"
+}
+```
+
+## India compliance information
+
+```bash
+paloma number compliance get -o json
+paloma number compliance set --file compliance.json --dry-run
+```
+
+The document requires a 2–128 character `entity_name`, a documented `entity_type`,
+`grievance_officer_details` (name and email), and `customer_care_details` (email).
+`entity_type_custom` is required only for `OTHER` and refused with other types.
+`is_registered` is boolean and only applies to `OTHER` or `PARTNERSHIP`. Email fields
+must be valid and shorter than 128 characters; optional mobile/landline numbers use
+international format. Paloma supplies `messaging_product: whatsapp`. Submitting the
+regional compliance document confirms and preserves Meta's response.
+
+```json
+{
+  "entity_name": "Acme Support",
+  "entity_type": "PRIVATE_COMPANY",
+  "grievance_officer_details": {
+    "name": "Support Officer",
+    "email": "officer@example.com"
+  },
+  "customer_care_details": {"email": "support@example.com"}
+}
+```

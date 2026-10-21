@@ -2,6 +2,10 @@ use clap::{Args, Subcommand, ValueEnum};
 use paloma_core::limits::MAX_PHONE_NUMBERS_PAGE;
 use paloma_core::{Result, validate};
 use paloma_graph::api::phone_numbers::{self, DETAIL_FIELDS, ListFilter, QUALITY_FIELDS};
+mod admin;
+mod identity;
+mod settings;
+
 use secrecy::{ExposeSecret, SecretString};
 
 use super::{SecretSource, read_secret};
@@ -29,6 +33,46 @@ pub enum NumberCommand {
     Register(RegisterArgs),
     /// Deregister the number.
     Deregister,
+    /// Request an ownership verification code by SMS or voice.
+    RequestCode {
+        #[arg(long, value_enum)]
+        method: CodeMethod,
+        #[arg(long, default_value = "en_US")]
+        language: String,
+    },
+    /// Verify ownership using PALOMA_VERIFICATION_CODE or stdin.
+    VerifyCode {
+        #[arg(long)]
+        code_stdin: bool,
+    },
+    /// Add a phone number to the selected WABA; verification and registration follow.
+    Add {
+        phone_number: String,
+        #[arg(long)]
+        name: String,
+    },
+    /// Submit a new display name for review.
+    SetName { name: String },
+    /// Set whether this business number is visible in search.
+    SearchVisibility {
+        #[arg(value_enum)]
+        visibility: SearchVisibility,
+    },
+    /// Inspect or apply for Official Business Account status.
+    #[command(subcommand)]
+    Oba(admin::ObaCommand),
+    /// Manage India business compliance information.
+    #[command(subcommand)]
+    Compliance(admin::ComplianceCommand),
+    /// Manage the business username.
+    #[command(subcommand)]
+    Username(identity::UsernameCommand),
+    /// Inspect or delete Meta contact-book entries.
+    #[command(subcommand)]
+    Contacts(identity::ContactsCommand),
+    /// Configure local storage and identity checks.
+    #[command(subcommand)]
+    Settings(settings::SettingsCommand),
     /// Set the two-step verification PIN.
     SetPin(PinInput),
 }
@@ -82,9 +126,23 @@ pub struct RegisterArgs {
     pin: PinInput,
     /// Store message data at rest in this country (AE, AU, BH, BR, CA, CH, DE, GB, ID, IN,
     /// JP, KR, SG, ZA). First registration only: a registered number changes this through
-    /// the Settings API after deregistering, which Paloma doesn't do yet.
+    /// number settings storage after deregistering.
     #[arg(long, value_name = "CC")]
     data_localization_region: Option<String>,
+}
+
+#[derive(Debug, Clone, Copy, ValueEnum)]
+#[value(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum CodeMethod {
+    Sms,
+    Voice,
+}
+
+#[derive(Debug, Clone, Copy, ValueEnum)]
+#[value(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum SearchVisibility {
+    Visible,
+    Hidden,
 }
 
 /// The six-digit two-step verification PIN: from PALOMA_PIN, stdin or a prompt.
@@ -173,6 +231,84 @@ impl NumberCommand {
                     return Ok(());
                 }
                 app.send_and_emit(&phone_numbers::deregister(&phone), no_id)
+                    .await
+            }
+            Self::Oba(command) => command.run(app).await,
+            Self::Compliance(command) => command.run(app).await,
+            Self::Username(command) => command.run(app).await,
+            Self::Contacts(command) => command.run(app).await,
+            Self::Settings(command) => command.run(app).await,
+            Self::RequestCode { method, language } => {
+                validate::not_blank(&language, "language")?;
+                let phone = app.ctx()?.require_phone_number_id()?.to_owned();
+                if !app.confirm_or_abort(&format!(
+                    "send a verification SMS or voice call to number {phone}"
+                ))? {
+                    return Ok(());
+                }
+                let method = match method {
+                    CodeMethod::Sms => "SMS",
+                    CodeMethod::Voice => "VOICE",
+                };
+                app.send_and_emit(
+                    &phone_numbers::request_code(&phone, method, &language),
+                    no_id,
+                )
+                .await
+            }
+            Self::VerifyCode { code_stdin } => {
+                let code = read_secret(
+                    app,
+                    &SecretSource {
+                        what: "verification code",
+                        flag: "--code",
+                        stdin_flag: "--code-stdin",
+                        env: "PALOMA_VERIFICATION_CODE",
+                    },
+                    None,
+                    code_stdin,
+                )?;
+                validate::verification_code(code.expose_secret())?;
+                let phone = app.ctx()?.require_phone_number_id()?.to_owned();
+                app.send_and_emit(
+                    &phone_numbers::verify_code(&phone, code.expose_secret()),
+                    no_id,
+                )
+                .await
+            }
+            Self::Add { phone_number, name } => {
+                validate::recipient(&phone_number)?;
+                if !phone_number.bytes().all(|b| b.is_ascii_digit()) {
+                    return Err(paloma_core::Error::validation(
+                        "phone number must be international digits without a plus sign",
+                    ));
+                }
+                validate::not_blank(&name, "display name")?;
+                let waba = app.ctx()?.require_waba_id()?.to_owned();
+                app.send_and_emit(&phone_numbers::add(&waba, &phone_number, &name), field_id)
+                    .await
+            }
+            Self::SetName { name } => {
+                validate::not_blank(&name, "display name")?;
+                let phone = app.ctx()?.require_phone_number_id()?.to_owned();
+                if !app
+                    .confirm_or_abort(&format!("submit a display-name change for number {phone}"))?
+                {
+                    return Ok(());
+                }
+                app.send_and_emit(&phone_numbers::set_name(&phone, &name), no_id)
+                    .await
+            }
+            Self::SearchVisibility { visibility } => {
+                let phone = app.ctx()?.require_phone_number_id()?.to_owned();
+                if !app.confirm_or_abort(&format!("change search visibility for number {phone}"))? {
+                    return Ok(());
+                }
+                let value = match visibility {
+                    SearchVisibility::Visible => "VISIBLE",
+                    SearchVisibility::Hidden => "HIDDEN",
+                };
+                app.send_and_emit(&phone_numbers::search_visibility(&phone, value), no_id)
                     .await
             }
             Self::SetPin(input) => {

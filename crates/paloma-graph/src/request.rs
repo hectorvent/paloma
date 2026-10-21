@@ -248,6 +248,19 @@ impl Request {
         url
     }
 
+    /// A verification code is a secret only on the ownership-verification endpoint;
+    /// template language codes and Graph error codes must stay readable.
+    pub fn diagnostic_json(&self, value: &Value) -> Value {
+        let mut redacted = redact_json(value);
+        if matches!(&self.target, Target::Node(path) if path.ends_with("/verify_code"))
+            && let Some(object) = redacted.as_object_mut()
+            && object.contains_key("code")
+        {
+            object.insert("code".into(), Value::String("<redacted>".into()));
+        }
+        redacted
+    }
+
     /// The `--dry-run` rendering: method, URL and body, with multipart files shown by
     /// name and size rather than content. Never includes credentials.
     pub fn describe(&self, base: &str, version: &str) -> Value {
@@ -281,7 +294,7 @@ impl Request {
         match &self.body {
             Body::Empty => {}
             Body::Json(v) => {
-                out.insert("body".into(), redact_json(v));
+                out.insert("body".into(), self.diagnostic_json(v));
             }
             Body::Multipart(parts) => {
                 let mut form = Map::new();

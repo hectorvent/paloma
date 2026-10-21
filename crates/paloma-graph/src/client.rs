@@ -16,9 +16,7 @@ use tokio::io::{AsyncSeekExt, AsyncWriteExt};
 use tracing::{debug, trace};
 
 use crate::error_map::map_error;
-use crate::request::{
-    Auth, Body, Method, PartValue, Request, Target, diagnostic_body, redact_json, redact_url,
-};
+use crate::request::{Auth, Body, Method, PartValue, Request, Target, diagnostic_body, redact_url};
 use crate::retry::{self, Failure};
 
 /// Called before each retry, so a wait never looks like a hang. The transport has no
@@ -279,7 +277,7 @@ impl Client {
         builder = match &req.body {
             Body::Empty => builder,
             Body::Json(v) => {
-                trace!(body = %redact_json(v), "request body");
+                trace!(body = %req.diagnostic_json(v), "request body");
                 builder.json(v)
             }
             Body::Multipart(parts) => builder.multipart(build_form(parts).await?),
