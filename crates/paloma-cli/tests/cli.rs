@@ -12455,6 +12455,131 @@ async fn commerce_uses_query_flags_including_false_and_preserves_list_output() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
+async fn welcome_sequences_create_update_read_and_delete_waba_ad_assets() {
+    let home = TempDir::new().unwrap();
+    let file = home.path().join("sequence.json");
+    let sequence = json!({"text":"Welcome","autofill_message":{"content":"Hi"},"ice_breakers":[{"title":"Help"}]});
+    std::fs::write(&file, sequence.to_string()).unwrap();
+    let graph = MockServer::start().await;
+    for (args, body, result, quiet) in [
+        (
+            vec![
+                "account",
+                "welcome-sequence",
+                "create",
+                "--name",
+                "Support",
+                "--file",
+            ],
+            json!({"name":"Support","welcome_message_sequence":sequence}),
+            json!({"sequence_id":"444"}),
+            "444\n",
+        ),
+        (
+            vec![
+                "account",
+                "welcome-sequence",
+                "set",
+                "444",
+                "--name",
+                "New",
+                "--file",
+            ],
+            json!({"name":"New","welcome_message_sequence":sequence,"sequence_id":"444"}),
+            json!({"success":true}),
+            "",
+        ),
+    ] {
+        Mock::given(method("POST"))
+            .and(path("/v26.0/222/welcome_message_sequences"))
+            .and(body_json(body))
+            .respond_with(ResponseTemplate::new(200).set_body_json(result))
+            .expect(1)
+            .mount(&graph)
+            .await;
+        paloma(Some(&graph), &home)
+            .args(&args)
+            .arg(&file)
+            .args(["--yes", "-q"])
+            .assert()
+            .success()
+            .stdout(quiet);
+        paloma(Some(&graph), &home)
+            .args(&args)
+            .arg(&file)
+            .arg("--dry-run")
+            .assert()
+            .success()
+            .stdout(predicate::str::contains("welcome_message_sequence"));
+    }
+    Mock::given(method("GET"))
+        .and(path("/v26.0/222/welcome_message_sequences"))
+        .and(query_param("sequence_id", "444"))
+        .and(query_param("limit", "5"))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .set_body_json(json!([{"sequence_id":"444","is_used_in_ad":false}])),
+        )
+        .expect(1)
+        .mount(&graph)
+        .await;
+    paloma(Some(&graph), &home)
+        .args([
+            "account",
+            "welcome-sequence",
+            "list",
+            "--id",
+            "444",
+            "--limit",
+            "5",
+            "-o",
+            "json",
+        ])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("is_used_in_ad"));
+    Mock::given(method("DELETE"))
+        .and(path("/v26.0/222/welcome_message_sequences"))
+        .and(query_param("sequence_id", "444"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({"success":true})))
+        .expect(1)
+        .mount(&graph)
+        .await;
+    paloma(Some(&graph), &home)
+        .args([
+            "account",
+            "welcome-sequence",
+            "delete",
+            "444",
+            "--yes",
+            "-q",
+        ])
+        .assert()
+        .success()
+        .stdout("");
+    paloma(Some(&graph), &home)
+        .args(["account", "welcome-sequence", "delete", "444"])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("--yes"));
+    std::fs::write(&file, "{\"ice_breakers\":[42]}").unwrap();
+    paloma(Some(&graph), &home)
+        .env_remove("PALOMA_WABA_ID")
+        .args([
+            "account",
+            "welcome-sequence",
+            "create",
+            "--name",
+            "Support",
+            "--file",
+        ])
+        .arg(&file)
+        .assert()
+        .code(5)
+        .stdout("");
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn oba_and_india_compliance_submit_validated_documents_and_confirm() {
     let home = TempDir::new().unwrap();
     let graph = MockServer::start().await;
@@ -12560,3 +12685,32 @@ async fn compliance_validation_rejects_wrong_entity_contacts_and_bounds_before_a
     assert!(graph.received_requests().await.unwrap().is_empty());
 }
 
+#[tokio::test(flavor = "multi_thread")]
+async fn account_users_follow_cursors_and_quiet_prints_every_id() {
+    let graph = MockServer::start().await;
+    let home = TempDir::new().unwrap();
+    Mock::given(method("GET")).and(path("/v26.0/222/assigned_users")).and(query_param("business","999")).and(query_param("after","start")).respond_with(ResponseTemplate::new(200).set_body_json(json!({"data":[{"id":"444"}],"paging":{"next":"https://untrusted.invalid/?access_token=LEAK_SENTINEL","cursors":{"after":"next"}}}))).expect(1).mount(&graph).await;
+    Mock::given(method("GET"))
+        .and(path("/v26.0/222/assigned_users"))
+        .and(query_param("business", "999"))
+        .and(query_param("after", "next"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({"data":[{"id":"555"}]})))
+        .expect(1)
+        .mount(&graph)
+        .await;
+    paloma(Some(&graph), &home)
+        .args([
+            "account",
+            "users",
+            "--business-id",
+            "999",
+            "--after",
+            "start",
+            "--all",
+            "-q",
+        ])
+        .assert()
+        .success()
+        .stdout("444\n555\n")
+        .stderr("");
+}

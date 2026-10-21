@@ -152,6 +152,48 @@ fn health_details(entity: &Value) -> String {
     info.chain(errors).collect::<Vec<_>>().join("; ")
 }
 
+pub fn users(
+    waba: &str,
+    system: bool,
+    business: Option<&str>,
+    limit: Option<u32>,
+    after: Option<&str>,
+) -> Request {
+    Request::get(format!(
+        "{waba}/{}",
+        if system {
+            "system_users"
+        } else {
+            "assigned_users"
+        }
+    ))
+    .query_opt("business", business)
+    .query_opt("limit", limit)
+    .query_opt("after", after)
+}
+pub fn welcome_sequence(
+    waba: &str,
+    read: bool,
+    delete: bool,
+    id: Option<&str>,
+    mut body: Value,
+    limit: Option<u32>,
+) -> Request {
+    let node = format!("{waba}/welcome_message_sequences");
+    if read {
+        return Request::get(node)
+            .query_opt("sequence_id", id)
+            .query_opt("limit", limit);
+    }
+    if delete {
+        return Request::delete(node).query_opt("sequence_id", id);
+    }
+    if let Some(id) = id {
+        body["sequence_id"] = json!(id);
+    }
+    Request::post(node).json(body)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

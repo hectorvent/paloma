@@ -12,6 +12,7 @@ use crate::{cli::Format, output::Output};
 use paloma_graph::Request;
 use serde_json::json;
 
+mod administration;
 mod analytics;
 mod billing_currency;
 use crate::app::{App, field_id, no_id};
@@ -40,6 +41,11 @@ pub enum AccountCommand {
     },
     /// Update account settings.
     Set(SetArgs),
+    /// List assigned users or WABA system users.
+    Users(administration::Users),
+    /// Manage click-to-WhatsApp welcome message sequences.
+    #[command(subcommand)]
+    WelcomeSequence(administration::WelcomeSequence),
     /// List account activity history.
     Activities(ActivitiesArgs),
     /// Clone an account and explicitly switch billing currency.
@@ -170,6 +176,12 @@ impl SetArgs {
 
 impl AccountCommand {
     pub async fn run(self, app: &App) -> Result<()> {
+        if let Self::Users(command) = self {
+            return command.run(app).await;
+        }
+        if let Self::WelcomeSequence(command) = self {
+            return command.run(app).await;
+        }
         if let Self::BillingCurrency(command) = self {
             return command.run(app).await;
         }
@@ -237,7 +249,11 @@ impl AccountCommand {
                 )
                 .await
             }
-            Self::Set(_) | Self::BillingCurrency(_) | Self::Analytics(_) => {
+            Self::Users(_)
+            | Self::WelcomeSequence(_)
+            | Self::Set(_)
+            | Self::BillingCurrency(_)
+            | Self::Analytics(_) => {
                 unreachable!("handled before context resolution")
             }
             Self::Get { fields } => {

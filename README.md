@@ -283,7 +283,7 @@ error: text body is 5000 chars; max is 4096        # exit 5
 | `webhook` | get · subscribe · unsubscribe · fields · listen · verify-url · simulate |
 | `number` | list · get · register · deregister · set-pin · quality · health · request-code · verify-code · add · set-name · search-visibility · username · contacts · settings · oba · compliance |
 | `profile` | get · set · photo |
-| `account` | get · set · limits · health · activities · subscribed-apps · billing-currency · analytics |
+| `account` | get · set · limits · health · activities · subscribed-apps · billing-currency · analytics · users · welcome-sequence |
 | `block` | add · remove · list |
 | `qr` | create · list · get · update · delete |
 | `automation` | get · set |

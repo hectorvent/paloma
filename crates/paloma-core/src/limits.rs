@@ -238,6 +238,9 @@ pub const MAX_BUSINESS_USERNAME: usize = 35;
 pub const MIN_OBA_SUPPORTING_LINKS: usize = 5;
 pub const MAX_OBA_SUPPORTING_LINKS: usize = 10;
 
+/// Maximum assigned-user page size documented by Graph.
+pub const MAX_ASSIGNED_USERS_PAGE: u32 = 100;
+
 /// Legal entity names and email addresses in India compliance submissions.
 pub const MIN_COMPLIANCE_ENTITY_NAME: usize = 2;
 pub const MAX_COMPLIANCE_ENTITY_NAME: usize = 128;

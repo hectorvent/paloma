@@ -240,3 +240,43 @@ paloma account analytics --pricing --start 2026-11-01 --end 2026-11-02 --dry-run
 
 The deprecated `conversation_analytics` field is not exposed. Template and calling
 analytics belong to their own resources and are outside this command.
+
+## Assigned users and system users
+
+```bash
+paloma account users --business-id 123 --all -o json
+paloma account users --system -q
+```
+
+Assigned-user reads require `--business-id` to identify the business context.
+`--system` selects the WABA's system-users endpoint instead and conflicts with that
+flag. Both accept `--limit` (1–100), `--after`, and `--all`. A single page warns when
+more results exist; `--all` follows cursors. Table output includes ID/name/user type,
+`-q` prints IDs, and JSON/raw retain returned metadata. Dry-run prints the first
+request offline. These are read-only commands and do not grant or remove access.
+
+## Welcome message sequences
+
+```bash
+paloma account welcome-sequence list --limit 5
+paloma account welcome-sequence list --id 123 -o json
+paloma account welcome-sequence create --name Support --file sequence.json --dry-run
+paloma account welcome-sequence set 123 --name 'Support updated' --yes
+paloma account welcome-sequence delete 123 --yes
+```
+
+These are WABA-scoped assets for click-to-WhatsApp ads. The JSON file is the sequence
+content, with `text`, `autofill_message.content`, and/or `ice_breakers` containing
+`title` fields. `create` requires `--name` and `--file`; `set` accepts either or both.
+`list` accepts optional `--id` and positive `--limit`. JSON/raw preserve Meta's array
+response. `create -q` prints the sequence ID; updates and deletes have no primary ID.
+Updates and deletes confirm, and all writes support dry-run. Meta refuses deletion
+of sequences used in active ads.
+
+```json
+{
+  "text": "Welcome to Acme",
+  "autofill_message": {"content": "I'd like some help"},
+  "ice_breakers": [{"title": "Track an order"}]
+}
+```
