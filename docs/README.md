@@ -28,6 +28,7 @@ New here? Start with [Installation](installation.md) → [Getting started](getti
 | `paloma media` | upload · get · download · delete | [commands/media.md](commands/media.md) |
 | `paloma message` | read · typing · history | [commands/message.md](commands/message.md) |
 | `paloma number` | list · get · register · deregister · set-pin · quality · health · request-code · verify-code · add · set-name · search-visibility · username · contacts · settings · oba · compliance | [commands/number.md](commands/number.md) |
+| `paloma commerce` | get · set | [commands/commerce.md](commands/commerce.md) |
 | `paloma profile` | get · set · photo | [commands/profile.md](commands/profile.md) |
 | `paloma calling` | status · enable · disable · set · sip · codecs | [commands/calling.md](commands/calling.md) |
 | `paloma webhook` | get · subscribe · unsubscribe · fields · fields available · fields set · listen · verify-url · simulate | [commands/webhook.md](commands/webhook.md) |

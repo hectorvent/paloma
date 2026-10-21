@@ -12406,6 +12406,55 @@ async fn usernames_contacts_and_settings_reads_and_deletes_keep_their_contracts(
 }
 
 #[tokio::test(flavor = "multi_thread")]
+async fn commerce_uses_query_flags_including_false_and_preserves_list_output() {
+    let graph = MockServer::start().await;
+    let home = TempDir::new().unwrap();
+    let body = json!({"data":[{"id":"333","is_cart_enabled":true,"is_catalog_visible":false}]});
+    Mock::given(method("GET"))
+        .and(path("/v26.0/111/whatsapp_commerce_settings"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(body.clone()))
+        .expect(2)
+        .mount(&graph)
+        .await;
+    paloma(Some(&graph), &home)
+        .args(["commerce", "get", "-q"])
+        .assert()
+        .success()
+        .stdout("333\n");
+    let out = paloma(Some(&graph), &home)
+        .args(["commerce", "get", "-o", "json"])
+        .output()
+        .unwrap();
+    assert_eq!(stdout_json(&out), body);
+    Mock::given(method("POST"))
+        .and(path("/v26.0/111/whatsapp_commerce_settings"))
+        .and(query_param("is_cart_enabled", "false"))
+        .and(query_param("is_catalog_visible", "true"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({"success":true})))
+        .expect(1)
+        .mount(&graph)
+        .await;
+    paloma(Some(&graph), &home)
+        .args([
+            "commerce",
+            "set",
+            "--cart-enabled",
+            "false",
+            "--catalog-visible",
+            "true",
+            "--yes",
+            "-q",
+        ])
+        .assert()
+        .success()
+        .stdout("");
+    assert_eq!(
+        dry_run_request(&home, &["commerce", "set", "--cart-enabled", "false"])["url"],
+        format!("{GRAPH}/{PHONE}/whatsapp_commerce_settings?is_cart_enabled=false")
+    );
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn oba_and_india_compliance_submit_validated_documents_and_confirm() {
     let home = TempDir::new().unwrap();
     let graph = MockServer::start().await;

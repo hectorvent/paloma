@@ -18,6 +18,7 @@ mod auth;
 mod automation;
 mod block;
 mod calling;
+mod commerce;
 mod config;
 mod flow;
 mod link;
@@ -52,6 +53,9 @@ pub enum Command {
     /// Read and update the business profile.
     #[command(subcommand)]
     Profile(profile::ProfileCommand),
+    /// Read and update shopping cart and catalog settings.
+    #[command(subcommand)]
+    Commerce(commerce::CommerceCommand),
     /// Configure welcome messages, ice breakers and bot commands.
     #[command(subcommand)]
     Automation(automation::AutomationCommand),
@@ -105,6 +109,7 @@ impl Command {
             Self::Template(c) => c.run(app).await,
             Self::Number(c) => c.run(app).await,
             Self::Profile(c) => c.run(app).await,
+            Self::Commerce(c) => c.run(app).await,
             Self::Block(c) => c.run(app).await,
             Self::Automation(c) => c.run(app).await,
             Self::Webhook(c) => c.run(app).await,
