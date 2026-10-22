@@ -35,3 +35,7 @@ impl Settings {
         serde_json::to_value(self).expect("automation settings are JSON primitives")
     }
 }
+
+pub fn bot(id: &str) -> Request {
+    Request::get(id)
+}

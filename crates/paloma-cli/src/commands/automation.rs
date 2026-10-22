@@ -11,6 +11,8 @@ use std::path::PathBuf;
 
 #[derive(Debug, Subcommand)]
 pub enum AutomationCommand {
+    /// Read a WABA bot by its bot ID.
+    Bot { bot_id: String },
     /// Show welcome-message, ice-breaker and command settings.
     Get,
     /// Update conversational components on the active phone number.
@@ -145,6 +147,10 @@ fn validate_body(body: &Value) -> Result<()> {
 impl AutomationCommand {
     pub async fn run(self, app: &App) -> Result<()> {
         match self {
+            Self::Bot { bot_id } => {
+                validate::numeric_id(&bot_id, "bot id")?;
+                app.send_and_emit(&automation::bot(&bot_id), field_id).await
+            }
             Self::Get => {
                 let phone = app.ctx()?.require_phone_number_id()?.to_owned();
                 app.send_and_emit(&automation::get(&phone), field_id).await

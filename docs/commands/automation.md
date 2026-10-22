@@ -41,3 +41,13 @@ commands; the API remains the authority on supported text.
 `get -q` prints the returned phone-number id. Settings writes have no primary id, so
 `set -q` produces no output. All data goes through the selected output format; diagnostics
 go to stderr. Both verbs support `--dry-run` without reading a token or sending requests.
+
+## `paloma automation bot`
+
+```bash
+paloma automation bot 123 -o json
+```
+
+Reads a bot by its WABA bot ID, which is distinct from the phone-number ID. The ID is
+validated before resolving context. JSON/raw preserve prompts, commands and welcome
+settings; `-q` prints the returned bot ID when Meta includes it. Dry-run is offline.

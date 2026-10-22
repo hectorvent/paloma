@@ -12455,6 +12455,53 @@ async fn commerce_uses_query_flags_including_false_and_preserves_list_output() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
+async fn account_users_and_automation_bot_use_the_documented_nodes() {
+    let graph = MockServer::start().await;
+    let home = TempDir::new().unwrap();
+    for (args, node) in [
+        (
+            vec!["account", "users", "--business-id", "999", "--limit", "10"],
+            "222/assigned_users",
+        ),
+        (vec!["account", "users", "--system"], "222/system_users"),
+    ] {
+        let mut mock = Mock::given(method("GET")).and(path(format!("/v26.0/{node}")));
+        if node.ends_with("assigned_users") {
+            mock = mock
+                .and(query_param("business", "999"))
+                .and(query_param("limit", "10"));
+        }
+        mock.respond_with(
+            ResponseTemplate::new(200).set_body_json(json!({"data":[{"id":"777","name":"A"}]})),
+        )
+        .expect(1)
+        .mount(&graph)
+        .await;
+        paloma(Some(&graph), &home)
+            .args(&args)
+            .arg("-q")
+            .assert()
+            .success()
+            .stdout("777\n");
+        assert_eq!(dry_run_request(&home, &args)["method"], "GET");
+    }
+    Mock::given(method("GET"))
+        .and(path("/v26.0/444"))
+        .respond_with(
+            ResponseTemplate::new(200).set_body_json(json!({"id":"444","prompts":["Hi"]})),
+        )
+        .expect(1)
+        .mount(&graph)
+        .await;
+    paloma(Some(&graph), &home)
+        .env_remove("PALOMA_PHONE_NUMBER_ID")
+        .args(["automation", "bot", "444", "-q"])
+        .assert()
+        .success()
+        .stdout("444\n");
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn welcome_sequences_create_update_read_and_delete_waba_ad_assets() {
     let home = TempDir::new().unwrap();
     let file = home.path().join("sequence.json");

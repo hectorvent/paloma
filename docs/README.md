@@ -42,7 +42,7 @@ New here? Start with [Installation](installation.md) → [Getting started](getti
 | `paloma completion` | bash · zsh · fish · powershell · elvish | [commands/completion.md](commands/completion.md) |
 | `paloma account` | get · set · limits · health · activities · subscribed-apps · billing-currency · analytics · users · welcome-sequence | [commands/account.md](commands/account.md) |
 | `paloma qr` | create · list · get · update · delete | [commands/qr.md](commands/qr.md) |
-| `paloma automation` | get · set | [commands/automation.md](commands/automation.md) |
+| `paloma automation` | get · set · bot | [commands/automation.md](commands/automation.md) |
 
 > Anything marked **planned** is already visible in `paloma --help` and exits with a
 > clear "not yet implemented (planned for vX.Y)" message. See the
