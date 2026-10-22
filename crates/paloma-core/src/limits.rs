@@ -234,6 +234,9 @@ pub const MAX_ACTIVITIES_PAGE: u32 = 100;
 pub const MIN_BUSINESS_USERNAME: usize = 3;
 pub const MAX_BUSINESS_USERNAME: usize = 35;
 
+/// Flow migration copies at most 100 named Flows per request.
+pub const MAX_FLOW_MIGRATION_NAMES: usize = 100;
+
 /// Evidence links for an Official Business Account application.
 pub const MIN_OBA_SUPPORTING_LINKS: usize = 5;
 pub const MAX_OBA_SUPPORTING_LINKS: usize = 10;

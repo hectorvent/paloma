@@ -12406,6 +12406,103 @@ async fn usernames_contacts_and_settings_reads_and_deletes_keep_their_contracts(
 }
 
 #[tokio::test(flavor = "multi_thread")]
+async fn identity_and_settings_reject_bad_inputs_before_context_or_network() {
+    let graph = MockServer::start().await;
+    let home = TempDir::new().unwrap();
+    for args in [
+        vec!["number", "username", "set", "abc..def"],
+        vec!["number", "username", "set", "12345"],
+        vec!["number", "username", "set", "Acme.COM"],
+        vec!["number", "contacts", "get", "US.ENT.123"],
+        vec!["number", "contacts", "delete", "15551234567"],
+        vec!["number", "settings", "storage", "--region", "XX"],
+        vec!["number", "set-name", " "],
+        vec!["number", "add", "+15551234567", "--name", "Acme"],
+        vec![
+            "number",
+            "request-code",
+            "--method",
+            "SMS",
+            "--language",
+            " ",
+        ],
+        vec!["commerce", "set"],
+        vec!["automation", "bot", "../bad"],
+        vec![
+            "flow",
+            "metrics",
+            "123",
+            "--name",
+            "ENDPOINT_REQUEST_COUNT",
+            "--since",
+            "2026-02-30",
+        ],
+        vec![
+            "flow",
+            "metrics",
+            "123",
+            "--name",
+            "ENDPOINT_REQUEST_COUNT",
+            "--since",
+            "2026-11-04",
+            "--until",
+            "2026-11-03",
+        ],
+        vec!["flow", "migrate", "--source-waba-id", "../bad"],
+        vec!["account", "users", "--business-id", "../bad"],
+    ] {
+        paloma(Some(&graph), &home)
+            .env_remove("PALOMA_PHONE_NUMBER_ID")
+            .env_remove("PALOMA_WABA_ID")
+            .args(&args)
+            .assert()
+            .code(5)
+            .stdout("");
+    }
+    paloma(Some(&graph), &home)
+        .env_remove("PALOMA_PHONE_NUMBER_ID")
+        .env("PALOMA_VERIFICATION_CODE", "BAD_SECRET")
+        .args(["number", "verify-code"])
+        .assert()
+        .code(5)
+        .stderr(predicate::str::contains("BAD_SECRET").not());
+    assert!(graph.received_requests().await.unwrap().is_empty());
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn new_disruptive_commands_refuse_without_confirmation_and_preview_offline() {
+    let graph = MockServer::start().await;
+    let home = TempDir::new().unwrap();
+    for args in [
+        vec!["number", "request-code", "--method", "VOICE"],
+        vec!["number", "set-name", "Acme"],
+        vec!["number", "username", "set", "acme_shop"],
+        vec!["number", "username", "delete"],
+        vec!["number", "contacts", "delete", "US.123"],
+        vec!["number", "settings", "storage", "--disable"],
+        vec!["number", "settings", "identity-check", "--enabled", "true"],
+        vec!["number", "search-visibility", "VISIBLE"],
+        vec!["commerce", "set", "--cart-enabled", "false"],
+        vec!["flow", "migrate", "--source-waba-id", "333"],
+    ] {
+        paloma(Some(&graph), &home)
+            .args(&args)
+            .assert()
+            .failure()
+            .stdout("")
+            .stderr(predicate::str::contains("--yes"));
+        paloma(Some(&graph), &home)
+            .env_remove("PALOMA_TOKEN")
+            .args(&args)
+            .args(["--dry-run", "-o", "json"])
+            .assert()
+            .success()
+            .stdout(predicate::str::contains("method"));
+    }
+    assert!(graph.received_requests().await.unwrap().is_empty());
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn commerce_uses_query_flags_including_false_and_preserves_list_output() {
     let graph = MockServer::start().await;
     let home = TempDir::new().unwrap();
@@ -12499,6 +12596,127 @@ async fn account_users_and_automation_bot_use_the_documented_nodes() {
         .assert()
         .success()
         .stdout("444\n");
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn flow_metrics_preserve_all_points_and_migration_copies_named_flows() {
+    let graph = MockServer::start().await;
+    let home = TempDir::new().unwrap();
+    let body = json!({"id":"444","metric":{"name":"ENDPOINT_REQUEST_COUNT","data_points":[{"timestamp":"2026-11-01","data":[{"key":"value","value":5}]},{"timestamp":"2026-11-02","data":[{"key":"value","value":7}]}]}});
+    let args = [
+        "flow",
+        "metrics",
+        "444",
+        "--name",
+        "ENDPOINT_REQUEST_COUNT",
+        "--granularity",
+        "DAY",
+        "--since",
+        "2026-11-01",
+        "--until",
+        "2026-11-02",
+    ];
+    Mock::given(method("GET")).and(path("/v26.0/444")).and(query_param("fields","metric.name(ENDPOINT_REQUEST_COUNT).granularity(DAY).since(2026-11-01).until(2026-11-02)"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(body.clone())).expect(1).mount(&graph).await;
+    let out = paloma(Some(&graph), &home)
+        .args(args)
+        .args(["-o", "json"])
+        .output()
+        .unwrap();
+    assert!(out.status.success());
+    assert_eq!(stdout_json(&out), body);
+    assert!(
+        dry_run_request(&home, &args)["url"]
+            .as_str()
+            .unwrap()
+            .contains("metric.name")
+    );
+    Mock::given(method("POST"))
+        .and(path("/v26.0/222/migrate_flows"))
+        .and(query_param("source_waba_id", "333"))
+        .and(query_param("source_flow_names", "[\"booking\",\"survey\"]"))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .set_body_json(json!({"migrated_flows":[{"source_id":"a","migrated_id":"b"}]})),
+        )
+        .expect(1)
+        .mount(&graph)
+        .await;
+    paloma(Some(&graph), &home)
+        .args([
+            "flow",
+            "migrate",
+            "--source-waba-id",
+            "333",
+            "--name",
+            "booking",
+            "--name",
+            "survey",
+            "--yes",
+            "-o",
+            "json",
+        ])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("migrated_id"));
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn flow_key_reads_and_writes_public_pem_but_rejects_private_material_before_context() {
+    let graph = MockServer::start().await;
+    let home = TempDir::new().unwrap();
+    let file = home.path().join("public.pem");
+    let public = "-----BEGIN PUBLIC KEY-----\nTEST_PUBLIC_MATERIAL\n-----END PUBLIC KEY-----";
+    std::fs::write(&file, public).unwrap();
+    Mock::given(method("GET"))
+        .and(path("/v26.0/111/whatsapp_business_encryption"))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .set_body_json(json!({"business_public_key_signature_status":"VALID"})),
+        )
+        .expect(1)
+        .mount(&graph)
+        .await;
+    paloma(Some(&graph), &home)
+        .args(["flow", "key", "get", "-o", "json"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("VALID"));
+    Mock::given(method("POST"))
+        .and(path("/v26.0/111/whatsapp_business_encryption"))
+        .and(body_string_contains("name=\"business_public_key\""))
+        .and(body_string_contains(public))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({"success":true})))
+        .expect(1)
+        .mount(&graph)
+        .await;
+    paloma(Some(&graph), &home)
+        .args(["flow", "key", "set", "--public-key"])
+        .arg(&file)
+        .args(["--yes", "-q"])
+        .assert()
+        .success()
+        .stdout("");
+    paloma(Some(&graph), &home)
+        .env_remove("PALOMA_TOKEN")
+        .args(["flow", "key", "set", "--public-key"])
+        .arg(&file)
+        .arg("--dry-run")
+        .assert()
+        .success();
+    std::fs::write(
+        &file,
+        "-----BEGIN PRIVATE KEY-----\nPRIVATE_SENTINEL\n-----END PRIVATE KEY-----",
+    )
+    .unwrap();
+    paloma(Some(&graph), &home)
+        .env_remove("PALOMA_PHONE_NUMBER_ID")
+        .args(["flow", "key", "set", "--public-key"])
+        .arg(&file)
+        .assert()
+        .code(5)
+        .stdout("")
+        .stderr(predicate::str::contains("PRIVATE_SENTINEL").not());
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -12693,6 +12911,40 @@ async fn oba_and_india_compliance_submit_validated_documents_and_confirm() {
             .code(5)
             .stdout("");
     }
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn flow_migration_partial_failure_preserves_results_and_exits_one() {
+    let graph = MockServer::start().await;
+    let home = TempDir::new().unwrap();
+    let body = json!({"migrated_flows":[{"source_name":"one","migrated_id":"444"}],"failed_flows":[{"source_name":"two","error_code":"4233041","error_message":"already exists"}]});
+    Mock::given(method("POST"))
+        .and(path("/v26.0/222/migrate_flows"))
+        .and(query_param("source_waba_id", "333"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(body.clone()))
+        .expect(2)
+        .mount(&graph)
+        .await;
+    let out = paloma(Some(&graph), &home)
+        .args([
+            "flow",
+            "migrate",
+            "--source-waba-id",
+            "333",
+            "--yes",
+            "-o",
+            "json",
+        ])
+        .output()
+        .unwrap();
+    assert_eq!(out.status.code(), Some(1));
+    assert_eq!(stdout_json(&out), body);
+    assert!(String::from_utf8_lossy(&out.stderr).contains("1 Flow migration(s) failed"));
+    paloma(Some(&graph), &home)
+        .args(["flow", "migrate", "--source-waba-id", "333", "--yes", "-q"])
+        .assert()
+        .code(1)
+        .stdout("444\n");
 }
 
 #[tokio::test(flavor = "multi_thread")]

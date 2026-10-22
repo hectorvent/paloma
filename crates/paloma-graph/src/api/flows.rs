@@ -122,6 +122,39 @@ fn describe_error(error: &Value) -> String {
     s
 }
 
+pub fn metrics(
+    flow: &str,
+    name: &str,
+    granularity: &str,
+    since: Option<&str>,
+    until: Option<&str>,
+) -> Request {
+    let mut fields = format!("metric.name({name}).granularity({granularity})");
+    if let Some(date) = since {
+        let _ = write!(fields, ".since({date})");
+    }
+    if let Some(date) = until {
+        let _ = write!(fields, ".until({date})");
+    }
+    get(flow, &fields)
+}
+
+pub fn migrate(destination: &str, source: &str, names: &[String]) -> Request {
+    Request::post(format!("{destination}/migrate_flows"))
+        .query("source_waba_id", source)
+        .query_opt(
+            "source_flow_names",
+            (!names.is_empty()).then(|| serde_json::to_string(names).expect("string array")),
+        )
+}
+pub fn get_key(phone: &str) -> Request {
+    Request::get(format!("{phone}/whatsapp_business_encryption"))
+}
+pub fn set_key(phone: &str, key: &str) -> Request {
+    Request::post(format!("{phone}/whatsapp_business_encryption"))
+        .multipart(vec![FormPart::text("business_public_key", key)])
+}
+
 #[cfg(test)]
 mod tests {
     use serde_json::json;

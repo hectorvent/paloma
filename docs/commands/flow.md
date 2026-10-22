@@ -247,3 +247,45 @@ Beyond the [standard contract](../global-flags.md), the one worth knowing here:
 | Code | When |
 |------|------|
 | `5` | A Flow JSON failed validation — locally before sending, or reported by Meta after it stored it |
+
+## Endpoint metrics
+
+```bash
+paloma flow metrics 123 --name ENDPOINT_REQUEST_COUNT --granularity DAY \
+  --since 2026-11-01 --until 2026-11-03 -o json
+```
+
+`metrics <flow_id>` requires `--name` and accepts `--granularity DAY|HOUR|LIFETIME`
+(default `DAY`). Metrics are `ENDPOINT_REQUEST_COUNT`, `ENDPOINT_REQUEST_ERROR`,
+`ENDPOINT_REQUEST_ERROR_RATE`, `ENDPOINT_REQUEST_LATENCY_SECONDS_CEIL`, and
+`ENDPOINT_AVAILABILITY`. Optional `--since` and `--until` are real `YYYY-MM-DD` dates;
+a reversed range fails locally with exit `5`. Meta enforces retention (90 days for
+DAY, 30 for HOUR) and metrics can be delayed by hours. JSON/raw preserve every point
+and dimension; no totals or missing points are invented. Dry-run is offline.
+
+## Migration
+
+```bash
+paloma flow migrate --source-waba-id 123 --name booking --name survey --dry-run
+```
+
+The selected WABA is the destination. This **copies** Flows between WABAs owned by
+the same business; source Flows remain. Repeat `--name` to select up to 100 names,
+or omit it to request all. Existing destination names can be skipped, and published
+source Flows remain published in the destination. Migration confirms and preserves
+Meta's per-Flow result. Any `failed_flows` entries cause exit `1` with a warning;
+`-q` prints newly migrated IDs. It never silently retries with
+an expanded selection. Source and destination must differ.
+
+## Endpoint encryption key
+
+```bash
+paloma flow key get -o json
+paloma flow key set --public-key public.pem --dry-run
+```
+
+These phone-scoped commands read or replace the business public key used for Flow
+endpoint encryption. Supply a PEM **public** key file generated from a 2048-bit RSA
+pair. Private-key input is rejected locally; keep that key on your endpoint server.
+Meta validates the public key and returns its signature status. Installation confirms
+before writing. Dry-run shows the public-key form field without sending it.
