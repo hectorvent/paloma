@@ -12913,6 +12913,193 @@ async fn oba_and_india_compliance_submit_validated_documents_and_confirm() {
     }
 }
 
+fn phone_settings_manifest(home: &TempDir, spec: &str) -> std::path::PathBuf {
+    let path = home.path().join("settings.yaml");
+    std::fs::write(
+        &path,
+        format!("apiVersion: paloma/v1\nkind: PhoneSettings\nspec:\n{spec}"),
+    )
+    .unwrap();
+    path
+}
+#[tokio::test(flavor = "multi_thread")]
+async fn phone_settings_manifest_exports_only_writable_fields_and_reconciles_each_feature() {
+    let graph = MockServer::start().await;
+    let home = TempDir::new().unwrap();
+    let current = json!({"storage_configuration":{"status":"IN_COUNTRY_STORAGE_ENABLED","data_localization_region":"IN"},"user_identity_change":{"enable_identity_key_check":true},"calling":{"sip":{"servers":[{"password":"PRIVATE_SIP_SENTINEL"}]}}});
+    Mock::given(method("GET"))
+        .and(path("/v26.0/111/settings"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(current))
+        .mount(&graph)
+        .await;
+    let out = paloma(Some(&graph), &home)
+        .args(["export", "PhoneSettings", "-o", "json"])
+        .output()
+        .unwrap();
+    assert!(out.status.success());
+    let spec = &stdout_json(&out)["spec"];
+    assert_eq!(spec["storageConfiguration"]["dataLocalizationRegion"], "IN");
+    assert!(spec.get("calling").is_none());
+    assert!(!String::from_utf8_lossy(&out.stdout).contains("PRIVATE_SIP_SENTINEL"));
+    let file = phone_settings_manifest(
+        &home,
+        "  storageConfiguration:\n    status: IN_COUNTRY_STORAGE_ENABLED\n    dataLocalizationRegion: IN\n  userIdentityChange:\n    enableIdentityKeyCheck: true\n",
+    );
+    paloma(Some(&graph), &home)
+        .args(["diff", "-f"])
+        .arg(&file)
+        .assert()
+        .success();
+    let file = phone_settings_manifest(
+        &home,
+        "  storageConfiguration:\n    status: IN_COUNTRY_STORAGE_DISABLED\n  userIdentityChange:\n    enableIdentityKeyCheck: false\n",
+    );
+    paloma(Some(&graph), &home)
+        .args(["diff", "-f"])
+        .arg(&file)
+        .assert()
+        .code(1);
+    paloma(Some(&graph), &home)
+        .args(["apply", "-f"])
+        .arg(&file)
+        .arg("--dry-run")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("IN_COUNTRY_STORAGE_DISABLED"));
+    assert!(
+        graph
+            .received_requests()
+            .await
+            .unwrap()
+            .iter()
+            .all(|r| r.method.as_str() == "GET")
+    );
+    paloma(Some(&graph), &home)
+        .args(["apply", "-f"])
+        .arg(&file)
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("--yes"));
+    for body in [
+        json!({"storage_configuration":{"status":"IN_COUNTRY_STORAGE_DISABLED"}}),
+        json!({"user_identity_change":{"enable_identity_key_check":false}}),
+    ] {
+        Mock::given(method("POST"))
+            .and(path("/v26.0/111/settings"))
+            .and(body_json(body))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({"success":true})))
+            .expect(1)
+            .mount(&graph)
+            .await;
+    }
+    paloma(Some(&graph), &home)
+        .args(["apply", "-f"])
+        .arg(&file)
+        .arg("--yes")
+        .assert()
+        .success()
+        .stderr(predicate::str::contains("configured"));
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn phone_settings_reject_invalid_specs_before_any_read_and_confirm_identity_only_changes() {
+    let graph = MockServer::start().await;
+    let home = TempDir::new().unwrap();
+    for spec in [
+        "  payloadEncryption: {}\n",
+        "  storageConfiguration:\n    status: IN_COUNTRY_STORAGE_ENABLED\n",
+        "  userIdentityChange:\n    enableIdentityKeyCheck: nope\n",
+    ] {
+        let file = phone_settings_manifest(&home, spec);
+        paloma(Some(&graph), &home)
+            .args(["apply", "-f"])
+            .arg(&file)
+            .arg("--yes")
+            .assert()
+            .code(5)
+            .stdout("");
+    }
+    assert!(graph.received_requests().await.unwrap().is_empty());
+    Mock::given(method("GET"))
+        .and(path("/v26.0/111/settings"))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .set_body_json(json!({"user_identity_change":{"enable_identity_key_check":false}})),
+        )
+        .expect(1)
+        .mount(&graph)
+        .await;
+    let file = phone_settings_manifest(
+        &home,
+        "  userIdentityChange:\n    enableIdentityKeyCheck: true\n",
+    );
+    paloma(Some(&graph), &home)
+        .args(["apply", "-f"])
+        .arg(&file)
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("--yes"));
+    assert!(
+        graph
+            .received_requests()
+            .await
+            .unwrap()
+            .iter()
+            .all(|r| r.method.as_str() == "GET")
+    );
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn number_manifest_search_visibility_is_idempotent_and_pin_diagnostics_are_redacted() {
+    let graph = MockServer::start().await;
+    let home = TempDir::new().unwrap();
+    let file = home.path().join("number.yaml");
+    Mock::given(method("GET"))
+        .and(path("/v26.0/111"))
+        .and(query_param("fields", "search_visibility"))
+        .respond_with(
+            ResponseTemplate::new(200).set_body_json(json!({"search_visibility":"VISIBLE"})),
+        )
+        .mount(&graph)
+        .await;
+    std::fs::write(
+        &file,
+        "apiVersion: paloma/v1\nkind: Number\nspec:\n  searchVisibility: VISIBLE\n",
+    )
+    .unwrap();
+    paloma(Some(&graph), &home)
+        .args(["apply", "-f"])
+        .arg(&file)
+        .assert()
+        .success()
+        .stderr(predicate::str::contains("unchanged"));
+    std::fs::write(&file,"apiVersion: paloma/v1\nkind: Number\nspec:\n  pin: '817263'\n  newDisplayName: Acme\n  searchVisibility: HIDDEN\n").unwrap();
+    let out = paloma(Some(&graph), &home)
+        .args(["apply", "-f"])
+        .arg(&file)
+        .arg("--dry-run")
+        .output()
+        .unwrap();
+    assert!(out.status.success());
+    assert!(!String::from_utf8_lossy(&out.stdout).contains("817263"));
+    assert!(!String::from_utf8_lossy(&out.stderr).contains("817263"));
+    Mock::given(method("POST"))
+        .and(path("/v26.0/111"))
+        .and(body_json(
+            json!({"pin":"817263","new_display_name":"Acme","search_visibility":"HIDDEN"}),
+        ))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({"success":true})))
+        .expect(1)
+        .mount(&graph)
+        .await;
+    paloma(Some(&graph), &home)
+        .args(["apply", "-f"])
+        .arg(&file)
+        .arg("--yes")
+        .assert()
+        .success();
+}
+
 #[tokio::test(flavor = "multi_thread")]
 async fn flow_migration_partial_failure_preserves_results_and_exits_one() {
     let graph = MockServer::start().await;

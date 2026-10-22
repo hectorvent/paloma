@@ -13,7 +13,7 @@ use crate::cli::Format;
 
 #[derive(Debug, Args)]
 pub struct Export {
-    /// Account, Calling, Commerce, ConversationalAutomation, Number, Profile, QrCode, Template or Webhook.
+    /// Account, Calling, Commerce, ConversationalAutomation, Number, PhoneSettings, Profile, QrCode, Template or Webhook.
     kind: String,
     /// Emit a skeleton manifest without calling the API.
     #[arg(long)]
@@ -116,6 +116,14 @@ impl Apply {
                             .unwrap_or_default()
                     ));
                 }
+                continue;
+            }
+            let changes_number_settings = plan.requests.iter().any(|req| matches!(&req.body, paloma_graph::request::Body::Json(body) if body.get("storage_configuration").is_some() || body.get("user_identity_change").is_some() || body.get("new_display_name").is_some() || body.get("search_visibility").is_some()));
+            if changes_number_settings
+                && !app.confirm_or_abort(
+                    "change number identity or storage settings; storage changes require deregistration and re-registration",
+                )?
+            {
                 continue;
             }
             for req in &plan.requests {

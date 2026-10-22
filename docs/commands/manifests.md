@@ -30,7 +30,7 @@ spec:
     additionalCodecs: [PCMA, PCMU]
 ```
 
-Supported `kind`s: **Calling**, **Profile**, **Number**, **Commerce**,
+Supported `kind`s: **Calling**, **Profile**, **Number**, **PhoneSettings**, **Commerce**,
 **ConversationalAutomation**, **Account**, **QrCode**, **Template**, **Webhook**.
 A file may hold several manifests separated by `---`.
 
@@ -133,10 +133,10 @@ compared whole, since Meta replaces them wholesale). Read-only, Meta-managed fie
   routes calls as SIP INVITEs and stops the `calls` webhook.
 - **Profile** maps to the business profile. The profile photo is read-only here and
   is not exported or applied.
-- **Number** is mostly read-only: `export` emits a snapshot (display name, quality,
-  tier, statuses) for versioning, but the only applyable field is the two-step
-  verification `pin`. A PIN is a secret, so `export` never includes it and you should
-  not commit one; read-only fields are ignored on apply.
+- **Number** exports an observational snapshot plus writable search visibility.
+  `pin` and `newDisplayName` are write-only submissions and always count as drift.
+  A PIN is a secret, so export never includes it; use interpolation instead of
+  committing one. Observational fields are ignored on apply.
 - **Commerce** maps to `whatsapp_commerce_settings`: `isCartEnabled`, `isCatalogVisible`.
 - **ConversationalAutomation** maps to `conversational_automation`: `enableWelcomeMessage`,
   `prompts` (ice breakers) and `commands`. Arrays are full-replace; send the complete
@@ -223,3 +223,39 @@ spec:
   code: WOMVT6TJ2BP7A1
   prefilledMessage: Tell me more
 ```
+
+### PhoneSettings
+
+This phone-scoped kind manages local storage and the customer identity-key check.
+Calling remains in the `Calling` kind. Export excludes calling credentials, encryption
+keys and unrelated settings. Each changed feature becomes a separate Settings API
+request; matching fields produce no writes.
+
+```yaml
+apiVersion: paloma/v1
+kind: PhoneSettings
+metadata:
+  phoneNumberId: '111'
+spec:
+  storageConfiguration:
+    status: IN_COUNTRY_STORAGE_ENABLED
+    dataLocalizationRegion: IN
+  userIdentityChange:
+    enableIdentityKeyCheck: true
+```
+
+For storage disablement use `status: IN_COUNTRY_STORAGE_DISABLED` and omit the region.
+Storage changes require the number to be deregistered and re-registered afterward;
+apply does neither automatically. Applying either feature confirms unless `--yes`
+is set; dry-run reads current settings and prints the proposed changes without writes.
+Unknown settings and malformed feature values fail before any read. Meta's default
+storage status is normalized to disabled to avoid repeated drift.
+
+### Additional Number fields
+
+`Number` also supports `searchVisibility: VISIBLE|HIDDEN` and `newDisplayName`.
+Visibility is compared with live state, so it only writes on drift. Display names are
+submitted for review and cannot be compared to a pending request; specifying one
+always plans a write. The existing write-only `pin` behavior is unchanged, and its
+value remains redacted from previews and diagnostics. Identity/visibility submissions
+confirm before apply. Exported observational fields remain read-only.

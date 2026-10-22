@@ -9,3 +9,5 @@ pub mod profile;
 pub mod qr_code;
 pub mod template;
 pub mod webhook;
+
+pub mod phone_settings;

@@ -14,7 +14,7 @@ paloma-cli ──► paloma-manifest ──► paloma-graph ──► paloma-cor
 | `paloma-core` | `Error` + exit codes, pre-flight validation and limits, the 24h-window policy, the `Credentials` trait | HTTP, clap. Its only I/O is stat-ing files for validation |
 | `paloma-config` | `config.toml` (read with `toml`, edited in place with `toml_edit`), profiles, the OS keyring, context resolution | HTTP, output |
 | `paloma-graph` | the Graph API: `Request` (a call as data), `Client` (reqwest/rustls), error mapping, paging, one `api::*` module per resource, `callback` (calling webhook endpoints), `webhook_samples` | the CLI, config files |
-| `paloma-manifest` | the YAML manifest envelope, `${...}` interpolation, camel/snake conversion, drift diff, the nine kinds | clap, output |
+| `paloma-manifest` | the YAML manifest envelope, `${...}` interpolation, camel/snake conversion, drift diff, the ten kinds | clap, output |
 | `paloma-cli` | the clap tree, `App` wiring, the output contract, prompts | — |
 
 The pure parts (`paloma-core` validation rules, `case`/`diff`/`interpolate`/`yaml` in

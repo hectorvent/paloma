@@ -142,6 +142,7 @@ live in one `whatsapp.yaml`.
 
 | Kind | Manages |
 |------|---------|
+| `PhoneSettings` | Local storage and customer identity-key checks |
 | `Account` | WABA name and timezone (excludes irreversible enrollment and billing) |
 | `QrCode` | Prefilled messages for existing QR codes |
 | `Calling` | Voice calling: status, call icon, callback permission, SIP servers, codecs |
@@ -150,7 +151,7 @@ live in one `whatsapp.yaml`.
 | `Webhook` | Callback URL override and the event fields your app subscribes to |
 | `ConversationalAutomation` | Ice breakers and slash commands |
 | `Commerce` | Cart and catalog visibility |
-| `Number` | A versioned snapshot of the number. The only field it can change is the two-step-verification PIN |
+| `Number` | Phone snapshot plus PIN, pending display-name submissions and search visibility |
 
 ### Keep secrets and environments out of the file
 
@@ -288,7 +289,7 @@ error: text body is 5000 chars; max is 4096        # exit 5
 | `qr` | create · list · get · update · delete |
 | `automation` | get · set · bot |
 | `commerce` | get · set |
-| `export` · `apply` · `diff` | your setup as code: declarative YAML for the nine kinds above |
+| `export` · `apply` · `diff` | your setup as code: declarative YAML for the ten kinds above |
 | `auth` | login · status · whoami · logout |
 | `config` · `configure` | profiles and settings |
 | `link` | `wa.me` click-to-chat links, offline, no token needed |

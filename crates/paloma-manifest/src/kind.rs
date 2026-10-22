@@ -47,19 +47,21 @@ pub enum Kind {
     ConversationalAutomation,
     Number,
     Profile,
+    PhoneSettings,
     QrCode,
     Template,
     Webhook,
 }
 
 impl Kind {
-    pub const ALL: [Self; 9] = [
+    pub const ALL: [Self; 10] = [
         Self::Account,
         Self::Calling,
         Self::Commerce,
         Self::ConversationalAutomation,
         Self::Number,
         Self::Profile,
+        Self::PhoneSettings,
         Self::QrCode,
         Self::Template,
         Self::Webhook,
@@ -73,6 +75,7 @@ impl Kind {
             Self::ConversationalAutomation => "ConversationalAutomation",
             Self::Number => "Number",
             Self::Profile => "Profile",
+            Self::PhoneSettings => "PhoneSettings",
             Self::QrCode => "QrCode",
             Self::Template => "Template",
             Self::Webhook => "Webhook",
@@ -108,6 +111,7 @@ impl Kind {
             Self::ConversationalAutomation => kinds::conversational_automation::template(),
             Self::Number => kinds::number::template(),
             Self::Profile => kinds::profile::template(),
+            Self::PhoneSettings => kinds::phone_settings::template(),
             Self::QrCode => kinds::qr_code::template(),
             Self::Template => kinds::template::template(),
             Self::Webhook => kinds::webhook::template(),
@@ -123,6 +127,7 @@ impl Kind {
             Self::ConversationalAutomation => kinds::conversational_automation::export(cx).await,
             Self::Number => kinds::number::export(cx).await,
             Self::Profile => kinds::profile::export(cx).await,
+            Self::PhoneSettings => kinds::phone_settings::export(cx).await,
             Self::QrCode => kinds::qr_code::export(cx).await,
             Self::Template => kinds::template::export(cx).await,
             Self::Webhook => kinds::webhook::export(cx).await,
@@ -138,8 +143,9 @@ impl Kind {
             Self::ConversationalAutomation => {
                 kinds::conversational_automation::plan(cx, spec).await
             }
-            Self::Number => kinds::number::plan(cx, spec),
+            Self::Number => kinds::number::plan(cx, spec).await,
             Self::Profile => kinds::profile::plan(cx, spec).await,
+            Self::PhoneSettings => kinds::phone_settings::plan(cx, spec).await,
             Self::QrCode => kinds::qr_code::plan(cx, spec).await,
             Self::Template => kinds::template::plan(cx, spec).await,
             Self::Webhook => kinds::webhook::plan(cx, spec).await,
