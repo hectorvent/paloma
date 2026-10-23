@@ -1,5 +1,6 @@
-//! Metrics preserve Meta's response, migration copies rather than moves, and key
-//! installation accepts only a public PEM file, keeping private material out of requests.
+//! Metrics preserve Meta's response and warn because Meta scheduled that API's deprecation.
+//! Migration copies rather than moves, and key installation accepts only a public PEM
+//! file, keeping private material out of requests.
 use crate::app::{App, no_id};
 use crate::commands::read_file;
 use crate::output::Output;
@@ -44,16 +45,19 @@ impl Metrics {
         let start = self
             .since
             .as_deref()
-            .map(|v| validate::template_analytics_time(v, "since", true))
+            .map(|v| validate::calendar_date(v, "--since"))
             .transpose()?;
         let end = self
             .until
             .as_deref()
-            .map(|v| validate::template_analytics_time(v, "until", true))
+            .map(|v| validate::calendar_date(v, "--until"))
             .transpose()?;
         if matches!((start,end),(Some(a),Some(b)) if a>b) {
             return Err(Error::validation("since must not follow until"));
         }
+        app.out.warn(
+            "Meta scheduled the Flows Metrics API for deprecation on 2026-04-30; this read may fail or return stale data",
+        );
         let name = self.name.to_possible_value().expect("metric enum");
         let granularity = self
             .granularity
@@ -136,6 +140,7 @@ pub enum KeyCommand {
     Get,
     /// Install a 2048-bit RSA public key; never pass the private key.
     Set {
+        /// Path to a PEM public key file.
         #[arg(long)]
         public_key: PathBuf,
     },

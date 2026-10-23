@@ -13303,3 +13303,39 @@ async fn oba_leaves_the_country_format_to_meta_but_requires_a_value() {
     }
     assert!(graph.received_requests().await.unwrap().is_empty());
 }
+
+#[tokio::test]
+async fn flow_metrics_warns_about_deprecation_and_explains_bad_dates() {
+    let graph = MockServer::start().await;
+    let home = TempDir::new().unwrap();
+    paloma(Some(&graph), &home)
+        .args([
+            "flow",
+            "metrics",
+            "123",
+            "--name",
+            "ENDPOINT_REQUEST_COUNT",
+            "--dry-run",
+        ])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("deprecat").not())
+        .stderr(predicate::str::contains("deprecation on 2026-04-30"));
+    paloma(Some(&graph), &home)
+        .args([
+            "flow",
+            "metrics",
+            "123",
+            "--name",
+            "ENDPOINT_REQUEST_COUNT",
+            "--since",
+            "2026-13-05",
+        ])
+        .assert()
+        .code(5)
+        .stderr(
+            predicate::str::contains("--since must be a real YYYY-MM-DD date")
+                .and(predicate::str::contains("--waba-timezone").not()),
+        );
+    assert!(graph.received_requests().await.unwrap().is_empty());
+}

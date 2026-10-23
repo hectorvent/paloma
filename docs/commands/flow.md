@@ -202,7 +202,7 @@ List the flow's assets, or download its Flow JSON — the round trip for
 paloma flow assets 1234567890
 paloma flow assets 1234567890 -o json | jq '.data[].download_url'
 
-# download the layout (--out, since -o is the global --output flag)
+# download the layout (--out or -O, since -o is the global --output flag)
 paloma flow assets 1234567890 --out ./flow.json
 paloma flow assets 1234567890 --out ./flows/          # a directory receives flow.json
 ```
@@ -249,6 +249,9 @@ Beyond the [standard contract](../global-flags.md), the one worth knowing here:
 | `5` | A Flow JSON failed validation — locally before sending, or reported by Meta after it stored it |
 
 ## Endpoint metrics
+
+> Meta's docs say the Metrics API will be deprecated on 2026-04-30, so these reads may
+> fail or return stale data. The command warns on stderr each time.
 
 ```bash
 paloma flow metrics 123 --name ENDPOINT_REQUEST_COUNT --granularity DAY \
