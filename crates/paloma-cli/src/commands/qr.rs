@@ -183,46 +183,46 @@ async fn emit(app: &App, request: Request, image: ImageArgs, created: bool) -> R
     if app.dry_run() {
         let mut requests = vec![request];
         if image.image.is_some() {
-            requests
-                .push(Request::get_url("<qr_image_url from the QR response>").unauthenticated());
+            requests.push(Request::get_placeholder(
+                "<qr_image_url from the QR response>",
+            ));
         }
         return app.print_dry_run(&requests);
     }
     let response = app.fetch(&request).await?;
     let output = Output::response(&response)?;
     let code = qr::code(&output.data);
-    let path = match (image.out, image.image) {
-        (Some(path), _) => Some(path),
-        (None, Some(format)) => {
-            let code = code
-                .as_deref()
-                .ok_or_else(|| Error::other("QR response has no code"))?;
-            validate::qr_code(code)?;
-            Some(image_path(code, format))
-        }
-        (None, None) => None,
-    };
-    if let Some(path) = path {
-        let result: Result<()> = async {
-            let url = qr::image_url(&output.data)
-                .ok_or_else(|| Error::other("QR response has no image URL"))?;
-            let bytes = app
-                .client()?
-                .download_new(&Request::get_url(url).unauthenticated(), &path)
-                .await?;
-            app.out
-                .note(format!("wrote {bytes} bytes to {}", path.display()));
-            Ok(())
-        }
-        .await;
-        if result.is_err() && created {
-            app.out.warn(format!(
-                "QR code {} was created, but saving its image failed; use qr get --image to retry",
-                code.as_deref().unwrap_or("(code missing from response)")
-            ));
-        }
-        result?;
+    // Everything after the create sits in this block, so any failure can say it exists.
+    let result: Result<()> = async {
+        let path = match (image.out, image.image) {
+            (Some(path), _) => path,
+            (None, Some(format)) => {
+                let code = code
+                    .as_deref()
+                    .ok_or_else(|| Error::other("QR response has no code"))?;
+                validate::qr_code(code)?;
+                image_path(code, format)
+            }
+            (None, None) => return Ok(()),
+        };
+        let url = qr::image_url(&output.data)
+            .ok_or_else(|| Error::other("QR response has no image URL"))?;
+        let bytes = app
+            .client()?
+            .download_new(&Request::get_url(url).unauthenticated(), &path)
+            .await?;
+        app.out
+            .note(format!("wrote {bytes} bytes to {}", path.display()));
+        Ok(())
     }
+    .await;
+    if result.is_err() && created {
+        app.out.warn(format!(
+            "QR code {} was created, but saving its image failed; use qr get --image to retry",
+            code.as_deref().unwrap_or("(code missing from response)")
+        ));
+    }
+    result?;
     app.out.emit(&output.id(code).table("/data", COLUMNS));
     Ok(())
 }

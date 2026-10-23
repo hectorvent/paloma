@@ -268,8 +268,9 @@ paloma account welcome-sequence delete 123 --yes
 These are WABA-scoped assets for click-to-WhatsApp ads. The JSON file is the sequence
 content, with `text`, `autofill_message.content`, and/or `ice_breakers` containing
 `title` fields. `create` requires `--name` and `--file`; `set` accepts either or both.
-`list` accepts optional `--id` and positive `--limit`. JSON/raw preserve Meta's array
-response. `create -q` prints the sequence ID; updates and deletes have no primary ID.
+`list` accepts optional `--id` and positive `--limit`, and tables show `sequence_id`,
+`name` and `is_used_in_ad`. JSON/raw preserve Meta's array response. `list -q` prints one
+sequence ID per line and `create -q` prints the new one; updates and deletes have no primary ID.
 Updates and deletes confirm, and all writes support dry-run. Meta refuses deletion
 of sequences used in active ads.
 

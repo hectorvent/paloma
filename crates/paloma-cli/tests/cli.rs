@@ -13546,3 +13546,71 @@ async fn qr_export_keeps_rows_that_would_fail_input_validation() {
         .success()
         .stdout(predicate::str::contains("SHORT").and(predicate::str::contains("WOMVT6TJ2BP7A1")));
 }
+
+#[tokio::test]
+async fn qr_create_dry_run_marks_the_image_url_as_a_placeholder() {
+    let graph = MockServer::start().await;
+    let home = TempDir::new().unwrap();
+    let out = paloma(Some(&graph), &home)
+        .args([
+            "qr",
+            "create",
+            "hello",
+            "--image",
+            "svg",
+            "--dry-run",
+            "-o",
+            "json",
+        ])
+        .output()
+        .unwrap();
+    assert!(out.status.success());
+    let requests: Value = serde_json::from_slice(&out.stdout).unwrap();
+    assert_eq!(requests[1]["url"], "<qr_image_url from the QR response>");
+}
+
+#[tokio::test]
+async fn qr_create_says_the_code_exists_when_its_response_code_is_unusable() {
+    let graph = MockServer::start().await;
+    let home = TempDir::new().unwrap();
+    Mock::given(method("POST"))
+        .and(path("/v26.0/111/message_qrdls"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "code":"ABC123","prefilled_message":"hello","qr_image_url":"https://example.com/a.svg"
+        })))
+        .mount(&graph)
+        .await;
+    paloma(Some(&graph), &home)
+        .current_dir(home.path())
+        .env("PALOMA_PHONE_NUMBER_ID", "111")
+        .args(["qr", "create", "hello", "--image", "svg"])
+        .assert()
+        .code(5)
+        .stderr(predicate::str::contains("QR code ABC123 was created"));
+}
+
+#[tokio::test]
+async fn welcome_sequence_list_renders_meta_s_bare_array() {
+    let graph = MockServer::start().await;
+    let home = TempDir::new().unwrap();
+    Mock::given(method("GET"))
+        .and(path("/v26.0/222/welcome_message_sequences"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!([
+            {"sequence_id":"8716291","name":"Driver Sign up","is_used_in_ad":true},
+            {"sequence_id":"4362","name":"Basic Triage","is_used_in_ad":false},
+        ])))
+        .mount(&graph)
+        .await;
+    paloma(Some(&graph), &home)
+        .args(["account", "welcome-sequence", "list"])
+        .assert()
+        .success()
+        .stdout(
+            predicate::str::contains("Driver Sign up").and(predicate::str::contains("[0]").not()),
+        );
+    paloma(Some(&graph), &home)
+        .args(["account", "welcome-sequence", "list", "-q"])
+        .assert()
+        .success()
+        .stdout("8716291\n4362\n");
+}

@@ -144,6 +144,28 @@ fn content(path: &Path) -> Result<Value> {
     }
     Ok(body)
 }
+/// Meta documents a bare array here; `data` is accepted too, since other edges wrap lists.
+async fn list_sequences(app: &App, req: &paloma_graph::Request) -> Result<()> {
+    let Some(response) = app.send(req).await? else {
+        return Ok(());
+    };
+    let mut output = Output::response(&response)?;
+    let rows = if output.data.is_array() { "" } else { "/data" };
+    let ids = output
+        .data
+        .pointer(rows)
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter_map(|v| v.get("sequence_id").and_then(Value::as_str))
+        .collect::<Vec<_>>()
+        .join("\n");
+    output.primary_id = (!ids.is_empty()).then_some(ids);
+    app.out
+        .emit(&output.table(rows, &["sequence_id", "name", "is_used_in_ad"]));
+    Ok(())
+}
+
 impl WelcomeSequence {
     pub async fn run(self, app: &App) -> Result<()> {
         let (read, delete, id, body, limit) = match self {
@@ -195,6 +217,9 @@ impl WelcomeSequence {
             return Ok(());
         }
         let req = account::welcome_sequence(&waba, read, delete, id.as_deref(), body, limit);
+        if read {
+            return list_sequences(app, &req).await;
+        }
         app.send_and_emit(&req, |v| {
             v.get("sequence_id")
                 .and_then(Value::as_str)
