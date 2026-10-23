@@ -110,6 +110,11 @@ paloma apply -f all.yaml --dry-run     # print the POST bodies, change nothing
 Output (to stderr) is one line per kind: `Calling/<id> unchanged` or
 `Calling/<id> configured:` followed by the changed fields.
 
+Every document is planned, and every confirmation is asked, before the first write. Without
+a terminal or `--yes`, a document that needs confirmation exits `5` with nothing written.
+Writes aren't atomic across documents: if one fails, stderr lists the documents not
+attempted, and the ones before it stay applied.
+
 ## `paloma diff -f <file>`
 
 Show drift between manifests and live config without writing. Exits `0` when
@@ -138,6 +143,7 @@ compared whole, since Meta replaces them wholesale). Read-only, Meta-managed fie
   A PIN is a secret, so export never includes it; use interpolation instead of
   committing one. Observational fields are ignored on apply.
 - **Commerce** maps to `whatsapp_commerce_settings`: `isCartEnabled`, `isCatalogVisible`.
+  Disabling either confirms unless `--yes` is set.
 - **ConversationalAutomation** maps to `conversational_automation`: `enableWelcomeMessage`,
   `prompts` (ice breakers) and `commands`. Arrays are full-replace; send the complete
   desired set.
@@ -229,7 +235,7 @@ spec:
 This phone-scoped kind manages local storage and the customer identity-key check.
 Calling remains in the `Calling` kind. Export excludes calling credentials, encryption
 keys and unrelated settings. Each changed feature becomes a separate Settings API
-request; matching fields produce no writes.
+request, identity first; matching fields produce no writes.
 
 ```yaml
 apiVersion: paloma/v1
@@ -248,14 +254,20 @@ For storage disablement use `status: IN_COUNTRY_STORAGE_DISABLED` and omit the r
 Storage changes require the number to be deregistered and re-registered afterward;
 apply does neither automatically. Applying either feature confirms unless `--yes`
 is set; dry-run reads current settings and prints the proposed changes without writes.
+Graph can't apply both atomically, so if a request fails, stderr names what was applied,
+what failed and what wasn't attempted.
+A dry-run prints one body per request, leaving out features already in sync.
+Meta's settings schema doesn't list `userIdentityChange` as readable. If Graph doesn't
+return it, the plan says `not returned by Graph` and the feature counts as drift on every
+`apply` and `diff`, like `pin` on a Number.
 Unknown settings and malformed feature values fail before any read. Meta's default
 storage status is normalized to disabled to avoid repeated drift.
 
 ### Additional Number fields
 
 `Number` also supports `searchVisibility: VISIBLE|HIDDEN` and `newDisplayName`.
-Visibility is compared with live state, so it only writes on drift. Display names are
-submitted for review and cannot be compared to a pending request; specifying one
-always plans a write. The existing write-only `pin` behavior is unchanged, and its
-value remains redacted from previews and diagnostics. Identity/visibility submissions
+Visibility is compared with live state, so it only writes on drift. A display name is
+submitted for review only if it isn't already the verified name or a pending request, or
+if Meta declined or expired the earlier request. The existing write-only `pin` behavior
+is unchanged, and its value remains redacted from previews and diagnostics. Identity/visibility submissions
 confirm before apply. Exported observational fields remain read-only.

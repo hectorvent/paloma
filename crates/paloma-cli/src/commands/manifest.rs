@@ -101,14 +101,23 @@ impl Export {
 
 impl Apply {
     pub async fn run(self, app: &App) -> Result<()> {
-        for (label, plan) in plans(app, &self.file).await? {
+        let plans = plans(app, &self.file).await?;
+        // Ask before the first write, so a refusal can't land halfway through the manifest.
+        let mut approved = Vec::with_capacity(plans.len());
+        for (_, plan) in &plans {
+            approved.push(match plan.confirm {
+                Some(what) if !plan.in_sync() => app.confirm_or_abort(what)?,
+                _ => true,
+            });
+        }
+        for (index, ((label, plan), approved)) in plans.iter().zip(approved).enumerate() {
             if plan.in_sync() {
                 app.out.info(format!("{label} unchanged"));
                 continue;
             }
             if app.dry_run() {
                 app.out.info(format!("{label} would configure:"));
-                print_changes(app, &plan);
+                print_changes(app, plan);
                 if let Some(p) = &plan.preview {
                     app.out.stdout(&format!(
                         "{}\n",
@@ -118,21 +127,62 @@ impl Apply {
                 }
                 continue;
             }
-            let changes_number_settings = plan.requests.iter().any(|req| matches!(&req.body, paloma_graph::request::Body::Json(body) if body.get("storage_configuration").is_some() || body.get("user_identity_change").is_some() || body.get("new_display_name").is_some() || body.get("search_visibility").is_some()));
-            if changes_number_settings
-                && !app.confirm_or_abort(
-                    "change number identity or storage settings; storage changes require deregistration and re-registration",
-                )?
-            {
+            if !approved {
                 continue;
             }
-            for req in &plan.requests {
-                app.fetch(req).await?;
+            if let Err(error) = write(app, label, plan).await {
+                let skipped: Vec<&str> = plans[index + 1..]
+                    .iter()
+                    .filter(|(_, later)| !later.in_sync())
+                    .map(|(label, _)| label.as_str())
+                    .collect();
+                if !skipped.is_empty() {
+                    app.out
+                        .warn(format!("not attempted: {}", skipped.join(", ")));
+                }
+                return Err(error);
             }
             app.out.info(format!("{label} configured:"));
-            print_changes(app, &plan);
+            print_changes(app, plan);
         }
         Ok(())
+    }
+}
+
+/// Send a plan's writes in order. Graph has no transaction across them, so a failure
+/// says which ones already took effect and which never ran.
+async fn write(app: &App, label: &str, plan: &KindPlan) -> Result<()> {
+    for (index, req) in plan.requests.iter().enumerate() {
+        if let Err(error) = app.fetch(req).await {
+            if plan.requests.len() > 1 {
+                app.out.warn(format!(
+                    "{label} partly applied; applied: {}; failed: {}; not attempted: {}",
+                    request_names(&plan.requests[..index]),
+                    request_names(std::slice::from_ref(req)),
+                    request_names(&plan.requests[index + 1..]),
+                ));
+            }
+            return Err(error);
+        }
+    }
+    Ok(())
+}
+
+/// Requests named by the top-level fields they write; never their values.
+fn request_names(requests: &[paloma_graph::request::Request]) -> String {
+    let names: Vec<String> = requests
+        .iter()
+        .map(|req| {
+            req.json_body().and_then(Value::as_object).map_or_else(
+                || "request".to_owned(),
+                |body| body.keys().cloned().collect::<Vec<_>>().join("+"),
+            )
+        })
+        .collect();
+    if names.is_empty() {
+        "none".to_owned()
+    } else {
+        names.join(", ")
     }
 }
 

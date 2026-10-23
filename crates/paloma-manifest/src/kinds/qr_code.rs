@@ -17,15 +17,15 @@ pub fn template() -> Value {
 pub async fn export(cx: Cx<'_>) -> Result<Vec<Value>> {
     let phone = cx.ctx.require_phone_number_id()?;
     let all = paging::collect_all(cx.client, None, |after| qr::list(phone, None, after)).await?;
-    all.get("data")
+    // Live rows are reported as Graph returned them: the input rules in `spec_fields` belong
+    // to `plan`, and one unusual row mustn't hide the rest of the export.
+    Ok(all
+        .get("data")
         .and_then(Value::as_array)
         .into_iter()
         .flatten()
-        .map(|q| {
-            let (code, message) = spec_fields(q)?;
-            Ok(json!({"code": code, "prefilled_message": message}))
-        })
-        .collect::<Result<Vec<_>>>()
+        .map(|q| json!({"code": q.get("code"), "prefilled_message": q.get("prefilled_message")}))
+        .collect())
 }
 
 pub async fn plan(cx: Cx<'_>, spec: &Value) -> Result<KindPlan> {

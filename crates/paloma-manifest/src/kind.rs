@@ -20,6 +20,8 @@ pub struct KindPlan {
     pub preview: Option<Value>,
     /// The writes that bring live config in line, in order.
     pub requests: Vec<Request>,
+    /// What `apply` must confirm before writing, when the plan is disruptive.
+    pub confirm: Option<&'static str>,
 }
 
 impl KindPlan {
@@ -29,6 +31,14 @@ impl KindPlan {
 
     pub fn in_sync(&self) -> bool {
         self.requests.is_empty()
+    }
+
+    /// Require a confirmation before this plan's writes. Each kind decides, because only
+    /// the kind knows whether a write is carried in a body, a query or a path.
+    #[must_use]
+    pub fn confirming(mut self, what: &'static str) -> Self {
+        self.confirm = Some(what);
+        self
     }
 }
 
@@ -171,6 +181,7 @@ pub(crate) fn singleton_plan(
         changes,
         preview: Some(preview),
         requests: vec![request],
+        confirm: None,
     }
 }
 

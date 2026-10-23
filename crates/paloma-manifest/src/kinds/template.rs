@@ -76,6 +76,7 @@ pub async fn plan(cx: Cx<'_>, spec: &Value) -> Result<KindPlan> {
             changes: vec![format!("create {name}/{language} (category {category})")],
             preview: Some(create_body.clone()),
             requests: vec![templates::create(waba, create_body)],
+            confirm: None,
         });
     };
     let current_norm = normalize(&current, shorthand, Some(&desired));
@@ -105,6 +106,7 @@ pub async fn plan(cx: Cx<'_>, spec: &Value) -> Result<KindPlan> {
         changes,
         preview: Some(edit_body.clone()),
         requests: vec![templates::edit(id, edit_body)],
+        confirm: None,
     })
 }
 

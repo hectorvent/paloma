@@ -13105,6 +13105,18 @@ async fn number_manifest_search_visibility_is_idempotent_and_pin_diagnostics_are
         .assert()
         .success()
         .stderr(predicate::str::contains("unchanged"));
+    Mock::given(method("GET"))
+        .and(path("/v26.0/111"))
+        .and(query_param(
+            "fields",
+            "search_visibility,verified_name,new_display_name,new_name_status",
+        ))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .set_body_json(json!({"search_visibility":"VISIBLE","verified_name":"Old"})),
+        )
+        .mount(&graph)
+        .await;
     std::fs::write(&file,"apiVersion: paloma/v1\nkind: Number\nspec:\n  pin: '817263'\n  newDisplayName: Acme\n  searchVisibility: HIDDEN\n").unwrap();
     let out = paloma(Some(&graph), &home)
         .args(["apply", "-f"])
@@ -13338,4 +13350,199 @@ async fn flow_metrics_warns_about_deprecation_and_explains_bad_dates() {
                 .and(predicate::str::contains("--waba-timezone").not()),
         );
     assert!(graph.received_requests().await.unwrap().is_empty());
+}
+
+fn write_manifest(home: &TempDir, text: &str) -> std::path::PathBuf {
+    let file = home.path().join("apply.yaml");
+    std::fs::write(&file, text).unwrap();
+    file
+}
+
+async fn mock_phone_settings(graph: &MockServer) {
+    Mock::given(method("GET"))
+        .and(path("/v26.0/111/settings"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "storage_configuration": {"status": "default"},
+            "user_identity_change": {"enable_identity_key_check": false},
+        })))
+        .mount(graph)
+        .await;
+}
+
+#[tokio::test]
+async fn apply_refuses_a_later_confirmation_before_writing_anything() {
+    let graph = MockServer::start().await;
+    let home = TempDir::new().unwrap();
+    mock_phone_settings(&graph).await;
+    Mock::given(method("GET"))
+        .and(path("/v26.0/222"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({"name": "Old"})))
+        .mount(&graph)
+        .await;
+    let file = write_manifest(
+        &home,
+        "apiVersion: paloma/v1\nkind: Account\nspec:\n  name: New\n---\n\
+         apiVersion: paloma/v1\nkind: PhoneSettings\nspec:\n  userIdentityChange:\n    enableIdentityKeyCheck: true\n",
+    );
+    paloma(Some(&graph), &home)
+        .env("PALOMA_PHONE_NUMBER_ID", "111")
+        .args(["apply", "--file"])
+        .arg(&file)
+        .assert()
+        .code(5)
+        .stderr(predicate::str::contains("refusing to"));
+    let requests = graph.received_requests().await.unwrap();
+    assert!(
+        requests.iter().all(|r| r.method.as_str() == "GET"),
+        "a write was sent before the refusal"
+    );
+}
+
+#[tokio::test]
+async fn apply_confirms_a_commerce_manifest_that_disables_the_cart() {
+    let graph = MockServer::start().await;
+    let home = TempDir::new().unwrap();
+    Mock::given(method("GET"))
+        .and(path("/v26.0/111/whatsapp_commerce_settings"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(
+            json!({"data":[{"id":"9","is_cart_enabled":true,"is_catalog_visible":true}]}),
+        ))
+        .mount(&graph)
+        .await;
+    let file = write_manifest(
+        &home,
+        "apiVersion: paloma/v1\nkind: Commerce\nspec:\n  isCartEnabled: false\n",
+    );
+    paloma(Some(&graph), &home)
+        .env("PALOMA_PHONE_NUMBER_ID", "111")
+        .args(["apply", "--file"])
+        .arg(&file)
+        .assert()
+        .code(5)
+        .stderr(predicate::str::contains("disable shopping cart"));
+    let requests = graph.received_requests().await.unwrap();
+    assert!(requests.iter().all(|r| r.method.as_str() == "GET"));
+}
+
+#[tokio::test]
+async fn apply_reports_what_a_failed_multi_request_plan_left_behind() {
+    let graph = MockServer::start().await;
+    let home = TempDir::new().unwrap();
+    mock_phone_settings(&graph).await;
+    Mock::given(method("POST"))
+        .and(path("/v26.0/111/settings"))
+        .and(body_string_contains("user_identity_change"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({"success":true})))
+        .mount(&graph)
+        .await;
+    Mock::given(method("POST"))
+        .and(path("/v26.0/111/settings"))
+        .and(body_string_contains("storage_configuration"))
+        .respond_with(
+            ResponseTemplate::new(400)
+                .set_body_json(json!({"error":{"message":"number is registered","code":100}})),
+        )
+        .mount(&graph)
+        .await;
+    let file = write_manifest(
+        &home,
+        "apiVersion: paloma/v1\nkind: PhoneSettings\nspec:\n  userIdentityChange:\n    enableIdentityKeyCheck: true\n  storageConfiguration:\n    status: IN_COUNTRY_STORAGE_ENABLED\n    dataLocalizationRegion: IN\n",
+    );
+    paloma(Some(&graph), &home)
+        .env("PALOMA_PHONE_NUMBER_ID", "111")
+        .args(["apply", "--yes", "--file"])
+        .arg(&file)
+        .assert()
+        .code(1)
+        .stderr(predicate::str::contains(
+            "partly applied; applied: user_identity_change; failed: storage_configuration; not attempted: none",
+        ));
+}
+
+#[tokio::test]
+async fn phone_settings_previews_each_request_and_flags_an_unreadable_identity_check() {
+    let graph = MockServer::start().await;
+    let home = TempDir::new().unwrap();
+    Mock::given(method("GET"))
+        .and(path("/v26.0/111/settings"))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .set_body_json(json!({"storage_configuration":{"status":"default"}})),
+        )
+        .mount(&graph)
+        .await;
+    let file = write_manifest(
+        &home,
+        "apiVersion: paloma/v1\nkind: PhoneSettings\nspec:\n  userIdentityChange:\n    enableIdentityKeyCheck: true\n  storageConfiguration:\n    status: IN_COUNTRY_STORAGE_DISABLED\n",
+    );
+    let out = paloma(Some(&graph), &home)
+        .env("PALOMA_PHONE_NUMBER_ID", "111")
+        .args(["apply", "--dry-run", "--file"])
+        .arg(&file)
+        .output()
+        .unwrap();
+    assert!(out.status.success());
+    // Storage already matches, so only the identity request is planned and previewed.
+    let preview: Value = serde_json::from_slice(&out.stdout).unwrap();
+    assert_eq!(
+        preview,
+        json!({"user_identity_change":{"enable_identity_key_check":true}})
+    );
+    assert!(String::from_utf8_lossy(&out.stderr).contains("not returned by Graph"));
+}
+
+#[tokio::test]
+async fn number_manifest_does_not_resubmit_a_pending_display_name() {
+    let graph = MockServer::start().await;
+    let home = TempDir::new().unwrap();
+    Mock::given(method("GET"))
+        .and(path("/v26.0/111"))
+        .and(query_param(
+            "fields",
+            "verified_name,new_display_name,new_name_status",
+        ))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "verified_name":"Old","new_display_name":"Acme","new_name_status":"PENDING_REVIEW"
+        })))
+        .mount(&graph)
+        .await;
+    let file = write_manifest(
+        &home,
+        "apiVersion: paloma/v1\nkind: Number\nspec:\n  newDisplayName: Acme\n",
+    );
+    paloma(Some(&graph), &home)
+        .env("PALOMA_PHONE_NUMBER_ID", "111")
+        .args(["apply", "--file"])
+        .arg(&file)
+        .assert()
+        .success()
+        .stderr(predicate::str::contains("unchanged"));
+    paloma(Some(&graph), &home)
+        .env("PALOMA_PHONE_NUMBER_ID", "111")
+        .args(["diff", "--file"])
+        .arg(&file)
+        .assert()
+        .success();
+    let requests = graph.received_requests().await.unwrap();
+    assert!(requests.iter().all(|r| r.method.as_str() == "GET"));
+}
+
+#[tokio::test]
+async fn qr_export_keeps_rows_that_would_fail_input_validation() {
+    let graph = MockServer::start().await;
+    let home = TempDir::new().unwrap();
+    Mock::given(method("GET"))
+        .and(path("/v26.0/111/message_qrdls"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({"data":[
+            {"code":"SHORT","prefilled_message":"Hi"},
+            {"code":"WOMVT6TJ2BP7A1","prefilled_message":"Hello"},
+        ]})))
+        .mount(&graph)
+        .await;
+    paloma(Some(&graph), &home)
+        .env("PALOMA_PHONE_NUMBER_ID", "111")
+        .args(["export", "qrcode", "--minimal"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("SHORT").and(predicate::str::contains("WOMVT6TJ2BP7A1")));
 }

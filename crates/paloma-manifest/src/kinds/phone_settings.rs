@@ -117,17 +117,41 @@ pub async fn plan(cx: Cx<'_>, spec: &Value) -> Result<KindPlan> {
     let phone = cx.ctx.require_phone_number_id()?;
     let current = writable(&read(cx, &phone_numbers::settings(phone)).await?);
     let mut plan = KindPlan::synced();
-    for (key, value) in desired.as_object().expect("validated mapping") {
+    let mut bodies = Vec::new();
+    // Identity first: storage only succeeds on a deregistered number, and its failure
+    // must not block an unrelated identity change.
+    for key in ["user_identity_change", "storage_configuration"] {
+        let Some(value) = desired.get(key) else {
+            continue;
+        };
         let body = json!({key:value});
         if crate::diff::in_sync(&body, Some(&current)) {
             continue;
         }
-        plan.changes
-            .extend(crate::diff::changes(&body, Some(&current)));
-        plan.requests.push(phone_numbers::set_settings(phone, body));
+        // Meta's settings schema doesn't list this field as readable. Say so instead of
+        // implying the live value is off, since the write can never converge in that case.
+        if key == "user_identity_change" && current.get(key).is_none() {
+            plan.changes.push(format!(
+                "user_identity_change.enable_identity_key_check: (not returned by Graph) -> {}",
+                value["enable_identity_key_check"]
+            ));
+        } else {
+            plan.changes
+                .extend(crate::diff::changes(&body, Some(&current)));
+        }
+        plan.requests
+            .push(phone_numbers::set_settings(phone, body.clone()));
+        bodies.push(body);
     }
     if !plan.in_sync() {
-        plan.preview = Some(desired);
+        // One body per request, so a dry-run shows exactly what would be sent.
+        plan.preview = Some(match <[Value; 1]>::try_from(bodies) {
+            Ok([body]) => body,
+            Err(bodies) => Value::Array(bodies),
+        });
+        plan.confirm = Some(
+            "change number identity or storage settings; storage changes require deregistration and re-registration",
+        );
     }
     Ok(plan)
 }

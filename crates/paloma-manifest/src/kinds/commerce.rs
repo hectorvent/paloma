@@ -30,5 +30,13 @@ pub async fn plan(cx: Cx<'_>, spec: &Value) -> Result<KindPlan> {
     let cur = current(cx).await?;
     let flag = |k: &str| spec.get(k).and_then(Value::as_bool);
     let req = commerce::set(phone, flag("is_cart_enabled"), flag("is_catalog_visible"));
-    Ok(singleton_plan(spec, &cur, spec.clone(), req))
+    let plan = singleton_plan(spec, &cur, spec.clone(), req);
+    // Matches `commerce set`: turning a storefront feature off is what customers notice.
+    let disables =
+        flag("is_cart_enabled") == Some(false) || flag("is_catalog_visible") == Some(false);
+    Ok(if disables && !plan.in_sync() {
+        plan.confirming("disable shopping cart or catalog visibility")
+    } else {
+        plan
+    })
 }
