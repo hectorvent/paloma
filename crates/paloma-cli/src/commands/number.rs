@@ -48,6 +48,9 @@ pub enum NumberCommand {
     /// Add a phone number to the selected WABA; verification and registration follow.
     Add {
         phone_number: String,
+        /// Country calling code, such as 1 or 52.
+        #[arg(long)]
+        cc: String,
         #[arg(long)]
         name: String,
     },
@@ -276,7 +279,12 @@ impl NumberCommand {
                 )
                 .await
             }
-            Self::Add { phone_number, name } => {
+            Self::Add {
+                phone_number,
+                cc,
+                name,
+            } => {
+                validate::calling_code(&cc)?;
                 validate::recipient(&phone_number)?;
                 if !phone_number.bytes().all(|b| b.is_ascii_digit()) {
                     return Err(paloma_core::Error::validation(
@@ -285,8 +293,11 @@ impl NumberCommand {
                 }
                 validate::not_blank(&name, "display name")?;
                 let waba = app.ctx()?.require_waba_id()?.to_owned();
-                app.send_and_emit(&phone_numbers::add(&waba, &phone_number, &name), field_id)
-                    .await
+                app.send_and_emit(
+                    &phone_numbers::add(&waba, &cc, &phone_number, &name),
+                    field_id,
+                )
+                .await
             }
             Self::SetName { name } => {
                 validate::not_blank(&name, "display name")?;

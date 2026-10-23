@@ -22,7 +22,7 @@ pub enum SettingsCommand {
     },
     /// Require the customer's identity hash to match before delivering messages.
     IdentityCheck {
-        #[arg(long, action = clap::ArgAction::Set)]
+        #[arg(long, required = true, action = clap::ArgAction::Set)]
         enabled: bool,
     },
 }

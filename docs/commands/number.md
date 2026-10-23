@@ -113,15 +113,16 @@ JSON, YAML and raw keep Meta's full response, and quiet output remains the numbe
 Add a number to the WABA, verify ownership, then register it for Cloud API use:
 
 ```bash
-paloma number add 15551234567 --name 'Acme Support'
+paloma number add 15551234567 --cc 1 --name 'Acme Support'
 paloma number request-code --method SMS --language en_US --yes
 # Put the returned number ID in the selected profile before verifying/registering.
 paloma number verify-code --code-stdin
 paloma number register --pin-stdin
 ```
 
-`add <phone_number> --name <name>` takes international digits without `+` and prints
-the new number ID under `-q`. Adding a number does not register it. `request-code`
+`add <phone_number> --cc <code> --name <name>` takes digits without `+`, with or without
+the country calling code, plus the calling code Meta requires, and prints the new number
+ID under `-q`. Adding a number does not register it. `request-code`
 uses the active phone-number ID, accepts `--method SMS|VOICE`, and defaults
 `--language` to `en_US`. It confirms before triggering a text or phone call; an
 already verified number can be refused by Meta.
@@ -179,7 +180,8 @@ Checks or deletes one portfolio-scoped BSUID in Meta's contact book. Parent BSUI
 and phone numbers are refused. The contact book is scoped to the whole portfolio;
 deleting an entry affects all its numbers. Meta populates entries through qualifying
 interactions; these commands do not create or enumerate contact-book entries.
-Both preserve Meta's response, and deletion confirms before writing.
+Both preserve Meta's response, and deletion confirms before writing. If Meta reports
+`deleted: false`, the command warns on stderr and still exits `0`.
 
 ## `paloma number settings`
 
@@ -191,7 +193,7 @@ paloma number settings storage --disable --dry-run
 ```
 
 `get` reads settings without requesting SIP credentials. Writes confirm; one feature
-is sent per request. `identity-check --enabled <true|false>` controls Meta's
+is sent per request. `identity-check` requires an explicit `--enabled <true|false>` value and controls Meta's
 `user_identity_change.enable_identity_key_check`. Delivery with an identity hash is
 still subject to Meta's identity comparison.
 
@@ -210,8 +212,8 @@ paloma number oba get -o json
 paloma number oba apply --file oba.json --dry-run
 ```
 
-The application document contains `business_website_url` and a two-letter uppercase
-`primary_country_of_operation`. Optional `supporting_links` must contain 5–10 HTTP(S)
+The application document contains `business_website_url` and
+`primary_country_of_operation` (such as `US`). Optional `supporting_links` must contain 5–10 HTTP(S)
 URLs. Other documented optional fields are `primary_language`,
 `parent_business_or_brand`, and `additional_supporting_information`. Submission
 confirms, and Meta determines eligibility, review and approval.

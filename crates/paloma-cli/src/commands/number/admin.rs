@@ -43,12 +43,8 @@ fn oba(body: &Value) -> Result<()> {
         return Err(Error::validation("OBA application must be a JSON object"));
     }
     callback::parse_url(text(body, "business_website_url")?)?;
-    let country = text(body, "primary_country_of_operation")?;
-    if country.len() != 2 || !country.bytes().all(|b| b.is_ascii_uppercase()) {
-        return Err(Error::validation(
-            "primary_country_of_operation must be an uppercase two-letter country code",
-        ));
-    }
+    // Meta documents a free-form string here, so its format is Meta's to judge.
+    text(body, "primary_country_of_operation")?;
     if let Some(links) = body.get("supporting_links") {
         let links = links
             .as_array()

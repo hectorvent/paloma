@@ -534,6 +534,19 @@ pub fn business_username(value: &str) -> Result<()> {
     Ok(())
 }
 
+/// A country calling code, as `number add` sends it: digits only, no `+` or leading zero.
+pub fn calling_code(value: &str) -> Result<()> {
+    if !(1..=crate::limits::MAX_CALLING_CODE_DIGITS).contains(&value.len())
+        || !value.bytes().all(|b| b.is_ascii_digit())
+        || value.starts_with('0')
+    {
+        return Err(Error::validation(format!(
+            "country calling code '{value}' must be 1–3 digits without a plus sign or leading zero"
+        )));
+    }
+    Ok(())
+}
+
 /// Verification codes must never be included in a validation diagnostic.
 pub fn verification_code(value: &str) -> Result<()> {
     if value.is_empty() || !value.bytes().all(|b| b.is_ascii_digit()) {
@@ -547,6 +560,16 @@ pub fn verification_code(value: &str) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn calling_codes_are_short_digit_strings() {
+        for code in ["1", "52", "598"] {
+            assert!(calling_code(code).is_ok());
+        }
+        for code in ["", "+1", "0", "01", "1234", "1a"] {
+            assert!(calling_code(code).is_err());
+        }
+    }
 
     #[test]
     fn business_usernames_and_verification_codes_follow_their_own_rules() {

@@ -12203,9 +12203,17 @@ async fn number_onboarding_and_identity_writes_use_exact_payloads() {
             false,
         ),
         (
-            vec!["number", "add", "15551234567", "--name", "Acme"],
+            vec![
+                "number",
+                "add",
+                "15551234567",
+                "--cc",
+                "1",
+                "--name",
+                "Acme",
+            ],
             "222/phone_numbers",
-            json!({"phone_number":"15551234567","verified_name":"Acme"}),
+            json!({"cc":"1","phone_number":"15551234567","verified_name":"Acme"}),
             true,
         ),
         (
@@ -12417,7 +12425,24 @@ async fn identity_and_settings_reject_bad_inputs_before_context_or_network() {
         vec!["number", "contacts", "delete", "15551234567"],
         vec!["number", "settings", "storage", "--region", "XX"],
         vec!["number", "set-name", " "],
-        vec!["number", "add", "+15551234567", "--name", "Acme"],
+        vec![
+            "number",
+            "add",
+            "+15551234567",
+            "--cc",
+            "1",
+            "--name",
+            "Acme",
+        ],
+        vec![
+            "number",
+            "add",
+            "15551234567",
+            "--cc",
+            "+1",
+            "--name",
+            "Acme",
+        ],
         vec![
             "number",
             "request-code",
@@ -12466,6 +12491,13 @@ async fn identity_and_settings_reject_bad_inputs_before_context_or_network() {
         .assert()
         .code(5)
         .stderr(predicate::str::contains("BAD_SECRET").not());
+    paloma(Some(&graph), &home)
+        .env_remove("PALOMA_PHONE_NUMBER_ID")
+        .args(["number", "settings", "identity-check", "--yes"])
+        .assert()
+        .code(2)
+        .stdout("")
+        .stderr(predicate::str::contains("--enabled"));
     assert!(graph.received_requests().await.unwrap().is_empty());
 }
 
@@ -13199,4 +13231,75 @@ async fn account_users_follow_cursors_and_quiet_prints_every_id() {
         .success()
         .stdout("444\n555\n")
         .stderr("");
+}
+
+#[tokio::test]
+async fn verification_code_is_redacted_from_every_dry_run_format() {
+    let graph = MockServer::start().await;
+    let home = TempDir::new().unwrap();
+    for format in ["json", "yaml", "table", "raw"] {
+        paloma(Some(&graph), &home)
+            .env("PALOMA_VERIFICATION_CODE", "987654")
+            .args(["number", "verify-code", "--dry-run", "-o", format])
+            .assert()
+            .success()
+            .stdout(predicate::str::contains("987654").not())
+            .stderr(predicate::str::contains("987654").not());
+    }
+    assert!(graph.received_requests().await.unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn contacts_delete_warns_when_meta_deleted_nothing() {
+    let graph = MockServer::start().await;
+    let home = TempDir::new().unwrap();
+    Mock::given(method("DELETE"))
+        .and(path("/v26.0/111/contact_book"))
+        .and(query_param("bsuid", "US.123"))
+        .respond_with(
+            ResponseTemplate::new(200).set_body_json(
+                json!({"messaging_product":"whatsapp","success":true,"deleted":false}),
+            ),
+        )
+        .mount(&graph)
+        .await;
+    paloma(Some(&graph), &home)
+        .args([
+            "number",
+            "contacts",
+            "delete",
+            "US.123",
+            "--yes",
+            "--phone-number-id",
+            "111",
+            "-o",
+            "json",
+        ])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("\"deleted\": false"))
+        .stderr(predicate::str::contains(
+            "no contact-book entry was deleted",
+        ));
+}
+
+#[tokio::test]
+async fn oba_leaves_the_country_format_to_meta_but_requires_a_value() {
+    let graph = MockServer::start().await;
+    let home = TempDir::new().unwrap();
+    let file = home.path().join("oba.json");
+    for (country, code) in [("United States", 0), ("  ", 5)] {
+        std::fs::write(
+            &file,
+            json!({"business_website_url":"https://example.com","primary_country_of_operation":country})
+                .to_string(),
+        )
+        .unwrap();
+        paloma(Some(&graph), &home)
+            .args(["number", "oba", "apply", "--dry-run", "--file"])
+            .arg(&file)
+            .assert()
+            .code(code);
+    }
+    assert!(graph.received_requests().await.unwrap().is_empty());
 }

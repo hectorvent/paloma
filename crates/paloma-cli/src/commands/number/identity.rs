@@ -105,6 +105,16 @@ impl ContactsCommand {
             return Ok(());
         }
         let req = phone_numbers::contact(&phone, &bsuid, delete);
-        app.send_and_emit(&req, no_id).await
+        let Some(response) = app.send(&req).await? else {
+            return Ok(());
+        };
+        let output = Output::response(&response)?;
+        // Graph answers 200 either way; deleting nothing still leaves the entry gone.
+        if delete && output.data.get("deleted") == Some(&serde_json::Value::Bool(false)) {
+            app.out
+                .warn(format!("no contact-book entry was deleted for {bsuid}"));
+        }
+        app.out.emit(&output);
+        Ok(())
     }
 }

@@ -97,9 +97,9 @@ pub fn verify_code(phone: &str, code: &str) -> Request {
     Request::post(format!("{phone}/verify_code")).json(json!({"code": code}))
 }
 
-pub fn add(waba: &str, phone_number: &str, name: &str) -> Request {
+pub fn add(waba: &str, cc: &str, phone_number: &str, name: &str) -> Request {
     Request::post(format!("{waba}/phone_numbers"))
-        .json(json!({"phone_number": phone_number, "verified_name": name}))
+        .json(json!({"cc": cc, "phone_number": phone_number, "verified_name": name}))
 }
 
 pub fn set_name(phone: &str, name: &str) -> Request {

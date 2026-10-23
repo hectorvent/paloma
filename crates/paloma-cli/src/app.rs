@@ -142,7 +142,7 @@ impl App {
             [one] => (
                 described.into_iter().next().unwrap_or_default(),
                 one.json_body()
-                    .map(|body| paloma_graph::request::redact_json(body).to_string()),
+                    .map(|body| one.diagnostic_json(body).to_string()),
             ),
             _ => (serde_json::Value::Array(described), None),
         };
