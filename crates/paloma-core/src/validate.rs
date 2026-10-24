@@ -260,12 +260,6 @@ pub fn template_analytics_range(start: &str, end: &str, date_only: bool) -> Resu
     Ok(())
 }
 
-/// A real calendar date as Unix seconds, for flags that accept only `YYYY-MM-DD`.
-pub fn calendar_date(value: &str, what: &str) -> Result<i64> {
-    template_date_to_unix(value)
-        .ok_or_else(|| Error::validation(format!("{what} must be a real YYYY-MM-DD date")))
-}
-
 fn template_date_to_unix(date: &str) -> Option<i64> {
     let [y1, y2, y3, y4, b'-', m1, m2, b'-', d1, d2] = *date.as_bytes() else {
         return None;

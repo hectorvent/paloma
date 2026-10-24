@@ -1,78 +1,13 @@
-//! Metrics preserve Meta's response and warn because Meta scheduled that API's deprecation.
 //! Migration copies rather than moves, and key installation accepts only a public PEM
 //! file, keeping private material out of requests.
 use crate::app::{App, no_id};
 use crate::commands::read_file;
 use crate::output::Output;
-use clap::{Args, Subcommand, ValueEnum};
+use clap::{Args, Subcommand};
 use paloma_core::{Error, Result, limits, validate};
 use paloma_graph::api::flows;
 use std::path::PathBuf;
 
-#[derive(Debug, Clone, Copy, ValueEnum)]
-#[value(rename_all = "SCREAMING_SNAKE_CASE")]
-#[allow(clippy::enum_variant_names)] // These are Meta's public metric names, also exposed by clap.
-pub enum MetricName {
-    EndpointRequestCount,
-    EndpointRequestError,
-    EndpointRequestErrorRate,
-    EndpointRequestLatencySecondsCeil,
-    EndpointAvailability,
-}
-#[derive(Debug, Clone, Copy, ValueEnum)]
-#[value(rename_all = "SCREAMING_SNAKE_CASE")]
-pub enum Granularity {
-    Day,
-    Hour,
-    Lifetime,
-}
-
-#[derive(Debug, Args)]
-pub struct Metrics {
-    flow_id: String,
-    #[arg(long, value_enum)]
-    name: MetricName,
-    #[arg(long, value_enum, default_value = "DAY")]
-    granularity: Granularity,
-    #[arg(long)]
-    since: Option<String>,
-    #[arg(long)]
-    until: Option<String>,
-}
-impl Metrics {
-    pub async fn run(self, app: &App) -> Result<()> {
-        validate::numeric_id(&self.flow_id, "flow id")?;
-        let start = self
-            .since
-            .as_deref()
-            .map(|v| validate::calendar_date(v, "--since"))
-            .transpose()?;
-        let end = self
-            .until
-            .as_deref()
-            .map(|v| validate::calendar_date(v, "--until"))
-            .transpose()?;
-        if matches!((start,end),(Some(a),Some(b)) if a>b) {
-            return Err(Error::validation("since must not follow until"));
-        }
-        app.out.warn(
-            "Meta scheduled the Flows Metrics API for deprecation on 2026-04-30; this read may fail or return stale data",
-        );
-        let name = self.name.to_possible_value().expect("metric enum");
-        let granularity = self
-            .granularity
-            .to_possible_value()
-            .expect("granularity enum");
-        let req = flows::metrics(
-            &self.flow_id,
-            name.get_name(),
-            granularity.get_name(),
-            self.since.as_deref(),
-            self.until.as_deref(),
-        );
-        app.send_and_emit(&req, no_id).await
-    }
-}
 #[derive(Debug, Args)]
 pub struct Migrate {
     #[arg(long)]

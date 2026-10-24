@@ -12453,26 +12453,6 @@ async fn identity_and_settings_reject_bad_inputs_before_context_or_network() {
         ],
         vec!["commerce", "set"],
         vec!["automation", "bot", "../bad"],
-        vec![
-            "flow",
-            "metrics",
-            "123",
-            "--name",
-            "ENDPOINT_REQUEST_COUNT",
-            "--since",
-            "2026-02-30",
-        ],
-        vec![
-            "flow",
-            "metrics",
-            "123",
-            "--name",
-            "ENDPOINT_REQUEST_COUNT",
-            "--since",
-            "2026-11-04",
-            "--until",
-            "2026-11-03",
-        ],
         vec!["flow", "migrate", "--source-waba-id", "../bad"],
         vec!["account", "users", "--business-id", "../bad"],
     ] {
@@ -12631,38 +12611,9 @@ async fn account_users_and_automation_bot_use_the_documented_nodes() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn flow_metrics_preserve_all_points_and_migration_copies_named_flows() {
+async fn flow_migration_copies_named_flows() {
     let graph = MockServer::start().await;
     let home = TempDir::new().unwrap();
-    let body = json!({"id":"444","metric":{"name":"ENDPOINT_REQUEST_COUNT","data_points":[{"timestamp":"2026-11-01","data":[{"key":"value","value":5}]},{"timestamp":"2026-11-02","data":[{"key":"value","value":7}]}]}});
-    let args = [
-        "flow",
-        "metrics",
-        "444",
-        "--name",
-        "ENDPOINT_REQUEST_COUNT",
-        "--granularity",
-        "DAY",
-        "--since",
-        "2026-11-01",
-        "--until",
-        "2026-11-02",
-    ];
-    Mock::given(method("GET")).and(path("/v26.0/444")).and(query_param("fields","metric.name(ENDPOINT_REQUEST_COUNT).granularity(DAY).since(2026-11-01).until(2026-11-02)"))
-        .respond_with(ResponseTemplate::new(200).set_body_json(body.clone())).expect(1).mount(&graph).await;
-    let out = paloma(Some(&graph), &home)
-        .args(args)
-        .args(["-o", "json"])
-        .output()
-        .unwrap();
-    assert!(out.status.success());
-    assert_eq!(stdout_json(&out), body);
-    assert!(
-        dry_run_request(&home, &args)["url"]
-            .as_str()
-            .unwrap()
-            .contains("metric.name")
-    );
     Mock::given(method("POST"))
         .and(path("/v26.0/222/migrate_flows"))
         .and(query_param("source_waba_id", "333"))
@@ -13313,42 +13264,6 @@ async fn oba_leaves_the_country_format_to_meta_but_requires_a_value() {
             .assert()
             .code(code);
     }
-    assert!(graph.received_requests().await.unwrap().is_empty());
-}
-
-#[tokio::test]
-async fn flow_metrics_warns_about_deprecation_and_explains_bad_dates() {
-    let graph = MockServer::start().await;
-    let home = TempDir::new().unwrap();
-    paloma(Some(&graph), &home)
-        .args([
-            "flow",
-            "metrics",
-            "123",
-            "--name",
-            "ENDPOINT_REQUEST_COUNT",
-            "--dry-run",
-        ])
-        .assert()
-        .success()
-        .stdout(predicate::str::contains("deprecat").not())
-        .stderr(predicate::str::contains("deprecation on 2026-04-30"));
-    paloma(Some(&graph), &home)
-        .args([
-            "flow",
-            "metrics",
-            "123",
-            "--name",
-            "ENDPOINT_REQUEST_COUNT",
-            "--since",
-            "2026-13-05",
-        ])
-        .assert()
-        .code(5)
-        .stderr(
-            predicate::str::contains("--since must be a real YYYY-MM-DD date")
-                .and(predicate::str::contains("--waba-timezone").not()),
-        );
     assert!(graph.received_requests().await.unwrap().is_empty());
 }
 

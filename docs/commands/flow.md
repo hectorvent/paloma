@@ -248,24 +248,6 @@ Beyond the [standard contract](../global-flags.md), the one worth knowing here:
 |------|------|
 | `5` | A Flow JSON failed validation — locally before sending, or reported by Meta after it stored it |
 
-## Endpoint metrics
-
-> Meta's docs list 2026-04-30 as the Metrics API's deprecation date, so these reads may
-> fail or return stale data. The command warns on stderr each time.
-
-```bash
-paloma flow metrics 123 --name ENDPOINT_REQUEST_COUNT --granularity DAY \
-  --since 2026-11-01 --until 2026-11-03 -o json
-```
-
-`metrics <flow_id>` requires `--name` and accepts `--granularity DAY|HOUR|LIFETIME`
-(default `DAY`). Metrics are `ENDPOINT_REQUEST_COUNT`, `ENDPOINT_REQUEST_ERROR`,
-`ENDPOINT_REQUEST_ERROR_RATE`, `ENDPOINT_REQUEST_LATENCY_SECONDS_CEIL`, and
-`ENDPOINT_AVAILABILITY`. Optional `--since` and `--until` are real `YYYY-MM-DD` dates;
-a reversed range fails locally with exit `5`. Meta enforces retention (90 days for
-DAY, 30 for HOUR) and metrics can be delayed by hours. JSON/raw preserve every point
-and dimension; no totals or missing points are invented. Dry-run is offline.
-
 ## Migration
 
 ```bash

@@ -55,8 +55,6 @@ pub enum FlowCommand {
     Deprecate { flow_id: String },
     /// Delete a draft flow.
     Delete { flow_id: String },
-    /// Read Flow endpoint metrics.
-    Metrics(tools::Metrics),
     /// Copy Flows from another WABA owned by the same business.
     Migrate(tools::Migrate),
     /// Manage the Flow endpoint public encryption key.
@@ -148,7 +146,6 @@ pub struct Assets {
 impl FlowCommand {
     pub async fn run(self, app: &App) -> Result<()> {
         match self {
-            Self::Metrics(a) => a.run(app).await,
             Self::Migrate(a) => a.run(app).await,
             Self::Key(a) => a.run(app).await,
             Self::List(a) => {

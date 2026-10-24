@@ -122,23 +122,6 @@ fn describe_error(error: &Value) -> String {
     s
 }
 
-pub fn metrics(
-    flow: &str,
-    name: &str,
-    granularity: &str,
-    since: Option<&str>,
-    until: Option<&str>,
-) -> Request {
-    let mut fields = format!("metric.name({name}).granularity({granularity})");
-    if let Some(date) = since {
-        let _ = write!(fields, ".since({date})");
-    }
-    if let Some(date) = until {
-        let _ = write!(fields, ".until({date})");
-    }
-    get(flow, &fields)
-}
-
 pub fn migrate(destination: &str, source: &str, names: &[String]) -> Request {
     Request::post(format!("{destination}/migrate_flows"))
         .query("source_waba_id", source)
