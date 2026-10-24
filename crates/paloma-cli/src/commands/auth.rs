@@ -92,7 +92,7 @@ fn login(app: &App, with_token: bool) -> Result<()> {
         buf.trim().to_owned()
     } else if let Some(t) = app.globals.token.clone().filter(|t| !t.trim().is_empty()) {
         t
-    } else if std::io::stdin().is_terminal() {
+    } else if std::io::stdin().is_terminal() && std::io::stderr().is_terminal() {
         dialoguer::Password::new()
             .with_prompt("Access token")
             .interact()

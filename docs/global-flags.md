@@ -89,10 +89,10 @@ MID=$(paloma send text 15551234567 "hi" -q)
 | `0` | Success |
 | `1` | Generic error |
 | `2` | Usage error (bad flags/arguments) |
-| `3` | Auth/token error |
-| `4` | Rate-limited (HTTP 429, or a Meta throttling code such as 130429), after any [retries](#retries) |
+| `3` | Auth/token error, including Meta's permission codes such as 10, 190 and 200-299, whatever the HTTP status |
+| `4` | Rate-limited (HTTP 429, or a Meta throttling code such as 130429 or 131048), after any [retries](#retries) |
 | `5` | Pre-flight validation failed (caught locally before the API call) |
-| `6` | Policy/window block (e.g. the 24-hour customer-service window) |
+| `6` | Policy/window block (e.g. the 24-hour customer-service window, a marketing opt-out, or a restricted account) |
 
 Pre-flight checks — recipient format, text-body length, required template fields,
 file readability — run **locally**, so invalid input fails fast with code `5`

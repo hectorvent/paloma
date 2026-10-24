@@ -9240,11 +9240,19 @@ async fn automatic_template_routing_surfaces_lookup_auth_errors_without_a_send()
 
 #[tokio::test(flavor = "multi_thread")]
 async fn template_routing_never_refreshes_http_400_auth_policy_or_unknown_rejections() {
-    // Some existing error mappings retain HTTP-400 auth/policy codes as generic API
-    // errors. The reroute allowlist must remain safe independently of that taxonomy.
+    // HTTP-400 auth and policy codes keep their own exit codes, and none may reroute.
     for (category, edge) in [("UTILITY", "messages"), ("MARKETING", "marketing_messages")] {
-        for code in [
-            3, 10, 190, 200, 299, 131_005, 368, 130_497, 131_031, 999_999,
+        for (code, exit) in [
+            (3, 3),
+            (10, 3),
+            (190, 3),
+            (200, 3),
+            (299, 3),
+            (131_005, 3),
+            (368, 6),
+            (130_497, 6),
+            (131_031, 6),
+            (999_999, 1),
         ] {
             let graph = MockServer::start().await;
             let home = TempDir::new().unwrap();
@@ -9269,7 +9277,7 @@ async fn template_routing_never_refreshes_http_400_auth_policy_or_unknown_reject
                     "-q",
                 ])
                 .assert()
-                .code(1)
+                .code(exit)
                 .stdout("")
                 .stderr(predicate::str::contains("retrying once").not());
             assert_eq!(graph.received_requests().await.unwrap().len(), 2);
