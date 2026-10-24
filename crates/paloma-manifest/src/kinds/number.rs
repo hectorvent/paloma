@@ -19,18 +19,30 @@ fn name_is_settled(name: &Value, live: &Value) -> bool {
             ))
 }
 
+/// Meta documents `HIDDEN`, but a live read returned `NON_VISIBLE`. Use one spelling, so an
+/// export can be diffed and a hidden number doesn't look like drift.
+fn canonical_visibility(value: &Value) -> Value {
+    if value.as_str() == Some("NON_VISIBLE") {
+        json!("HIDDEN")
+    } else {
+        value.clone()
+    }
+}
+
 pub fn template() -> Value {
     json!({"pin":"","newDisplayName":"","searchVisibility":""})
 }
 pub async fn export(cx: Cx<'_>) -> Result<Vec<Value>> {
     let phone = cx.ctx.require_phone_number_id()?;
-    Ok(vec![
-        read(
-            cx,
-            &phone_numbers::get(phone, &format!("{EXPORT_FIELDS},search_visibility")),
-        )
-        .await?,
-    ])
+    let mut live = read(
+        cx,
+        &phone_numbers::get(phone, &format!("{EXPORT_FIELDS},search_visibility")),
+    )
+    .await?;
+    if let Some(visibility) = live.get("search_visibility").map(canonical_visibility) {
+        live["search_visibility"] = visibility;
+    }
+    Ok(vec![live])
 }
 pub async fn plan(cx: Cx<'_>, spec: &Value) -> Result<KindPlan> {
     let object = spec
@@ -57,12 +69,13 @@ pub async fn plan(cx: Cx<'_>, spec: &Value) -> Result<KindPlan> {
                 desired.insert(key.clone(), value.clone());
             }
             "search_visibility" => {
-                if !matches!(value.as_str(), Some("VISIBLE" | "HIDDEN")) {
+                let canonical = canonical_visibility(value);
+                if !matches!(canonical.as_str(), Some("VISIBLE" | "HIDDEN")) {
                     return Err(Error::validation(
                         "searchVisibility must be VISIBLE or HIDDEN",
                     ));
                 }
-                desired.insert(key.clone(), value.clone());
+                desired.insert(key.clone(), canonical);
             }
             // These observational fields were exported by the original Number kind.
             "id"
@@ -100,7 +113,12 @@ pub async fn plan(cx: Cx<'_>, spec: &Value) -> Result<KindPlan> {
         desired.remove("new_display_name");
     }
     if let Some(visibility) = desired.get("search_visibility") {
-        if live.get("search_visibility") == Some(visibility) {
+        if live
+            .get("search_visibility")
+            .map(canonical_visibility)
+            .as_ref()
+            == Some(visibility)
+        {
             desired.remove("search_visibility");
         } else {
             changes.extend(crate::diff::changes(

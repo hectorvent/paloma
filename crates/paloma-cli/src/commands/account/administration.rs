@@ -70,7 +70,7 @@ impl Users {
             .join("\n");
         output.primary_id = (!ids.is_empty()).then_some(ids);
         app.out
-            .emit(&output.table("/data", &["id", "name", "user_type"]));
+            .emit(&output.table("/data", &["id", "name", "tasks"]));
         Ok(())
     }
 }

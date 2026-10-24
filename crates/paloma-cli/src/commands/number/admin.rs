@@ -155,15 +155,27 @@ fn compliance(body: &mut Value) -> Result<()> {
 }
 impl ObaCommand {
     pub async fn run(self, app: &App) -> Result<()> {
-        let body = match self {
-            Self::Get => None,
+        match self {
+            Self::Get => {
+                // Status is a field on the number: a live read of the edge returns
+                // "nonexisting field", and Meta's guide uses this form.
+                let phone = app.ctx()?.require_phone_number_id()?.to_owned();
+                app.send_and_emit(
+                    &phone_numbers::get(&phone, "official_business_account"),
+                    |v| {
+                        v.pointer("/official_business_account/oba_status")
+                            .and_then(Value::as_str)
+                            .map(str::to_owned)
+                    },
+                )
+                .await
+            }
             Self::Apply { file } => {
                 let body = read_json(&file)?;
                 oba(&body)?;
-                Some(body)
+                submit(app, "official_business_account", Some(body)).await
             }
-        };
-        submit(app, "official_business_account", body).await
+        }
     }
 }
 impl ComplianceCommand {

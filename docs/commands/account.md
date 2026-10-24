@@ -250,9 +250,10 @@ paloma account users --system -q
 ```
 
 Assigned-user reads require `--business-id` to identify the business context.
-`--system` selects the WABA's system-users endpoint instead and conflicts with that
-flag. Both accept `--limit` (1–100), `--after`, and `--all`. A single page warns when
-more results exist; `--all` follows cursors. Table output includes ID/name/user type,
+`--system` selects the WABA's system-users endpoint from Meta's guide instead and conflicts
+with that flag. A live call has answered `nonexisting field` for that endpoint, so it may not
+work for every token. Both accept `--limit` (1–100), `--after`, and `--all`. A single page warns when
+more results exist; `--all` follows cursors. Table output includes ID, name and tasks,
 `-q` prints IDs, and JSON/raw retain returned metadata. Dry-run prints the first
 request offline. These are read-only commands and do not grant or remove access.
 

@@ -212,6 +212,8 @@ paloma number oba get -o json
 paloma number oba apply --file oba.json --dry-run
 ```
 
+`get` reads `oba_status` from the number, and `get -q` prints just the status.
+
 The application document contains `business_website_url` and
 `primary_country_of_operation` (such as `US`). Optional `supporting_links` must contain 5–10 HTTP(S)
 URLs. Other documented optional fields are `primary_language`,

@@ -12862,9 +12862,23 @@ async fn oba_and_india_compliance_submit_validated_documents_and_confirm() {
             .expect(1)
             .mount(&graph)
             .await;
+        // OBA status is a field on the number; compliance is read from its edge.
+        let (read_path, read_body, read_key) = if group == "oba" {
+            (
+                "/v26.0/111".to_owned(),
+                json!({"official_business_account":{"oba_status":"NOT_STARTED"},"id":"111"}),
+                "oba_status",
+            )
+        } else {
+            (
+                format!("/v26.0/111/{edge}"),
+                json!({"data":[body.clone()]}),
+                "data",
+            )
+        };
         Mock::given(method("GET"))
-            .and(path(format!("/v26.0/111/{edge}")))
-            .respond_with(ResponseTemplate::new(200).set_body_json(json!({"data":[body.clone()]})))
+            .and(path(read_path))
+            .respond_with(ResponseTemplate::new(200).set_body_json(read_body))
             .expect(1)
             .mount(&graph)
             .await;
@@ -12892,7 +12906,7 @@ async fn oba_and_india_compliance_submit_validated_documents_and_confirm() {
             .args(["number", group, "get", "-o", "json"])
             .assert()
             .success()
-            .stdout(predicate::str::contains("data"));
+            .stdout(predicate::str::contains(read_key));
         std::fs::write(&file, "{}").unwrap();
         paloma(Some(&graph), &home)
             .env_remove("PALOMA_PHONE_NUMBER_ID")
@@ -13770,4 +13784,54 @@ async fn webhook_version_set_reverify_resends_the_callback_with_a_token() {
         .success()
         .stdout(predicate::str::contains("VERIFY_SENTINEL").not())
         .stderr(predicate::str::contains("VERIFY_SENTINEL").not());
+}
+
+#[tokio::test]
+async fn oba_get_reads_the_status_field_on_the_number() {
+    let graph = MockServer::start().await;
+    let home = TempDir::new().unwrap();
+    Mock::given(method("GET"))
+        .and(path("/v26.0/111"))
+        .and(query_param("fields", "official_business_account"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(
+            json!({"official_business_account":{"oba_status":"NOT_STARTED"},"id":"111"}),
+        ))
+        .mount(&graph)
+        .await;
+    paloma(Some(&graph), &home)
+        .env("PALOMA_PHONE_NUMBER_ID", "111")
+        .args(["number", "oba", "get", "-q"])
+        .assert()
+        .success()
+        .stdout("NOT_STARTED\n");
+}
+
+#[tokio::test]
+async fn number_manifest_round_trips_a_non_visible_number() {
+    let graph = MockServer::start().await;
+    let home = TempDir::new().unwrap();
+    Mock::given(method("GET"))
+        .and(path("/v26.0/111"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(
+            json!({"id":"111","verified_name":"Acme","search_visibility":"NON_VISIBLE"}),
+        ))
+        .mount(&graph)
+        .await;
+    let out = paloma(Some(&graph), &home)
+        .env("PALOMA_PHONE_NUMBER_ID", "111")
+        .args(["export", "number", "--minimal"])
+        .output()
+        .unwrap();
+    assert!(out.status.success());
+    let text = String::from_utf8(out.stdout).unwrap();
+    assert!(text.contains("searchVisibility: HIDDEN"), "{text}");
+    let file = write_manifest(&home, &text);
+    paloma(Some(&graph), &home)
+        .env("PALOMA_PHONE_NUMBER_ID", "111")
+        .args(["diff", "--file"])
+        .arg(&file)
+        .assert()
+        .success();
+    let requests = graph.received_requests().await.unwrap();
+    assert!(requests.iter().all(|r| r.method.as_str() == "GET"));
 }
