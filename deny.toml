@@ -5,6 +5,13 @@ all-features = false
 [advisories]
 version = 2
 yanked = "deny"
+# These crates were merged into zbus 6, but the Linux keyring store we lock depends on
+# zbus 5. Drop these once zbus-secret-service-keyring-store moves to zbus 6.
+ignore = [
+    { id = "RUSTSEC-2026-0370", reason = "zvariant: transitive through zbus 5, no safe upgrade yet" },
+    { id = "RUSTSEC-2026-0371", reason = "zbus_names: transitive through zbus 5, no safe upgrade yet" },
+    { id = "RUSTSEC-2026-0372", reason = "zvariant_derive: transitive through zbus 5, no safe upgrade yet" },
+]
 
 [licenses]
 version = 2
@@ -25,6 +32,8 @@ confidence-threshold = 0.9
 [bans]
 multiple-versions = "warn"
 wildcards = "deny"
+# Only xtask relies on this: it is never published, so a bare path dependency is fine.
+allow-wildcard-paths = true
 deny = [
     # Keep the binary free of OpenSSL: TLS is rustls + ring.
     { name = "openssl-sys" },

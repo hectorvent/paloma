@@ -4,6 +4,7 @@ description = "Typed WhatsApp Cloud API (Meta Graph API) client used by paloma"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
+license.workspace = true
 repository.workspace = true
 authors.workspace = true
 

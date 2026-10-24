@@ -4,6 +4,7 @@ description = "Declarative, K8s-style YAML manifests (export / diff / apply) for
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
+license.workspace = true
 repository.workspace = true
 authors.workspace = true
 

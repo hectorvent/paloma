@@ -345,6 +345,10 @@ step-by-step for adding a command or a manifest kind. Commits follow
 [release-plz](https://release-plz.dev) turns them into versions, a changelog and
 GitHub Releases.
 
+## License
+
+[MIT](LICENSE)
+
 ---
 
 <div align="center">

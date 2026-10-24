@@ -4,6 +4,7 @@ description = "Domain primitives for paloma: errors, exit codes, pre-flight vali
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
+license.workspace = true
 repository.workspace = true
 authors.workspace = true
 

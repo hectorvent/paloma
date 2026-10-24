@@ -4,6 +4,7 @@ description = "paloma: an unofficial, single-binary CLI for the WhatsApp Cloud A
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
+license.workspace = true
 repository.workspace = true
 authors.workspace = true
 readme = "../../README.md"
