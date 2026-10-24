@@ -683,4 +683,4 @@ guardrail:
 - **Templates:** always permitted.
 
 Full window tracking (derived from events seen by `paloma webhook listen`) is
-[planned](planned.md) for v1.0.
+[future work](planned.md).

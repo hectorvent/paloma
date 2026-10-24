@@ -13614,3 +13614,23 @@ async fn welcome_sequence_list_renders_meta_s_bare_array() {
         .success()
         .stdout("8716291\n4362\n");
 }
+
+#[test]
+fn send_help_only_offers_flags_each_media_type_accepts() {
+    let home = TempDir::new().unwrap();
+    for (verb, filename, caption) in [
+        ("document", true, true),
+        ("image", false, true),
+        ("video", false, true),
+        ("audio", false, false),
+        ("sticker", false, false),
+    ] {
+        let out = paloma(None, &home)
+            .args(["send", verb, "--help"])
+            .output()
+            .unwrap();
+        let help = String::from_utf8_lossy(&out.stdout);
+        assert_eq!(help.contains("--filename"), filename, "{verb}");
+        assert_eq!(help.contains("--caption"), caption, "{verb}");
+    }
+}

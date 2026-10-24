@@ -17,7 +17,7 @@ New here? Start with [Installation](installation.md) → [Getting started](getti
 | [Scripting & automation](scripting.md) | `--output json`, `--quiet`, `--dry-run`, CI usage |
 | [Billing currency](billing-currency.md) | Migrate to INR or BRL billing before Meta's deadlines, then update Paloma |
 | [Architecture](architecture.md) | How the tool is built (for contributors) |
-| [Planned commands](commands/planned.md) | What's visible in `--help` but not implemented yet |
+| [Planned commands](commands/planned.md) | Work that hasn't shipped yet |
 
 ## Command reference
 
@@ -44,8 +44,7 @@ New here? Start with [Installation](installation.md) → [Getting started](getti
 | `paloma qr` | create · list · get · update · delete | [commands/qr.md](commands/qr.md) |
 | `paloma automation` | get · set · bot | [commands/automation.md](commands/automation.md) |
 
-> Anything marked **planned** is already visible in `paloma --help` and exits with a
-> clear "not yet implemented (planned for vX.Y)" message. See the
+> Every command listed here is implemented. For work that hasn't shipped, see the
 > [planned commands](commands/planned.md).
 
 ## Conventions

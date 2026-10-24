@@ -40,7 +40,7 @@ commands; the API remains the authority on supported text.
 
 `get -q` prints the returned phone-number id. Settings writes have no primary id, so
 `set -q` produces no output. All data goes through the selected output format; diagnostics
-go to stderr. Both verbs support `--dry-run` without reading a token or sending requests.
+go to stderr. All three verbs support `--dry-run` without reading a token or sending requests.
 
 ## `paloma automation bot`
 

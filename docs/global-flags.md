@@ -23,6 +23,7 @@ equivalent).
 | `--config <path>` | | Config file path (default: `~/.config/paloma/config.toml`) |
 | `--token <value>` | | Access token (hidden; prefer `PALOMA_TOKEN`/keyring) |
 | `--app-secret <value>` | | App secret (hidden; prefer `PALOMA_APP_SECRET` or a keyring reference to keep it out of argv) |
+| `--graph-url <url>` | | Graph API base URL for tests and proxies (hidden; also `PALOMA_GRAPH_URL`) |
 | `--yes` | `-y` | Skip confirmation prompts for destructive ops |
 | `--help` | `-h` | Show help for any command |
 | `--version` | `-V` | Print version |

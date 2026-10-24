@@ -100,7 +100,7 @@ pub struct GlobalArgs {
     #[arg(long, global = true, env = "PALOMA_API_VERSION")]
     pub api_version: Option<String>,
 
-    /// Print the exact request (method, URL, body) instead of sending it.
+    /// Print the request (method, URL, body) with secrets masked instead of sending it.
     #[arg(long, global = true)]
     pub dry_run: bool,
 

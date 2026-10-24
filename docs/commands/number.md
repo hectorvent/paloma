@@ -43,6 +43,9 @@ paloma number get 1556677889900
 paloma number quality
 ```
 
+Explicit phone-number Graph ids must contain only digits; invalid ids exit `5` before
+context resolution or an API call.
+
 ## `paloma number health`
 
 Read `health_status` for the active number, or pass another phone-number id. Returns
@@ -53,6 +56,9 @@ data, so a successful read still exits `0`. With `-q`, prints the returned numbe
 paloma number health
 paloma number health 1556677889900 -o json
 ```
+
+Tables show the overall status plus entity diagnostics and suggested fixes. JSON, YAML
+and raw keep Meta's full response.
 
 ## `paloma number register` / `deregister`
 
@@ -101,12 +107,6 @@ six digits will do because the output masks them. The older `--pin <value>` flag
 works, but it warns, because other processes can read a command line.
 
 PIN values are redacted from dry-run output and verbose request diagnostics. The real request sends the supplied PIN.
-
-Explicit phone-number Graph ids must contain only digits; invalid ids exit `5` before
-context resolution or an API call.
-
-`health` tables show the overall status plus entity diagnostics and suggested fixes.
-JSON, YAML and raw keep Meta's full response, and quiet output remains the number id.
 
 ## Verification and onboarding
 

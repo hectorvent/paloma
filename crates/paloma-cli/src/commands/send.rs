@@ -26,14 +26,18 @@ pub enum SendCommand {
     /// Send an approved template.
     Template(Template),
     /// Send an image.
+    #[command(mut_arg("filename", |a| a.hide(true)))]
     Image(Media),
     /// Send a document.
     Document(Media),
     /// Send an audio clip.
+    #[command(mut_arg("filename", |a| a.hide(true)), mut_arg("caption", |a| a.hide(true)))]
     Audio(Audio),
     /// Send a video.
+    #[command(mut_arg("filename", |a| a.hide(true)))]
     Video(Media),
     /// Send a sticker.
+    #[command(mut_arg("filename", |a| a.hide(true)), mut_arg("caption", |a| a.hide(true)))]
     Sticker(Media),
     /// Send a location pin.
     Location(Location),

@@ -1,7 +1,8 @@
 # `paloma account`
 
-Read the active WhatsApp Business Account (WABA), its health, subscribed apps and
-messaging limits. Select the account with `--waba-id`, `PALOMA_WABA_ID` or the active
+Read and manage the active WhatsApp Business Account (WABA): its health, subscribed apps,
+messaging limits, analytics, settings, users, welcome sequences and billing currency.
+Select the account with `--waba-id`, `PALOMA_WABA_ID` or the active
 profile. No active phone-number id is required.
 
 ```console
@@ -66,7 +67,7 @@ subscriptions.
 paloma account subscribed-apps -o json
 ```
 
-Both list commands accept:
+`limits` and `subscribed-apps` accept:
 
 | Flag | Meaning |
 |------|---------|
@@ -77,7 +78,7 @@ Without `--all`, a single page is returned and a note on stderr says if more res
 exist. Lists have no primary id, so `-q` produces no output. JSON/raw preserve the
 Graph body for a single page; `--all` renders the merged response.
 
-All four reads support `--dry-run`: print the GET request without sending it or reading
+`get`, `health`, `limits` and `subscribed-apps` support `--dry-run`: print the GET request without sending it or reading
 a token. Data goes to stdout; diagnostics go to stderr. Missing WABA context or rejected
 credentials exit `3`; rate limits exit `4`. Reads require a token with access to the
 WABA and appropriate WhatsApp business management permissions.

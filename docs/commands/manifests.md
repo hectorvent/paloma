@@ -84,8 +84,8 @@ spec:
 
 The comments are ignored by `apply`, so the file still round-trips. Pass `--minimal`
 to emit only the fields that are set (the previous behaviour). Annotation is YAML-only;
-`-o json` is unaffected. The annotation covers Profile, Calling, Commerce, Webhook,
-ConversationalAutomation, and Number; Template (a per-resource collection) is unchanged.
+`-o json` is unaffected. The annotation covers every kind's writable fields, including those
+of a Template.
 
 ```bash
 paloma export calling > calling.yaml

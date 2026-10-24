@@ -71,7 +71,7 @@ pub enum Command {
     /// Manage WhatsApp Flows.
     #[command(subcommand)]
     Flow(flow::FlowCommand),
-    /// WABA-level reads and analytics.
+    /// Manage WABA settings, users and billing, and read its analytics.
     #[command(subcommand)]
     Account(account::AccountCommand),
     /// Manage message QR codes.

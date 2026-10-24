@@ -37,8 +37,8 @@ paloma config use acme                # set the default profile
 paloma send text … --profile staging     # use a profile for one command
 ```
 
-Create or update profiles with `paloma auth login --profile <name>` (stores a token)
-or `paloma config set` (individual keys). See [commands/config.md](commands/config.md).
+Create or update profiles with `paloma auth login --profile <name>` (stores a token and
+makes that profile the default) or `paloma config set` (individual keys). See [commands/config.md](commands/config.md).
 
 ## Settable keys
 
@@ -87,6 +87,7 @@ These override the config file (and are themselves overridden by flags):
 | `PALOMA_APP_SECRET` | app secret (app-level webhook field subscriptions); also signs and checks webhooks in `webhook simulate` and `webhook listen` |
 | `PALOMA_OUTPUT` | default `--output` format |
 | `PALOMA_CONFIG` | config file path |
+| `PALOMA_LOG` | tracing filter for `--verbose` logging |
 | `NO_COLOR` | disables ANSI color |
 
 > `PALOMA_APP_ID` has no config-file key yet; set it via the env var or `--app-id`

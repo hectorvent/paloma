@@ -14,7 +14,8 @@ paloma auth <verb> [flags]
 Store a system-user token for a profile. The token is read from stdin with
 `--with-token`, from `PALOMA_TOKEN`, or from a hidden prompt; it is saved to the OS
 keyring and the profile is written to config (other keys already in the profile are
-kept). Never echoed, never stored in plaintext.
+kept). Never echoed, never stored in plaintext. Logging in also makes that profile the
+default, so `--profile staging` below switches later commands to `staging`.
 
 ```
 paloma auth login [--with-token] [--profile <name>] [--phone-number-id <id>] [--waba-id <id>] [--api-version <v>]

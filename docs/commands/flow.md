@@ -250,7 +250,7 @@ Beyond the [standard contract](../global-flags.md), the one worth knowing here:
 
 ## Endpoint metrics
 
-> Meta's docs say the Metrics API will be deprecated on 2026-04-30, so these reads may
+> Meta's docs list 2026-04-30 as the Metrics API's deprecation date, so these reads may
 > fail or return stale data. The command warns on stderr each time.
 
 ```bash
