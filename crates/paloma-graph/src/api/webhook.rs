@@ -87,6 +87,29 @@ pub fn set_app_subscriptions(
         .query_opt("verify_token", verify_token)
 }
 
+/// Each `whatsapp_business_account` field and the Graph version Meta delivers it in, from a
+/// subscriptions response. Other objects on the same app, such as `page`, are left out.
+pub fn field_versions(subscriptions: &Value) -> Vec<(String, Option<String>)> {
+    subscriptions
+        .get("data")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter(|s| s.get("object").and_then(Value::as_str) == Some("whatsapp_business_account"))
+        .flat_map(|s| {
+            s.get("fields")
+                .and_then(Value::as_array)
+                .cloned()
+                .unwrap_or_default()
+        })
+        .filter_map(|f| {
+            let name = f.get("name").and_then(Value::as_str)?.to_owned();
+            let version = f.get("version").and_then(Value::as_str).map(str::to_owned);
+            Some((name, version))
+        })
+        .collect()
+}
+
 /// The subscribed fields for `whatsapp_business_account` from a subscriptions response.
 pub fn subscribed_fields(subscriptions: &Value) -> Vec<String> {
     subscriptions

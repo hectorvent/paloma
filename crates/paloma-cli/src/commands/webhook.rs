@@ -16,6 +16,7 @@ use crate::app::{App, no_id};
 use crate::output::Output;
 
 mod listen;
+mod version;
 
 #[derive(Debug, Subcommand)]
 pub enum WebhookCommand {
@@ -36,6 +37,8 @@ pub enum WebhookCommand {
     Unsubscribe,
     /// Show or change the app-level webhook field subscriptions.
     Fields(Fields),
+    /// Show or change the Graph version of the app's WhatsApp webhooks.
+    Version(version::Version),
     /// Run a local webhook receiver that prints each event as a line of JSON.
     Listen(listen::ListenArgs),
     /// Run Meta's hub.challenge handshake against an endpoint and report pass or fail.
@@ -217,6 +220,7 @@ impl WebhookCommand {
                 app.send_and_emit(&webhook::unsubscribe(&waba), no_id).await
             }
             Self::Fields(f) => f.run(app).await,
+            Self::Version(v) => v.run(app).await,
             Self::Listen(args) => listen::run(args, app).await,
             Self::VerifyUrl(args) => args.run(app).await,
             Self::Simulate(args) => args.run(app).await,

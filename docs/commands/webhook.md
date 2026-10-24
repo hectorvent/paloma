@@ -138,6 +138,34 @@ from the same sources as for `subscribe`, and it's only used with `--callback-ur
 `--verify-token-stdin` needs `--yes`. Setting
 fields changes which events production receives, so it confirms first (`--yes` to skip).
 
+## `paloma webhook version`
+
+Shows the Graph version Meta uses for the app's WhatsApp webhooks, and moves them to another
+one. It only touches the `whatsapp_business_account` subscription; an app's Instagram or Page
+subscriptions keep their version. It needs an app id and the app secret, like `fields`.
+
+```bash
+paloma webhook version
+paloma webhook version -q                    # just the version, such as v26.0
+paloma webhook version set v26.0             # confirms; --yes to skip
+paloma webhook version set v26.0 --dry-run -o json
+```
+
+| Flag | Meaning |
+|------|---------|
+| `--reverify` | Also resend the current callback URL and a verify token, if Meta asks for them |
+| `--verify-token-stdin` | Read that token from stdin (requires `--reverify`). Otherwise uses `PALOMA_VERIFY_TOKEN`, or prompts |
+
+`set` resubmits the same fields through the requested version, so the subscribed set doesn't
+change. Already on that version, it writes nothing. Afterward it reads the subscription back
+and exits `1` if Meta still reports another version, because Meta doesn't document this route
+for changing versions; if that happens, use the App Dashboard. Payloads can differ between
+versions, so check your endpoint handles the new one first.
+
+This is the webhook version, which isn't the same as `--api-version` (the version Paloma calls
+Graph with) or the app's default API version in the App Dashboard, which Paloma can't change.
+All output describes the WhatsApp subscription rather than passing Graph's response through.
+
 ## `paloma webhook verify-url`
 
 Check that your endpoint would pass Meta's verification, before you point Meta at it. It sends

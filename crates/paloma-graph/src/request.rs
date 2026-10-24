@@ -116,6 +116,8 @@ pub struct Request {
     pub headers: Vec<(String, String)>,
     pub body: Body,
     pub auth: Auth,
+    /// A Graph version for this call alone, when the version itself is what's being acted on.
+    pub api_version: Option<String>,
 }
 
 impl Request {
@@ -127,7 +129,15 @@ impl Request {
             headers: Vec::new(),
             body: Body::Empty,
             auth: Auth::User,
+            api_version: None,
         }
+    }
+
+    /// Send this call through a specific Graph version instead of the active one.
+    #[must_use]
+    pub fn at_version(mut self, version: impl Into<String>) -> Self {
+        self.api_version = Some(version.into());
+        self
     }
 
     pub fn get(node: impl Into<String>) -> Self {
@@ -232,7 +242,12 @@ impl Request {
     /// The URL this request resolves to, including the query string.
     pub fn url(&self, base: &str, version: &str) -> String {
         let mut url = match &self.target {
-            Target::Node(node) => format!("{}/{}/{}", base.trim_end_matches('/'), version, node),
+            Target::Node(node) => format!(
+                "{}/{}/{}",
+                base.trim_end_matches('/'),
+                self.api_version.as_deref().unwrap_or(version),
+                node
+            ),
             Target::Url(u) => u.clone(),
             Target::Placeholder(text) => (*text).to_owned(),
         };
@@ -491,6 +506,15 @@ mod tests {
     }
 
     use super::*;
+
+    #[test]
+    fn a_request_can_pin_its_own_version() {
+        let req = Request::get("1/subscriptions").at_version("v26.0");
+        assert_eq!(
+            req.url("https://graph.example", "v21.0"),
+            "https://graph.example/v26.0/1/subscriptions"
+        );
+    }
 
     #[test]
     fn url_includes_version_and_encoded_query() {

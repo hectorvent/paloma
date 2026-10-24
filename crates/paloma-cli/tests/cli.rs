@@ -13549,3 +13549,217 @@ fn send_help_only_offers_flags_each_media_type_accepts() {
         assert_eq!(help.contains("--caption"), caption, "{verb}");
     }
 }
+
+fn subscriptions_at(version: &str) -> Value {
+    json!({"data":[
+        {"object":"page","callback_url":"https://example.com/bot","active":true,
+         "fields":[{"name":"feed","version":"v21.0"}]},
+        {"object":"whatsapp_business_account","callback_url":"https://example.com/wa","active":true,
+         "fields":[{"name":"messages","version":version},{"name":"calls","version":version}]},
+    ]})
+}
+
+fn webhook_version_cmd(graph: &MockServer, home: &TempDir) -> Command {
+    let mut cmd = paloma(Some(graph), home);
+    cmd.env("PALOMA_APP_ID", "999")
+        .env("PALOMA_APP_SECRET", "APP_SECRET_SENTINEL")
+        .env("PALOMA_API_VERSION", "v21.0");
+    cmd
+}
+
+async fn mock_subscriptions(graph: &MockServer, version: &str) {
+    Mock::given(method("GET"))
+        .and(path("/v21.0/999/subscriptions"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(subscriptions_at(version)))
+        .mount(graph)
+        .await;
+}
+
+fn subscription_writes(requests: &[wiremock::Request]) -> usize {
+    requests
+        .iter()
+        .filter(|r| r.method.as_str() != "GET")
+        .count()
+}
+
+#[tokio::test]
+async fn webhook_version_reports_only_the_whatsapp_subscription() {
+    let graph = MockServer::start().await;
+    let home = TempDir::new().unwrap();
+    mock_subscriptions(&graph, "v25.0").await;
+    let out = webhook_version_cmd(&graph, &home)
+        .args(["webhook", "version", "-o", "json"])
+        .output()
+        .unwrap();
+    assert!(out.status.success());
+    assert_eq!(
+        stdout_json(&out),
+        json!({"object":"whatsapp_business_account","version":"v25.0","fields":[
+            {"name":"messages","version":"v25.0"},{"name":"calls","version":"v25.0"},
+        ]})
+    );
+    webhook_version_cmd(&graph, &home)
+        .args(["webhook", "version", "-q"])
+        .assert()
+        .success()
+        .stdout("v25.0\n");
+}
+
+#[tokio::test]
+async fn webhook_version_set_writes_nothing_when_already_there() {
+    let graph = MockServer::start().await;
+    let home = TempDir::new().unwrap();
+    mock_subscriptions(&graph, "v26.0").await;
+    webhook_version_cmd(&graph, &home)
+        .args(["webhook", "version", "set", "v26.0"])
+        .assert()
+        .success()
+        .stderr(predicate::str::contains("already"));
+    assert_eq!(
+        subscription_writes(&graph.received_requests().await.unwrap()),
+        0
+    );
+}
+
+#[tokio::test]
+async fn webhook_version_set_rejects_bad_input_before_any_call() {
+    let graph = MockServer::start().await;
+    let home = TempDir::new().unwrap();
+    webhook_version_cmd(&graph, &home)
+        .args(["webhook", "version", "set", "26", "--yes"])
+        .assert()
+        .code(5)
+        .stdout("");
+    webhook_version_cmd(&graph, &home)
+        .args([
+            "webhook",
+            "version",
+            "set",
+            "v26.0",
+            "--yes",
+            "--verify-token-stdin",
+        ])
+        .write_stdin("t")
+        .assert()
+        .failure();
+    assert!(graph.received_requests().await.unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn webhook_version_set_refuses_without_confirmation() {
+    let graph = MockServer::start().await;
+    let home = TempDir::new().unwrap();
+    mock_subscriptions(&graph, "v21.0").await;
+    webhook_version_cmd(&graph, &home)
+        .args(["webhook", "version", "set", "v26.0"])
+        .assert()
+        .code(5)
+        .stderr(predicate::str::contains("--yes"));
+    assert_eq!(
+        subscription_writes(&graph.received_requests().await.unwrap()),
+        0
+    );
+}
+
+#[tokio::test]
+async fn webhook_version_set_dry_run_targets_the_new_version_without_writing() {
+    let graph = MockServer::start().await;
+    let home = TempDir::new().unwrap();
+    mock_subscriptions(&graph, "v21.0").await;
+    let out = webhook_version_cmd(&graph, &home)
+        .args([
+            "webhook",
+            "version",
+            "set",
+            "v26.0",
+            "--dry-run",
+            "-o",
+            "json",
+        ])
+        .output()
+        .unwrap();
+    assert!(out.status.success());
+    let url = stdout_json(&out)["url"].as_str().unwrap().to_owned();
+    assert!(url.contains("/v26.0/999/subscriptions"), "{url}");
+    assert!(url.contains("object=whatsapp_business_account"), "{url}");
+    assert_eq!(
+        subscription_writes(&graph.received_requests().await.unwrap()),
+        0
+    );
+}
+
+#[tokio::test]
+async fn webhook_version_set_resubmits_fields_through_the_target_version() {
+    let graph = MockServer::start().await;
+    let home = TempDir::new().unwrap();
+    Mock::given(method("GET"))
+        .and(path("/v21.0/999/subscriptions"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(subscriptions_at("v21.0")))
+        .up_to_n_times(1)
+        .mount(&graph)
+        .await;
+    Mock::given(method("POST"))
+        .and(path("/v26.0/999/subscriptions"))
+        .and(query_param("object", "whatsapp_business_account"))
+        .and(query_param("fields", "messages,calls"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({"success":true})))
+        .expect(1)
+        .mount(&graph)
+        .await;
+    mock_subscriptions(&graph, "v26.0").await;
+    let out = webhook_version_cmd(&graph, &home)
+        .args(["webhook", "version", "set", "v26.0", "--yes", "-o", "json"])
+        .output()
+        .unwrap();
+    assert!(out.status.success(), "{out:?}");
+    assert_eq!(stdout_json(&out)["version"], "v26.0");
+    let writes = graph.received_requests().await.unwrap();
+    let write = writes.iter().find(|r| r.method.as_str() == "POST").unwrap();
+    assert!(!write.url.query().unwrap().contains("verify_token"));
+    assert!(!write.url.query().unwrap().contains("callback_url"));
+}
+
+#[tokio::test]
+async fn webhook_version_set_fails_when_meta_keeps_the_old_version() {
+    let graph = MockServer::start().await;
+    let home = TempDir::new().unwrap();
+    mock_subscriptions(&graph, "v21.0").await;
+    Mock::given(method("POST"))
+        .and(path("/v26.0/999/subscriptions"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({"success":true})))
+        .mount(&graph)
+        .await;
+    webhook_version_cmd(&graph, &home)
+        .args(["webhook", "version", "set", "v26.0", "--yes"])
+        .assert()
+        .code(1)
+        .stderr(predicate::str::contains("still reports v21.0"));
+}
+
+#[tokio::test]
+async fn webhook_version_set_reverify_resends_the_callback_with_a_token() {
+    let graph = MockServer::start().await;
+    let home = TempDir::new().unwrap();
+    Mock::given(method("GET"))
+        .and(path("/v21.0/999/subscriptions"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(subscriptions_at("v21.0")))
+        .up_to_n_times(1)
+        .mount(&graph)
+        .await;
+    Mock::given(method("POST"))
+        .and(path("/v26.0/999/subscriptions"))
+        .and(query_param("callback_url", "https://example.com/wa"))
+        .and(query_param("verify_token", "VERIFY_SENTINEL"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({"success":true})))
+        .expect(1)
+        .mount(&graph)
+        .await;
+    mock_subscriptions(&graph, "v26.0").await;
+    webhook_version_cmd(&graph, &home)
+        .env("PALOMA_VERIFY_TOKEN", "VERIFY_SENTINEL")
+        .args(["webhook", "version", "set", "v26.0", "--reverify", "--yes"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("VERIFY_SENTINEL").not())
+        .stderr(predicate::str::contains("VERIFY_SENTINEL").not());
+}

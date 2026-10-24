@@ -547,6 +547,24 @@ pub fn calling_code(value: &str) -> Result<()> {
     Ok(())
 }
 
+/// A Graph API version such as `v26.0`.
+pub fn graph_version(value: &str) -> Result<()> {
+    let valid = value
+        .strip_prefix('v')
+        .and_then(|rest| rest.split_once('.'))
+        .is_some_and(|(major, minor)| {
+            [major, minor]
+                .iter()
+                .all(|part| !part.is_empty() && part.bytes().all(|b| b.is_ascii_digit()))
+        });
+    if !valid {
+        return Err(Error::validation(format!(
+            "Graph version '{value}' must look like v26.0"
+        )));
+    }
+    Ok(())
+}
+
 /// Verification codes must never be included in a validation diagnostic.
 pub fn verification_code(value: &str) -> Result<()> {
     if value.is_empty() || !value.bytes().all(|b| b.is_ascii_digit()) {
@@ -560,6 +578,14 @@ pub fn verification_code(value: &str) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn graph_versions_look_like_v26_0() {
+        assert!(graph_version("v26.0").is_ok());
+        for version in ["26.0", "v26", "v26.", "v.0", "vX.0", "v26.0/x", ""] {
+            assert!(graph_version(version).is_err(), "{version}");
+        }
+    }
 
     #[test]
     fn calling_codes_are_short_digit_strings() {
