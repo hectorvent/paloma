@@ -21,6 +21,7 @@ mod calling;
 mod commerce;
 mod config;
 mod flow;
+mod group;
 mod link;
 mod manifest;
 mod media;
@@ -62,6 +63,9 @@ pub enum Command {
     /// Manage the block list.
     #[command(subcommand)]
     Block(block::BlockCommand),
+    /// Create and manage WhatsApp groups.
+    #[command(subcommand)]
+    Group(group::GroupCommand),
     /// Manage webhook callbacks and field subscriptions.
     #[command(subcommand)]
     Webhook(webhook::WebhookCommand),
@@ -111,6 +115,7 @@ impl Command {
             Self::Profile(c) => c.run(app).await,
             Self::Commerce(c) => c.run(app).await,
             Self::Block(c) => c.run(app).await,
+            Self::Group(c) => c.run(app).await,
             Self::Automation(c) => c.run(app).await,
             Self::Webhook(c) => c.run(app).await,
             Self::Calling(c) => c.run(app).await,

@@ -251,3 +251,20 @@ pub const MAX_ASSIGNED_USERS_PAGE: u32 = 100;
 pub const MIN_COMPLIANCE_ENTITY_NAME: usize = 2;
 pub const MAX_COMPLIANCE_ENTITY_NAME: usize = 128;
 pub const MAX_COMPLIANCE_EMAIL: usize = 127;
+
+/// Group subjects and descriptions, in characters.
+pub const MAX_GROUP_SUBJECT: usize = 128;
+pub const MAX_GROUP_DESCRIPTION: usize = 2048;
+
+/// Maximum groups per Graph page.
+pub const MAX_GROUPS_PAGE: u32 = 1024;
+
+/// Participants that one request can remove from a group.
+pub const MAX_GROUP_PARTICIPANTS_PER_REQUEST: usize = 8;
+
+/// A group's photo, in bytes.
+pub const MAX_GROUP_PHOTO_BYTES: u64 = 5 * MB;
+
+/// How long a message can stay pinned in a group, in days.
+pub const MIN_PIN_DAYS: u32 = 1;
+pub const MAX_PIN_DAYS: u32 = 30;

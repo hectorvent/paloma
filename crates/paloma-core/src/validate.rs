@@ -547,6 +547,20 @@ pub fn calling_code(value: &str) -> Result<()> {
     Ok(())
 }
 
+/// A group id ends up in a request path, so it's limited to the URL-safe base64 Meta uses.
+pub fn group_id(value: &str) -> Result<()> {
+    if value.is_empty()
+        || !value
+            .bytes()
+            .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'-' | b'_' | b'='))
+    {
+        return Err(Error::validation(
+            "group id must contain only letters, digits, '-', '_' or '='",
+        ));
+    }
+    Ok(())
+}
+
 /// A Graph API version such as `v26.0`.
 pub fn graph_version(value: &str) -> Result<()> {
     let valid = value
@@ -578,6 +592,14 @@ pub fn verification_code(value: &str) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn group_ids_are_safe_in_a_path() {
+        assert!(group_id("Y2FwaV9ncm91cDoxNzA1NTU1MDEzOToxMjAzNjM0MDQ2OTQyMzM4MjAZD").is_ok());
+        for id in ["", "../x", "a/b", "a b", "a?b"] {
+            assert!(group_id(id).is_err(), "{id}");
+        }
+    }
 
     #[test]
     fn graph_versions_look_like_v26_0() {

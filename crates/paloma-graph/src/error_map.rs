@@ -7,11 +7,16 @@ use serde_json::Value;
 /// Meta error codes meaning the message was blocked by the 24-hour window.
 const WINDOW_CODES: [i64; 2] = [131_047, 470];
 /// Meta error codes for other policy blocks: the per-user frequency cap, a marketing opt-out,
-/// and the integrity codes for an account that's restricted or disabled.
-const POLICY_CODES: [i64; 5] = [131_049, 131_050, 368, 130_497, 131_031];
+/// the integrity codes for an account that's restricted or disabled, and a suspended, disabled
+/// or ineligible group. Meta sends 131207 with a 403, so these are checked before the status.
+const POLICY_CODES: [i64; 8] = [
+    131_049, 131_050, 368, 130_497, 131_031, 131_207, 131_214, 131_215,
+];
 /// Meta error codes for throttling. Meta says to build on codes rather than HTTP statuses,
 /// and documents no status for some of these, so they count whatever the status is.
-const RATE_LIMIT_CODES: [i64; 7] = [4, 80_007, 130_429, 131_048, 131_056, 131_064, 133_016];
+const RATE_LIMIT_CODES: [i64; 8] = [
+    4, 80_007, 130_429, 131_048, 131_056, 131_064, 131_208, 133_016,
+];
 
 /// Meta's authorization codes. Graph often sends these with a 400, so the status isn't enough.
 const fn is_auth_code(code: i64) -> bool {
@@ -31,9 +36,6 @@ pub fn map_error(status: u16, body: &str) -> Error {
     if status == 429 || code.is_some_and(|c| RATE_LIMIT_CODES.contains(&c)) {
         return Error::RateLimited(format!("rate limited ({status}): {message}"));
     }
-    if status == 401 || status == 403 || raw_code.is_some_and(is_auth_code) {
-        return Error::auth(format!("Graph API auth error ({status}): {message}"));
-    }
     if let Some(c) = code {
         if WINDOW_CODES.contains(&c) {
             return Error::policy(format!(
@@ -45,6 +47,9 @@ pub fn map_error(status: u16, body: &str) -> Error {
                 "blocked by a messaging policy (Meta #{c}): {message}"
             ));
         }
+    }
+    if status == 401 || status == 403 || raw_code.is_some_and(is_auth_code) {
+        return Error::auth(format!("Graph API auth error ({status}): {message}"));
     }
     Error::Api {
         status,
@@ -61,6 +66,9 @@ const fn hint(code: i64) -> Option<&'static str> {
             "this user may have reached the marketing-message limit, and Meta doesn't deliver \
              marketing messages to US users; otherwise wait at least 24 hours before resending, \
              because repeated attempts can block delivery to this user for up to 24 hours",
+        ),
+        131_215 => Some(
+            "the Groups API needs an Official Business Account; check with paloma number oba get",
         ),
         131_061 => Some(
             "templates with a max price can't be sent through /messages; use paloma send template \
@@ -136,7 +144,9 @@ mod tests {
 
     #[test]
     fn throttling_codes_exit_4_whatever_the_status() {
-        for code in [4, 80_007, 130_429, 131_048, 131_056, 131_064, 133_016] {
+        for code in [
+            4, 80_007, 130_429, 131_048, 131_056, 131_064, 131_208, 133_016,
+        ] {
             for status in [400, 403, 429, 500] {
                 let e = map_error(status, &body(code, "slow"));
                 assert_eq!(e.exit_code().code(), 4, "#{code} with {status}");
@@ -166,13 +176,23 @@ mod tests {
 
     #[test]
     fn integrity_and_opt_out_codes_exit_6() {
-        for code in [368, 130_497, 131_031, 131_050] {
+        for code in [368, 130_497, 131_031, 131_050, 131_207, 131_214, 131_215] {
             assert_eq!(
                 map_error(400, &body(code, "x")).exit_code().code(),
                 6,
                 "#{code}"
             );
         }
+    }
+
+    #[test]
+    fn a_suspended_group_is_a_policy_block_despite_its_403() {
+        assert_eq!(map_error(403, &body(131_207, "x")).exit_code().code(), 6);
+        assert!(
+            map_error(400, &body(131_215, "x"))
+                .to_string()
+                .contains("number oba get")
+        );
     }
 
     #[test]

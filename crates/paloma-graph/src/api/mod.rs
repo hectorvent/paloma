@@ -9,6 +9,7 @@ pub mod calling;
 pub mod commerce;
 pub mod conversational_automation;
 pub mod flows;
+pub mod groups;
 pub mod media;
 pub mod message_history;
 pub mod messages;

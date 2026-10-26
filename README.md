@@ -286,6 +286,7 @@ error: text body is 5000 chars; max is 4096        # exit 5
 | `profile` | get · set · photo |
 | `account` | get · set · limits · health · activities · subscribed-apps · billing-currency · analytics · users · welcome-sequence |
 | `block` | add · remove · list |
+| `group` | create · list · get · set · delete · invite · members · requests · pin · unpin |
 | `qr` | create · list · get · update · delete |
 | `automation` | get · set · bot |
 | `commerce` | get · set |
@@ -322,7 +323,7 @@ Then run `paloma configure` and you're ready. Full walkthrough:
 ## Documentation
 
 - **Guides:** [Installation](docs/installation.md) · [Getting started](docs/getting-started.md) · [Configuration](docs/configuration.md) · [Authentication](docs/authentication.md) · [Global flags](docs/global-flags.md) · [Scripting](docs/scripting.md) · [Billing currency](docs/billing-currency.md)
-- **Commands:** [send](docs/commands/send.md) · [template](docs/commands/template.md) · [media](docs/commands/media.md) · [message](docs/commands/message.md) · [calling](docs/commands/calling.md) · [flow](docs/commands/flow.md) · [webhook](docs/commands/webhook.md) · [number](docs/commands/number.md) · [account](docs/commands/account.md) · [profile](docs/commands/profile.md) · [block](docs/commands/block.md) · [commerce](docs/commands/commerce.md) · [qr](docs/commands/qr.md) · [automation](docs/commands/automation.md) · [auth](docs/commands/auth.md) · [config](docs/commands/config.md) · [link](docs/commands/link.md) · [completion](docs/commands/completion.md)
+- **Commands:** [send](docs/commands/send.md) · [template](docs/commands/template.md) · [media](docs/commands/media.md) · [message](docs/commands/message.md) · [calling](docs/commands/calling.md) · [flow](docs/commands/flow.md) · [webhook](docs/commands/webhook.md) · [number](docs/commands/number.md) · [account](docs/commands/account.md) · [profile](docs/commands/profile.md) · [block](docs/commands/block.md) · [group](docs/commands/group.md) · [commerce](docs/commands/commerce.md) · [qr](docs/commands/qr.md) · [automation](docs/commands/automation.md) · [auth](docs/commands/auth.md) · [config](docs/commands/config.md) · [link](docs/commands/link.md) · [completion](docs/commands/completion.md)
 - **Setup as code:** [export / apply / diff](docs/commands/manifests.md)
 - **Project:** [Architecture](docs/architecture.md) · [Contributing](CONTRIBUTING.md)
 
