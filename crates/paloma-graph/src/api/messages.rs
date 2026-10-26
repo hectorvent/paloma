@@ -104,6 +104,12 @@ fn envelope(to: &str, kind: &str, reply_to: Option<&str>, content: impl Serializ
     Value::Object(m)
 }
 
+/// Address a built message to a group: its `to` holds the group id.
+pub fn for_group(mut payload: Value) -> Value {
+    payload["recipient_type"] = "group".into();
+    payload
+}
+
 pub fn text(to: &str, body: &str, preview_url: bool, reply_to: Option<&str>) -> Value {
     envelope(
         to,

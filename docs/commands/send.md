@@ -669,6 +669,23 @@ own, Paloma adds it. A value in the payload always wins, including the deprecate
 
 ---
 
+## Sending to a group
+
+`send text`, `send template` and the media commands (`image`, `document`, `audio`, `video`,
+`sticker`) take `--group`, which treats the recipient as a group ID from
+[`paloma group`](group.md).
+
+```bash
+paloma send text "$GROUP_ID" 'Hello everyone' --group
+paloma send image "$GROUP_ID" --link https://example.com/a.jpg --group
+paloma send template "$GROUP_ID" order_ready --lang en_US --group
+```
+
+The 24-hour check doesn't apply, because that window is per customer. Templates always go through
+`/messages`, the route Meta documents for groups, so `--via marketing` exits `5` and no category
+lookup happens. Meta supports text and media templates here, and Cloud API can't send to a group
+that has only one member (#131020).
+
 ## Compliance: the 24-hour window
 
 Outside the 24-hour customer-service window, non-template sends are subject to a

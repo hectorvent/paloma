@@ -14113,3 +14113,75 @@ async fn group_set_uploads_a_photo_as_multipart() {
         .assert()
         .success();
 }
+
+#[tokio::test]
+async fn sends_to_a_group_address_the_group() {
+    for (args, content) in [
+        (
+            vec!["send", "text", GROUP, "Hello", "--group", "--strict"],
+            json!({"type":"text","text":{"preview_url":false,"body":"Hello"}}),
+        ),
+        (
+            vec!["send", "image", GROUP, "--id", "77", "--group"],
+            json!({"type":"image","image":{"id":"77"}}),
+        ),
+        (
+            vec![
+                "send", "template", GROUP, "order", "--lang", "en_US", "--group",
+            ],
+            json!({"type":"template","template":{"name":"order","language":{"code":"en_US"}}}),
+        ),
+    ] {
+        let graph = MockServer::start().await;
+        let home = TempDir::new().unwrap();
+        let mut expected =
+            json!({"messaging_product":"whatsapp","recipient_type":"group","to":GROUP});
+        for (key, value) in content.as_object().unwrap() {
+            expected[key] = value.clone();
+        }
+        Mock::given(method("POST"))
+            .and(path("/v26.0/111/messages"))
+            .and(body_json(expected))
+            .respond_with(
+                ResponseTemplate::new(200).set_body_json(json!({"messages":[{"id":"wamid.g"}]})),
+            )
+            .expect(1)
+            .mount(&graph)
+            .await;
+        paloma(Some(&graph), &home)
+            .env("PALOMA_PHONE_NUMBER_ID", "111")
+            .args(&args)
+            .args(["-q"])
+            .assert()
+            .success()
+            .stdout("wamid.g\n");
+    }
+}
+
+#[tokio::test]
+async fn group_sends_reject_bad_ids_and_the_marketing_route() {
+    let graph = MockServer::start().await;
+    let home = TempDir::new().unwrap();
+    for args in [
+        vec!["send", "text", "../x", "Hello", "--group"],
+        vec!["send", "image", "../x", "--id", "77", "--group"],
+        vec![
+            "send",
+            "template",
+            GROUP,
+            "order",
+            "--lang",
+            "en_US",
+            "--group",
+            "--via",
+            "marketing",
+        ],
+    ] {
+        paloma(Some(&graph), &home)
+            .args(&args)
+            .assert()
+            .code(5)
+            .stdout("");
+    }
+    assert!(graph.received_requests().await.unwrap().is_empty());
+}

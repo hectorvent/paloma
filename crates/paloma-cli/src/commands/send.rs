@@ -110,6 +110,9 @@ impl Policy {
 pub struct Text {
     /// Recipient (E.164 number or business-scoped user ID).
     to: String,
+    /// Treat the recipient as a group ID (see `paloma group`).
+    #[arg(long)]
+    group: bool,
     /// Message body.
     #[arg(required_unless_present = "body_file", conflicts_with = "body_file")]
     body: Option<String>,
@@ -134,6 +137,9 @@ pub struct Template {
     /// Template language code, e.g. en_US.
     #[arg(long)]
     lang: String,
+    /// Treat the recipient as a group ID (see `paloma group`).
+    #[arg(long)]
+    group: bool,
     /// Select the endpoint: auto looks up the latest category; explicit routes skip lookup.
     #[arg(long, value_enum, default_value = "auto")]
     via: TemplateVia,
@@ -196,6 +202,9 @@ impl TemplateVia {
 pub struct Media {
     /// Recipient (E.164 number or business-scoped user ID).
     to: String,
+    /// Treat the recipient as a group ID (see `paloma group`).
+    #[arg(long)]
+    group: bool,
     /// Upload this local file first, then send it.
     #[arg(long)]
     file: Option<PathBuf>,
@@ -735,18 +744,31 @@ impl SendCommand {
     pub async fn run(self, app: &App) -> Result<()> {
         match self {
             Self::Text(a) => {
-                validate::recipient(&a.to)?;
+                check_to(&a.to, a.group)?;
                 let body = match &a.body_file {
                     Some(path) => read_file(path)?,
                     None => a.body.clone().unwrap_or_default(),
                 };
                 validate::text_body(&body)?;
                 let reply_to = a.reply.id()?;
-                a.policy.enforce(&a.to)?;
-                dispatch(app, messages::text(&a.to, &body, a.preview_url, reply_to)).await
+                if !a.group {
+                    a.policy.enforce(&a.to)?;
+                }
+                let payload = messages::text(&a.to, &body, a.preview_url, reply_to);
+                dispatch(app, addressed(payload, a.group)).await
             }
             Self::Template(a) => {
-                validate::recipient(&a.to)?;
+                check_to(&a.to, a.group)?;
+                // Meta documents group sends only on /messages.
+                let via = match (a.group, a.via) {
+                    (false, via) => via,
+                    (true, TemplateVia::Marketing) => {
+                        return Err(Error::validation(
+                            "--group sends through /messages, so it can't use --via marketing",
+                        ));
+                    }
+                    (true, _) => TemplateVia::Cloud,
+                };
                 validate::not_blank(&a.name, "template name")?;
                 validate::not_blank(&a.lang, "--lang")?;
                 let reply_to = a.reply.id()?;
@@ -783,12 +805,15 @@ impl SendCommand {
                 }
                 template_routing::send(
                     app,
-                    messages::template_with_components(
-                        &a.to, &a.name, &a.lang, components, reply_to,
+                    addressed(
+                        messages::template_with_components(
+                            &a.to, &a.name, &a.lang, components, reply_to,
+                        ),
+                        a.group,
                     ),
                     &a.name,
                     &a.lang,
-                    a.via,
+                    via,
                 )
                 .await
             }
@@ -1714,7 +1739,7 @@ fn parse_sections(specs: &[String]) -> Result<Vec<Section>> {
 }
 
 async fn send_media(app: &App, kind: MediaKind, a: Media, voice: bool) -> Result<()> {
-    validate::recipient(&a.to)?;
+    check_to(&a.to, a.group)?;
     if a.caption.is_some() && !kind.supports_caption() {
         return Err(Error::usage(format!(
             "--caption is not supported for {} messages",
@@ -1748,7 +1773,9 @@ async fn send_media(app: &App, kind: MediaKind, a: Media, voice: bool) -> Result
             app.out.warn(warning);
         }
     }
-    a.policy.enforce(&a.to)?;
+    if !a.group {
+        a.policy.enforce(&a.to)?;
+    }
 
     let phone = app.ctx()?.require_phone_number_id()?.to_owned();
     let source = match (&file, a.id, a.link) {
@@ -1763,7 +1790,7 @@ async fn send_media(app: &App, kind: MediaKind, a: Media, voice: bool) -> Result
                     &options,
                 );
                 let payload = messages::with_messaging_account(
-                    payload,
+                    addressed(payload, a.group),
                     app.ctx()?.messaging_account_id.as_deref(),
                 );
                 return app.print_dry_run(&[upload, messages::send(&phone, payload)]);
@@ -1780,7 +1807,26 @@ async fn send_media(app: &App, kind: MediaKind, a: Media, voice: bool) -> Result
         (None, None, Some(link)) => MediaSource::Link(link),
         (None, None, None) => unreachable!("clap enforces one media source"),
     };
-    dispatch(app, messages::media(&a.to, kind, &source, &options)).await
+    let payload = messages::media(&a.to, kind, &source, &options);
+    dispatch(app, addressed(payload, a.group)).await
+}
+
+/// A group id takes the place of a recipient. The 24-hour window is per customer, so sends to
+/// a group skip that check.
+fn check_to(to: &str, group: bool) -> Result<()> {
+    if group {
+        validate::group_id(to)
+    } else {
+        validate::recipient(to)
+    }
+}
+
+fn addressed(payload: Value, group: bool) -> Value {
+    if group {
+        messages::for_group(payload)
+    } else {
+        payload
+    }
 }
 
 /// POST the message and print the response with its wamid as the primary id.
