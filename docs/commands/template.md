@@ -155,6 +155,10 @@ of this and exits 5.
 
 ### What needs `--file`
 
+A [max price](https://developers.facebook.com/documentation/business-messaging/whatsapp/marketing-messages/pricing)
+also goes in the file, as `optimization_spec`. Max price is in open beta, so it has no typed flags
+yet. `paloma account reach` estimates deliveries at different prices.
+
 Inline flags don't cover authentication templates' footers and one-time password buttons, so
 `AUTHENTICATION` with a header, footer or button exits 5. Also use `--file` for carousels,
 limited-time offers, location headers, and voice call, flow, catalog and other button types.

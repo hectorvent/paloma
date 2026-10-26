@@ -242,6 +242,21 @@ paloma account analytics --pricing --start 2026-11-01 --end 2026-11-02 --dry-run
 The deprecated `conversation_analytics` field is not exposed. Template and calling
 analytics belong to their own resources and are outside this command.
 
+## `paloma account reach`
+
+Estimates marketing deliveries and costs at several max prices, for planning
+[max price](https://developers.facebook.com/documentation/business-messaging/whatsapp/marketing-messages/pricing)
+templates. It reads historical data and sends nothing.
+
+```bash
+paloma account reach --country IN --interval L7D
+paloma account reach --country IN --country BR --interval L28D -o json
+```
+
+`--country` is an uppercase ISO 3166-1 alpha-2 code and repeats. `--interval` is `L1D`, `L7D`,
+`L14D` or `L28D`. Amounts are per 1,000 deliveries in the smallest unit of the account's currency,
+reported as `waba_currency` in JSON. Meta says these are planning estimates, not guarantees.
+
 ## Assigned users and system users
 
 ```bash

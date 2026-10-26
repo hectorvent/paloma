@@ -5,11 +5,70 @@ use crate::{
     app::{App, no_id},
     commands::read_json,
 };
-use clap::{Args, Subcommand};
+use clap::{Args, Subcommand, ValueEnum};
 use paloma_core::{Error, Result, validate};
 use paloma_graph::{api::account, paging};
 use serde_json::{Value, json};
 use std::path::{Path, PathBuf};
+
+/// The lookback for Meta's reach estimate. Its names are Meta's, also exposed by clap.
+#[derive(Debug, Clone, Copy, ValueEnum)]
+pub enum ReachInterval {
+    #[value(name = "L1D")]
+    OneDay,
+    #[value(name = "L7D")]
+    SevenDays,
+    #[value(name = "L14D")]
+    FourteenDays,
+    #[value(name = "L28D")]
+    TwentyEightDays,
+}
+
+impl ReachInterval {
+    const fn api(self) -> &'static str {
+        match self {
+            Self::OneDay => "L1D",
+            Self::SevenDays => "L7D",
+            Self::FourteenDays => "L14D",
+            Self::TwentyEightDays => "L28D",
+        }
+    }
+}
+
+#[derive(Debug, Args)]
+pub struct Reach {
+    /// Destination country as an ISO 3166-1 alpha-2 code; repeatable.
+    #[arg(long = "country", required = true, value_name = "CC")]
+    countries: Vec<String>,
+    /// How much history the estimate draws on.
+    #[arg(long, value_enum)]
+    interval: ReachInterval,
+}
+
+impl Reach {
+    pub async fn run(self, app: &App) -> Result<()> {
+        self.countries
+            .iter()
+            .try_for_each(|c| validate::country_code(c))?;
+        let waba = app.ctx()?.require_waba_id()?.to_owned();
+        let req = account::reach_estimate(&waba, &self.countries, self.interval.api());
+        let Some(response) = app.send(&req).await? else {
+            return Ok(());
+        };
+        app.out.emit(&Output::response(&response)?.table(
+            "/estimates",
+            &[
+                "bid_amount",
+                "users",
+                "deliveries_lower_bound",
+                "deliveries_upper_bound",
+                "cost_lower_bound",
+                "cost_upper_bound",
+            ],
+        ));
+        Ok(())
+    }
+}
 
 #[derive(Debug, Args)]
 pub struct Users {

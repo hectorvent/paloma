@@ -14185,3 +14185,124 @@ async fn group_sends_reject_bad_ids_and_the_marketing_route() {
     }
     assert!(graph.received_requests().await.unwrap().is_empty());
 }
+
+#[tokio::test]
+async fn account_reach_serializes_the_targeting_and_lists_estimates() {
+    let graph = MockServer::start().await;
+    let home = TempDir::new().unwrap();
+    Mock::given(method("GET"))
+        .and(path("/v26.0/222/reachestimate"))
+        .and(query_param(
+            "targeting_spec",
+            r#"{"geo_locations":{"countries":["IN","BR"]}}"#,
+        ))
+        .and(query_param("date_interval", "L7D"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "waba_currency":"USD",
+            "estimates":[{"bid_amount":400,"users":1000,"deliveries_lower_bound":500,
+                "deliveries_upper_bound":570,"cost_lower_bound":389.74,"cost_upper_bound":390.74}],
+        })))
+        .mount(&graph)
+        .await;
+    let args = [
+        "account",
+        "reach",
+        "--country",
+        "IN",
+        "--country",
+        "BR",
+        "--interval",
+        "L7D",
+    ];
+    paloma(Some(&graph), &home)
+        .args(args)
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("BID AMOUNT").and(predicate::str::contains("389.74")));
+    paloma(Some(&graph), &home)
+        .args(args)
+        .args(["-o", "json"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("waba_currency"));
+    paloma(Some(&graph), &home)
+        .env_remove("PALOMA_WABA_ID")
+        .args([
+            "account",
+            "reach",
+            "--country",
+            "india",
+            "--interval",
+            "L7D",
+        ])
+        .assert()
+        .code(5);
+}
+
+#[tokio::test]
+async fn marketing_options_go_on_the_marketing_route_only() {
+    let graph = MockServer::start().await;
+    let home = TempDir::new().unwrap();
+    Mock::given(method("POST"))
+        .and(path("/v26.0/111/marketing_messages"))
+        .and(body_json(json!({
+            "messaging_product":"whatsapp","recipient_type":"individual","to":"15551234567",
+            "type":"template","template":{"name":"sale","language":{"code":"en_US"}},
+            "product_policy":"STRICT","message_activity_sharing":false,
+        })))
+        .respond_with(
+            ResponseTemplate::new(200).set_body_json(json!({"messages":[{"id":"wamid.m"}]})),
+        )
+        .expect(1)
+        .mount(&graph)
+        .await;
+    let base = ["send", "template", "15551234567", "sale", "--lang", "en_US"];
+    paloma(Some(&graph), &home)
+        .env("PALOMA_PHONE_NUMBER_ID", "111")
+        .args(base)
+        .args([
+            "--via",
+            "marketing",
+            "--product-policy",
+            "strict",
+            "--message-activity-sharing",
+            "false",
+            "-q",
+        ])
+        .assert()
+        .success()
+        .stdout("wamid.m\n");
+    for route in [vec![], vec!["--via", "cloud"]] {
+        paloma(Some(&graph), &home)
+            .args(base)
+            .args(route)
+            .args(["--product-policy", "strict"])
+            .assert()
+            .code(5)
+            .stderr(predicate::str::contains("--via marketing"));
+    }
+}
+
+#[test]
+fn template_files_can_carry_a_max_price() {
+    let home = TempDir::new().unwrap();
+    let file = home.path().join("sale.json");
+    std::fs::write(
+        &file,
+        json!({"name":"sale","category":"MARKETING","language":"en",
+            "components":[{"type":"BODY","text":"Sale"}],
+            "optimization_spec":{"bid_amount":400,"bid_strategy":"LOWEST_COST_WITH_BID_CAP"}})
+        .to_string(),
+    )
+    .unwrap();
+    let out = paloma(None, &home)
+        .args(["template", "create", "--dry-run", "-o", "json", "--file"])
+        .arg(&file)
+        .output()
+        .unwrap();
+    assert!(out.status.success(), "{out:?}");
+    assert_eq!(
+        stdout_json(&out)["body"]["optimization_spec"]["bid_amount"],
+        400
+    );
+}

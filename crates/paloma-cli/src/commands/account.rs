@@ -41,6 +41,8 @@ pub enum AccountCommand {
     },
     /// Update account settings.
     Set(SetArgs),
+    /// Estimate marketing deliveries and costs at several max prices.
+    Reach(administration::Reach),
     /// List assigned users or WABA system users.
     Users(administration::Users),
     /// Manage click-to-WhatsApp welcome message sequences.
@@ -176,6 +178,9 @@ impl SetArgs {
 
 impl AccountCommand {
     pub async fn run(self, app: &App) -> Result<()> {
+        if let Self::Reach(command) = self {
+            return command.run(app).await;
+        }
         if let Self::Users(command) = self {
             return command.run(app).await;
         }
@@ -249,7 +254,8 @@ impl AccountCommand {
                 )
                 .await
             }
-            Self::Users(_)
+            Self::Reach(_)
+            | Self::Users(_)
             | Self::WelcomeSequence(_)
             | Self::Set(_)
             | Self::BillingCurrency(_)

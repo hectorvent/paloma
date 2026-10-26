@@ -143,6 +143,12 @@ pub struct Template {
     /// Select the endpoint: auto looks up the latest category; explicit routes skip lookup.
     #[arg(long, value_enum, default_value = "auto")]
     via: TemplateVia,
+    /// With --via marketing: whether Meta may fall back to Cloud API if onboarding is incomplete.
+    #[arg(long, value_enum)]
+    product_policy: Option<ProductPolicy>,
+    /// With --via marketing: share this message's activity with Meta, overriding the account.
+    #[arg(long, action = clap::ArgAction::Set, value_name = "BOOL")]
+    message_activity_sharing: Option<bool>,
     /// Body variable values, in order ({{1}}, {{2}}, …); repeatable.
     #[arg(long = "body-var", value_name = "VALUE", allow_hyphen_values = true)]
     body_vars: Vec<String>,
@@ -178,6 +184,23 @@ pub struct Template {
     components_file: Option<PathBuf>,
     #[command(flatten)]
     reply: Reply,
+}
+
+#[derive(Debug, Clone, Copy, ValueEnum)]
+enum ProductPolicy {
+    /// Send through Cloud API when marketing onboarding is incomplete.
+    CloudApiFallback,
+    /// Never fall back.
+    Strict,
+}
+
+impl ProductPolicy {
+    const fn api(self) -> &'static str {
+        match self {
+            Self::CloudApiFallback => "CLOUD_API_FALLBACK",
+            Self::Strict => "STRICT",
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, ValueEnum)]
@@ -759,6 +782,14 @@ impl SendCommand {
             }
             Self::Template(a) => {
                 check_to(&a.to, a.group)?;
+                // Auto might route to /messages, which doesn't take these, so ask for the route.
+                if (a.product_policy.is_some() || a.message_activity_sharing.is_some())
+                    && !matches!(a.via, TemplateVia::Marketing)
+                {
+                    return Err(Error::validation(
+                        "--product-policy and --message-activity-sharing need --via marketing",
+                    ));
+                }
                 // Meta documents group sends only on /messages.
                 let via = match (a.group, a.via) {
                     (false, via) => via,
@@ -805,11 +836,15 @@ impl SendCommand {
                 }
                 template_routing::send(
                     app,
-                    addressed(
-                        messages::template_with_components(
-                            &a.to, &a.name, &a.lang, components, reply_to,
+                    messages::with_marketing_options(
+                        addressed(
+                            messages::template_with_components(
+                                &a.to, &a.name, &a.lang, components, reply_to,
+                            ),
+                            a.group,
                         ),
-                        a.group,
+                        a.product_policy.map(ProductPolicy::api),
+                        a.message_activity_sharing,
                     ),
                     &a.name,
                     &a.lang,

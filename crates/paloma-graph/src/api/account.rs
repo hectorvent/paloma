@@ -152,6 +152,15 @@ fn health_details(entity: &Value) -> String {
     info.chain(errors).collect::<Vec<_>>().join("; ")
 }
 
+/// Estimated deliveries and costs at several max prices. Graph takes the targeting as
+/// serialized JSON.
+pub fn reach_estimate(waba: &str, countries: &[String], interval: &str) -> Request {
+    let targeting = json!({ "geo_locations": { "countries": countries } });
+    Request::get(format!("{waba}/reachestimate"))
+        .query("targeting_spec", targeting.to_string())
+        .query("date_interval", interval)
+}
+
 pub fn users(
     waba: &str,
     system: bool,

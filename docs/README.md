@@ -41,7 +41,7 @@ New here? Start with [Installation](installation.md) → [Getting started](getti
 | `paloma link` | create (offline) | [commands/link.md](commands/link.md) |
 | `paloma export` · `apply` · `diff` | your WhatsApp setup as code (declarative YAML: Account, Calling, Profile, Number, PhoneSettings, Commerce, ConversationalAutomation, QrCode, Template, Webhook) | [commands/manifests.md](commands/manifests.md) |
 | `paloma completion` | bash · zsh · fish · powershell · elvish | [commands/completion.md](commands/completion.md) |
-| `paloma account` | get · set · limits · health · activities · subscribed-apps · billing-currency · analytics · users · welcome-sequence | [commands/account.md](commands/account.md) |
+| `paloma account` | get · set · limits · health · activities · subscribed-apps · billing-currency · analytics · reach · users · welcome-sequence | [commands/account.md](commands/account.md) |
 | `paloma qr` | create · list · get · update · delete | [commands/qr.md](commands/qr.md) |
 | `paloma automation` | get · set · bot | [commands/automation.md](commands/automation.md) |
 

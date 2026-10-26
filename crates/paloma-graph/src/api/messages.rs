@@ -46,6 +46,21 @@ pub fn send_template(phone: &str, payload: Value, endpoint: TemplateEndpoint) ->
     Request::post(format!("{phone}/{}", endpoint.edge())).json(payload)
 }
 
+/// Options only `/marketing_messages` takes, at the top level of the message.
+pub fn with_marketing_options(
+    mut payload: Value,
+    product_policy: Option<&str>,
+    activity_sharing: Option<bool>,
+) -> Value {
+    if let Some(policy) = product_policy {
+        payload["product_policy"] = policy.into();
+    }
+    if let Some(sharing) = activity_sharing {
+        payload["message_activity_sharing"] = sharing.into();
+    }
+    payload
+}
+
 /// An offline plan cannot know the category. Never execute this placeholder request.
 pub fn template_routing_preview(phone: &str, payload: Value) -> Request {
     Request::post(format!(

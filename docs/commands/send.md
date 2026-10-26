@@ -669,6 +669,22 @@ own, Paloma adds it. A value in the payload always wins, including the deprecate
 
 ---
 
+## Marketing Messages options
+
+With `--via marketing`, `send template` also takes two options that only `/marketing_messages`
+accepts. Any other route exits `5`, including the default `--via auto`, which could pick
+`/messages`.
+
+| Flag | Meaning |
+|------|---------|
+| `--product-policy <cloud-api-fallback\|strict>` | Whether Meta may send through Cloud API when onboarding is incomplete. Meta defaults to falling back |
+| `--message-activity-sharing <true\|false>` | Whether to share this message's activity with Meta, overriding the account's setting |
+
+```bash
+paloma send template 15551234567 sale --lang en_US --via marketing \
+  --product-policy strict --message-activity-sharing false
+```
+
 ## Sending to a group
 
 `send text`, `send template` and the media commands (`image`, `document`, `audio`, `video`,
