@@ -41,12 +41,34 @@ pub struct PricingFilters {
     pub dimensions: Vec<String>,
 }
 
+/// Filters only call analytics takes. Empty means Meta's default of everything.
+#[derive(Debug, Default)]
+pub struct CallFilters {
+    pub directions: Vec<&'static str>,
+    pub dimensions: Vec<&'static str>,
+    pub metric_types: Vec<&'static str>,
+}
+
+/// Call analytics share the pricing API's granularity names.
+pub fn calls(account: &str, query: &Query, filters: &CallFilters) -> Request {
+    let mut fields = base_for("call_analytics", query, true);
+    append(&mut fields, "country_codes", &query.country_codes);
+    append(&mut fields, "directions", &filters.directions);
+    append(&mut fields, "dimensions", &filters.dimensions);
+    append(&mut fields, "metric_types", &filters.metric_types);
+    Request::get(account).query("fields", fields)
+}
+
 fn base(query: &Query, pricing: bool) -> String {
     let field = if pricing {
         "pricing_analytics"
     } else {
         "analytics"
     };
+    base_for(field, query, pricing)
+}
+
+fn base_for(field: &str, query: &Query, pricing: bool) -> String {
     let mut fields = format!(
         "{field}.start({}).end({}).granularity({})",
         query.start,

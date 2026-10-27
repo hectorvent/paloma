@@ -375,6 +375,26 @@ fn interrupted(error: &Error) -> bool {
         )
 }
 
+/// A report boundary or date: UNIX seconds, or `YYYY-MM-DD` at midnight UTC.
+pub fn timestamp(value: &str, flag: &str) -> Result<u64> {
+    let invalid = || {
+        Error::validation(format!(
+            "{flag} must be nonnegative UNIX seconds or a valid YYYY-MM-DD date (UTC)"
+        ))
+    };
+    if !value.is_empty() && value.bytes().all(|b| b.is_ascii_digit()) {
+        return value.parse().map_err(|_| invalid());
+    }
+    if value.len() != 10 {
+        return Err(invalid());
+    }
+    let parsed = humantime::parse_rfc3339(&format!("{value}T00:00:00Z")).map_err(|_| invalid())?;
+    parsed
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .map_err(|_| invalid())
+}
+
 /// Read a whole file for a `--file` style flag, with a validation error naming it.
 pub fn read_file(path: &std::path::Path) -> Result<String> {
     paloma_core::validate::readable_file(path)?;

@@ -268,3 +268,7 @@ pub const MAX_GROUP_PHOTO_BYTES: u64 = 5 * MB;
 /// How long a message can stay pinned in a group, in days.
 pub const MIN_PIN_DAYS: u32 = 1;
 pub const MAX_PIN_DAYS: u32 = 30;
+
+/// Call hours: opening periods per weekday, and holiday overrides.
+pub const MAX_CALL_HOURS_PER_DAY: usize = 2;
+pub const MAX_CALL_HOLIDAYS: usize = 20;

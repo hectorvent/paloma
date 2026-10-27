@@ -279,7 +279,7 @@ error: text body is 5000 chars; max is 4096        # exit 5
 | `template` | list · status · get · create · submit · watch · edit · delete · namespace · archive · unarchive · unpause · library · compare · migrate · preview · upsert · group · analytics |
 | `media` | upload · get · download · delete |
 | `message` | read · typing · history |
-| `calling` | status · enable · disable · set · sip · codecs |
+| `calling` | status · enable · disable · set · sip · codecs · hours · permission · analytics |
 | `flow` | list · get · create · update · publish · deprecate · delete · assets · migrate · key |
 | `webhook` | get · subscribe · unsubscribe · fields · version · listen · verify-url · simulate |
 | `number` | list · get · register · deregister · set-pin · quality · health · request-code · verify-code · add · set-name · search-visibility · username · contacts · settings · oba · compliance |

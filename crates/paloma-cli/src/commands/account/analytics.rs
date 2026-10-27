@@ -8,7 +8,6 @@ use clap::{Args, ValueEnum};
 use paloma_core::{Error, Result, validate};
 use paloma_graph::api::analytics::{self, PricingFilters, Query};
 use serde_json::{Value, json};
-use std::time::UNIX_EPOCH;
 
 const MESSAGE_COLUMNS: &[&str] = &["start", "end", "sent", "delivered"];
 const PRICING_COLUMNS: &[&str] = &[
@@ -134,29 +133,10 @@ fn api_values(values: &[impl ValueEnum]) -> Vec<String> {
         .collect()
 }
 
-fn timestamp(value: &str, flag: &str) -> Result<u64> {
-    let invalid = || {
-        Error::validation(format!(
-            "{flag} must be nonnegative UNIX seconds or a valid YYYY-MM-DD date (UTC)"
-        ))
-    };
-    if !value.is_empty() && value.bytes().all(|b| b.is_ascii_digit()) {
-        return value.parse().map_err(|_| invalid());
-    }
-    if value.len() != 10 {
-        return Err(invalid());
-    }
-    let parsed = humantime::parse_rfc3339(&format!("{value}T00:00:00Z")).map_err(|_| invalid())?;
-    parsed
-        .duration_since(UNIX_EPOCH)
-        .map(|d| d.as_secs())
-        .map_err(|_| invalid())
-}
-
 impl Analytics {
     pub async fn run(self, app: &App) -> Result<()> {
-        let start = timestamp(&self.start, "--start")?;
-        let end = timestamp(&self.end, "--end")?;
+        let start = crate::commands::timestamp(&self.start, "--start")?;
+        let end = crate::commands::timestamp(&self.end, "--end")?;
         validate::analytics_range(start, end)?;
         self.phone_number
             .iter()

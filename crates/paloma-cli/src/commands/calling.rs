@@ -1,3 +1,6 @@
+mod hours;
+mod insights;
+
 use std::path::PathBuf;
 
 use clap::{Args, Subcommand, ValueEnum};
@@ -29,6 +32,16 @@ pub enum CallingCommand {
     /// Configure additional audio codecs.
     #[command(subcommand)]
     Codecs(Codecs),
+    /// Show or change the hours when people can call you.
+    #[command(subcommand)]
+    Hours(hours::Hours),
+    /// Show whether a person can be called, and the remaining limits.
+    Permission {
+        /// E.164 number or business-scoped user ID.
+        user: String,
+    },
+    /// Report call counts, costs and durations.
+    Analytics(insights::Analytics),
 }
 
 #[derive(Debug, Clone, Copy, ValueEnum)]
@@ -112,8 +125,18 @@ pub enum Codecs {
 
 impl CallingCommand {
     pub async fn run(self, app: &App) -> Result<()> {
+        // These validate their own input before touching context.
+        let command = match self {
+            Self::Hours(command) => return command.run(app).await,
+            Self::Permission { user } => return insights::permission(app, &user).await,
+            Self::Analytics(args) => return args.run(app).await,
+            other => other,
+        };
         let phone = app.ctx()?.require_phone_number_id()?.to_owned();
-        let calling = match self {
+        let calling = match command {
+            Self::Hours(_) | Self::Permission { .. } | Self::Analytics(_) => {
+                unreachable!("handled before context resolution")
+            }
             Self::Status { sip_credentials } => {
                 return app
                     .send_and_emit(&calling::get(&phone, sip_credentials), no_id)
