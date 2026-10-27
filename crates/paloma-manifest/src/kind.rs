@@ -22,6 +22,9 @@ pub struct KindPlan {
     pub requests: Vec<Request>,
     /// What `apply` must confirm before writing, when the plan is disruptive.
     pub confirm: Option<&'static str>,
+    /// Why `apply` can't make this change, known without spending the call. `diff` still
+    /// reports the drift, so a declared state Meta won't accept stays visible.
+    pub refusal: Option<String>,
 }
 
 impl KindPlan {
@@ -181,7 +184,7 @@ pub(crate) fn singleton_plan(
         changes,
         preview: Some(preview),
         requests: vec![request],
-        confirm: None,
+        ..KindPlan::default()
     }
 }
 

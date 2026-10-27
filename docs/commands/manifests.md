@@ -159,6 +159,9 @@ compared whole, since Meta replaces them wholesale). Read-only, Meta-managed fie
     Meta rewrites on read (an uploaded header handle comes back as a CDN URL). Fields
     Meta returns that you didn't declare are ignored, and `type`/`format` match in any
     case.
+  - An edit sends only what changed. Meta can't change an approved template's category and
+    only edits `APPROVED`, `REJECTED` or `PAUSED` templates, so `apply` exits `5` with nothing
+    written if a document asks for either. `diff` still reports it as drift.
   - With the **`body`** shorthand, only `category` and the BODY text are compared.
     Meta's edit replaces every component, so a shorthand edit resends the live
     header, footer and buttons unchanged around the new BODY. A template with a

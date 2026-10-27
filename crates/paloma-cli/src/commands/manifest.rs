@@ -102,6 +102,9 @@ impl Export {
 impl Apply {
     pub async fn run(self, app: &App) -> Result<()> {
         let plans = plans(app, &self.file).await?;
+        if let Some(refusal) = plans.iter().find_map(|(_, plan)| plan.refusal.clone()) {
+            return Err(Error::validation(refusal));
+        }
         // Ask before the first write, so a refusal can't land halfway through the manifest.
         let mut approved = Vec::with_capacity(plans.len());
         for (_, plan) in &plans {

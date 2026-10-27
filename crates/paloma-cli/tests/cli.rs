@@ -794,7 +794,6 @@ async fn template_apply_edits_with_the_declared_components() {
     Mock::given(method("POST"))
         .and(path("/v26.0/tpl-1"))
         .and(body_json(json!({
-            "category": "MARKETING",
             "components": [
                 { "type": "header", "format": "image", "example": { "header_handle": ["4::upload-handle"] } },
                 { "type": "BODY", "text": "Hi {{1}}" },
@@ -856,7 +855,6 @@ async fn template_shorthand_edit_keeps_the_other_live_components() {
     Mock::given(method("POST"))
         .and(path("/v26.0/tpl-2"))
         .and(body_json(json!({
-            "category": "UTILITY",
             "components": [
                 { "type": "HEADER", "format": "TEXT", "text": "Order update" },
                 { "type": "BODY", "text": "Your order is on its way." },
@@ -880,16 +878,13 @@ async fn template_shorthand_edit_keeps_the_other_live_components() {
 #[tokio::test(flavor = "multi_thread")]
 /// Meta only allows category edits on REJECTED or PAUSED templates
 /// (`templates/template-management.md`), so the fixture is a rejected one.
-async fn template_shorthand_category_change_keeps_every_live_component() {
+async fn template_category_change_sends_only_the_category() {
     let graph = MockServer::start().await;
-    mock_notice(&graph, "TEXT", "REJECTED").await;
-    let live = live_notice("TEXT", "REJECTED");
+    // Media would block a shorthand edit of the components, but they aren't being edited.
+    mock_notice(&graph, "IMAGE", "REJECTED").await;
     Mock::given(method("POST"))
         .and(path("/v26.0/tpl-2"))
-        .and(body_json(json!({
-            "category": "MARKETING",
-            "components": live["data"][0]["components"]
-        })))
+        .and(body_json(json!({ "category": "MARKETING" })))
         .respond_with(ResponseTemplate::new(200).set_body_json(json!({ "success": true })))
         .expect(1)
         .mount(&graph)
@@ -14564,4 +14559,76 @@ async fn calling_reads_and_hours_reject_bad_input_before_context_or_network() {
             .stdout("");
     }
     assert!(graph.received_requests().await.unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn apply_refuses_edits_meta_forbids_while_diff_still_reports_them() {
+    for (status, category, body, reason) in [
+        (
+            "APPROVED",
+            "MARKETING",
+            "Your order shipped.",
+            "won't change its category",
+        ),
+        ("PENDING", "UTILITY", "A new body.", "can be edited"),
+    ] {
+        let graph = MockServer::start().await;
+        mock_notice(&graph, "TEXT", status).await;
+        let home = TempDir::new().unwrap();
+        let file = shorthand_manifest(&home, category, body);
+        for extra in [&[][..], &["--dry-run"][..]] {
+            paloma(Some(&graph), &home)
+                .args(["apply", "--yes", "-f"])
+                .arg(&file)
+                .args(extra)
+                .assert()
+                .code(5)
+                .stdout("")
+                .stderr(predicate::str::contains(reason));
+        }
+        paloma(Some(&graph), &home)
+            .args(["diff", "-f"])
+            .arg(&file)
+            .assert()
+            .code(1)
+            .stderr(predicate::str::contains("drift"));
+        assert!(
+            graph
+                .received_requests()
+                .await
+                .unwrap()
+                .iter()
+                .all(|r| r.method.as_str() == "GET"),
+            "{status}"
+        );
+    }
+}
+
+#[tokio::test]
+async fn apply_writes_nothing_for_any_document_when_one_edit_is_refused() {
+    let graph = MockServer::start().await;
+    mock_notice(&graph, "TEXT", "APPROVED").await;
+    Mock::given(method("GET"))
+        .and(path("/v26.0/222"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({"name":"Old"})))
+        .mount(&graph)
+        .await;
+    let home = TempDir::new().unwrap();
+    let file = write_manifest(
+        &home,
+        "apiVersion: paloma/v1\nkind: Account\nspec:\n  name: New\n---\napiVersion: paloma/v1\nkind: Template\nspec:\n  name: notice\n  language: en_US\n  category: MARKETING\n  body: \"Your order shipped.\"\n",
+    );
+    paloma(Some(&graph), &home)
+        .args(["apply", "--yes", "-f"])
+        .arg(&file)
+        .assert()
+        .code(5);
+    assert!(
+        graph
+            .received_requests()
+            .await
+            .unwrap()
+            .iter()
+            .all(|r| r.method.as_str() == "GET")
+    );
 }

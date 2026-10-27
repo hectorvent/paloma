@@ -143,7 +143,7 @@ pub async fn plan(cx: Cx<'_>, spec: &Value) -> Result<KindPlan> {
         changes,
         preview: Some(paloma_graph::request::redact_json(&body)),
         requests: vec![phone_numbers::update(phone, body)],
-        confirm: None,
+        ..KindPlan::default()
     };
     Ok(if disruptive {
         plan.confirming("change this number's display name or search visibility")

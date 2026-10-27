@@ -11,7 +11,7 @@
 use paloma_core::{Error, Result};
 use paloma_graph::api::templates::{self, ListFilter};
 use paloma_graph::paging;
-use serde_json::{Value, json};
+use serde_json::{Map, Value, json};
 
 use crate::diff;
 use crate::kind::{Cx, KindPlan};
@@ -76,28 +76,39 @@ pub async fn plan(cx: Cx<'_>, spec: &Value) -> Result<KindPlan> {
             changes: vec![format!("create {name}/{language} (category {category})")],
             preview: Some(create_body.clone()),
             requests: vec![templates::create(waba, create_body)],
-            confirm: None,
+            ..KindPlan::default()
         });
     };
     let current_norm = normalize(&current, shorthand, Some(&desired));
     if diff::in_sync(&desired, Some(&current_norm)) {
         return Ok(KindPlan::synced());
     }
+    let category_changed =
+        spec.get("category").is_some() && desired.get("category") != current_norm.get("category");
+    let content_key = if shorthand { "body" } else { "components" };
+    let content_changed = desired.get(content_key) != current_norm.get(content_key);
+    if !category_changed && !content_changed {
+        return Ok(KindPlan::synced());
+    }
     let mut changes = component_changes(&desired, &current_norm);
     changes.push(format!("(edit resubmits '{name}/{language}' for approval)"));
-    let category = spec
-        .get("category")
-        .or_else(|| current_norm.get("category"))
-        .cloned()
-        .unwrap_or_default();
-    // An edit replaces every component, so a shorthand edit must carry the live
-    // non-BODY components forward or it would delete them.
-    let components = if shorthand {
-        shorthand_edit_components(&current, &create_body, &name, &language)?
-    } else {
-        create_body.get("components").cloned().unwrap_or_default()
-    };
-    let edit_body = json!({ "category": category, "components": components });
+    // Send only what changed: Meta's examples edit each separately, and an approved
+    // template's category can't be edited at all.
+    let mut edit_body = Map::new();
+    if category_changed {
+        edit_body.insert("category".into(), desired["category"].clone());
+    }
+    if content_changed {
+        // An edit replaces every component, so a shorthand edit must carry the live
+        // non-BODY components forward or it would delete them.
+        let components = if shorthand {
+            shorthand_edit_components(&current, &create_body, &name, &language)?
+        } else {
+            create_body.get("components").cloned().unwrap_or_default()
+        };
+        edit_body.insert("components".into(), components);
+    }
+    let edit_body = Value::Object(edit_body);
     let id = current
         .get("id")
         .and_then(Value::as_str)
@@ -106,7 +117,32 @@ pub async fn plan(cx: Cx<'_>, spec: &Value) -> Result<KindPlan> {
         changes,
         preview: Some(edit_body.clone()),
         requests: vec![templates::edit(id, edit_body)],
-        confirm: None,
+        refusal: edit_refusal(&current, &name, &language, category_changed),
+        ..KindPlan::default()
+    })
+}
+
+/// Meta's limits on edits, which a live template's status is enough to check.
+fn edit_refusal(
+    current: &Value,
+    name: &str,
+    language: &str,
+    category_changed: bool,
+) -> Option<String> {
+    let status = current.get("status").and_then(Value::as_str)?;
+    if !matches!(status, "APPROVED" | "REJECTED" | "PAUSED") {
+        return Some(format!(
+            "template {name}/{language} is {status}; only APPROVED, REJECTED or PAUSED templates can be edited"
+        ));
+    }
+    let live = current
+        .get("category")
+        .and_then(Value::as_str)
+        .unwrap_or("?");
+    (category_changed && status == "APPROVED").then(|| {
+        format!(
+            "template {name}/{language} is APPROVED, so Meta won't change its category; declare {live} or create a new template"
+        )
     })
 }
 
