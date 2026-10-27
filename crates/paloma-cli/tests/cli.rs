@@ -14306,3 +14306,20 @@ fn template_files_can_carry_a_max_price() {
         400
     );
 }
+
+#[tokio::test]
+async fn group_list_shows_none_for_an_empty_data_array() {
+    let graph = MockServer::start().await;
+    let home = TempDir::new().unwrap();
+    Mock::given(method("GET"))
+        .and(path("/v26.0/111/groups"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({"data":[]})))
+        .mount(&graph)
+        .await;
+    paloma(Some(&graph), &home)
+        .env("PALOMA_PHONE_NUMBER_ID", "111")
+        .args(["group", "list"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("(none)"));
+}

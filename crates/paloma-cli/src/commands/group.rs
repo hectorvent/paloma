@@ -246,7 +246,13 @@ async fn list(app: &App, phone: &str, a: List) -> Result<()> {
         .filter_map(|g| g.get("id").and_then(Value::as_str).map(str::to_owned))
         .collect();
     output.primary_id = (!ids.is_empty()).then(|| ids.join("\n"));
-    app.out.emit(&output.table("/data/groups", LIST_COLUMNS));
+    // With no groups, a live read returned an empty `data` array rather than `data.groups`.
+    let rows = if output.data.get("data").is_some_and(Value::is_array) {
+        "/data"
+    } else {
+        "/data/groups"
+    };
+    app.out.emit(&output.table(rows, LIST_COLUMNS));
     Ok(())
 }
 

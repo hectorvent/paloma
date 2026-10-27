@@ -1,8 +1,9 @@
 # `paloma group`
 
 Create and manage WhatsApp groups on the active phone number. Meta only offers the Groups API
-to an [Official Business Account](number.md#official-business-account-applications); without
-one, these commands exit `6`. Check with `paloma number oba get`.
+to an [Official Business Account](number.md#official-business-account-applications), and refuses
+ineligible numbers with #131215, which exits `6`. Reads such as `group list` may still answer
+without one. Check your status with `paloma number oba get`.
 
 Subscribe your app to the `group_lifecycle_update`, `group_participants_update`,
 `group_settings_update` and `group_status_update` webhook fields first, because Meta reports
