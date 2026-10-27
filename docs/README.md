@@ -30,7 +30,7 @@ New here? Start with [Installation](installation.md) → [Getting started](getti
 | `paloma number` | list · get · register · deregister · set-pin · quality · health · request-code · verify-code · add · set-name · search-visibility · username · contacts · settings · oba · compliance | [commands/number.md](commands/number.md) |
 | `paloma commerce` | get · set | [commands/commerce.md](commands/commerce.md) |
 | `paloma profile` | get · set · photo | [commands/profile.md](commands/profile.md) |
-| `paloma calling` | status · enable · disable · set · sip · codecs · hours · permission · analytics | [commands/calling.md](commands/calling.md) |
+| `paloma calling` | status · enable · disable · set · sip · codecs · voicemail · hours · permission · analytics | [commands/calling.md](commands/calling.md) |
 | `paloma webhook` | get · subscribe · unsubscribe · fields · fields available · fields set · version · version set · listen · verify-url · simulate | [commands/webhook.md](commands/webhook.md) |
 | `paloma flow` | list · get · create · update · publish · deprecate · delete · assets · migrate · key | [commands/flow.md](commands/flow.md) |
 | `paloma block` | add · remove · list | [commands/block.md](commands/block.md) |

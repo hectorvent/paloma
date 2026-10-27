@@ -13,7 +13,7 @@ answering calls) is a separate, larger surface and is not implemented.
 ## `paloma calling status`
 
 Show the current calling config (status, call-icon visibility, callback
-permission, call hours, SIP, audio codecs).
+permission, call hours, SIP, audio codecs, voicemail).
 
 ```bash
 paloma calling status
@@ -32,24 +32,32 @@ paloma calling disable
 
 ## `paloma calling set`
 
-Update part of the config. The typed flags cover the confirmed scalar fields;
-for settings without a flag, such as `voicemail`, use the
-`--file` escape hatch with a full `calling` object. Enum values are case-insensitive.
+Update part of the config. For settings without a flag, such as `video`, use the `--file`
+escape hatch with a full `calling` object. Enum values are case-insensitive.
 
 | Flag | Values |
 |------|--------|
 | `--status` | `ENABLED` \| `DISABLED` |
 | `--call-icon` | `DEFAULT` \| `DISABLE_ALL` |
 | `--callback-permission` | `ENABLED` \| `DISABLED` |
+| `--icon-countries <CC,...>` | Show the call button only to people whose phone numbers are from these countries |
+| `--icon-everywhere` | Show the call button in every country again |
+| `--srtp` | `DTLS` (Meta's default) \| `SDES`, the SRTP key exchange for SIP calls |
 | `--file <json>` | A full `calling` object (mutually exclusive with the flags above) |
 
 ```bash
 paloma calling set --call-icon DISABLE_ALL
 paloma calling set --status ENABLED --callback-permission ENABLED
+paloma calling set --icon-countries DO,US
+paloma calling set --srtp SDES
 
 # other settings through the escape hatch
 paloma calling set --file calling.json
 ```
+
+`--icon-countries` takes two-letter codes, repeated or comma-separated, and a bad code exits `5`
+before any request. It goes by the country of the person's phone number, not where they are.
+Meta doesn't return `srtp_key_exchange_protocol` in `calling status` until it's been set.
 
 All writes support `--dry-run`, which prints the exact POST body without sending.
 Partial updates are merged server-side, so you only send the fields you change.
@@ -80,6 +88,27 @@ Set the additional audio codecs (a full replace). Valid values are `PCMA` and
 paloma calling codecs set PCMA PCMU
 paloma calling codecs clear          # additional_codecs -> []
 ```
+
+## `paloma calling voicemail`
+
+```bash
+GREETING=$(paloma media upload ./greeting.ogg --voicemail-announcement -q)
+paloma calling voicemail set --trigger reject,timeout --ring-seconds 20 --announcement "$GREETING"
+paloma calling voicemail disable
+```
+
+When voicemail is on, Meta answers missed or rejected calls, plays the greeting, records a
+message, and delivers it as an audio message on the `messages` webhook. That message's id is the
+call's id (`wacid.…`), not a `wamid`. The triggers are:
+
+- `reject`: you reject the call.
+- `timeout`: nobody accepts or rejects it within `--ring-seconds` (0 to 30).
+
+`--trigger timeout` needs `--ring-seconds`, because Meta ignores the trigger without it, and
+`--ring-seconds` without that trigger exits `5` too. The greeting comes from
+[`media upload --voicemail-announcement`](media.md#voicemail-announcements). Calling must be
+enabled, and Meta advises turning [call hours](#paloma-calling-hours) off, because people can't
+call outside them; `set` notes this on stderr.
 
 ## `paloma calling hours`
 

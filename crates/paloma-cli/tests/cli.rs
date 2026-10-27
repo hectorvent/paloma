@@ -14632,3 +14632,164 @@ async fn apply_writes_nothing_for_any_document_when_one_edit_is_refused() {
             .all(|r| r.method.as_str() == "GET")
     );
 }
+
+#[tokio::test]
+async fn calling_set_restricts_icons_and_sets_srtp() {
+    let graph = MockServer::start().await;
+    let home = TempDir::new().unwrap();
+    for calling in [
+        json!({"call_icons":{"restrict_to_user_countries":["DO","US"]},"srtp_key_exchange_protocol":"SDES"}),
+        json!({"call_icons":{"restrict_to_user_countries":[]}}),
+    ] {
+        Mock::given(method("POST"))
+            .and(path(format!("/v26.0/{PHONE}/settings")))
+            .and(body_json(
+                json!({"messaging_product":"whatsapp","calling":calling}),
+            ))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({"success":true})))
+            .expect(1)
+            .mount(&graph)
+            .await;
+    }
+    paloma(Some(&graph), &home)
+        .args([
+            "calling",
+            "set",
+            "--icon-countries",
+            "do, US",
+            "--srtp",
+            "sdes",
+        ])
+        .assert()
+        .success();
+    paloma(Some(&graph), &home)
+        .args(["calling", "set", "--icon-everywhere"])
+        .assert()
+        .success();
+}
+
+#[test]
+fn calling_settings_refuse_bad_input_before_context() {
+    let home = TempDir::new().unwrap();
+    let cases: [&[&str]; 5] = [
+        &["set", "--icon-countries", "USA"],
+        &[
+            "voicemail",
+            "set",
+            "--trigger",
+            "timeout",
+            "--announcement",
+            "1",
+        ],
+        &[
+            "voicemail",
+            "set",
+            "--trigger",
+            "reject",
+            "--ring-seconds",
+            "5",
+            "--announcement",
+            "1",
+        ],
+        &[
+            "voicemail",
+            "set",
+            "--trigger",
+            "timeout",
+            "--ring-seconds",
+            "31",
+            "--announcement",
+            "1",
+        ],
+        &[
+            "voicemail",
+            "set",
+            "--trigger",
+            "reject",
+            "--announcement",
+            "media-1",
+        ],
+    ];
+    for args in cases {
+        paloma(None, &home)
+            .env_remove("PALOMA_PHONE_NUMBER_ID")
+            .env_remove("PALOMA_TOKEN")
+            .arg("calling")
+            .args(args)
+            .assert()
+            .code(5);
+    }
+}
+
+#[tokio::test]
+async fn calling_voicemail_set_and_disable() {
+    let graph = MockServer::start().await;
+    let home = TempDir::new().unwrap();
+    for voicemail in [
+        json!({"status":"ENABLED","triggers":["REJECT","TIMEOUT"],
+               "audio":{"default":{"announcement_media_id":938_884_519_013_664_u64,"timeout_seconds":20}}}),
+        json!({"status":"DISABLED"}),
+    ] {
+        Mock::given(method("POST"))
+            .and(path(format!("/v26.0/{PHONE}/settings")))
+            .and(body_json(
+                json!({"messaging_product":"whatsapp","calling":{"voicemail":voicemail}}),
+            ))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({"success":true})))
+            .expect(1)
+            .mount(&graph)
+            .await;
+    }
+    paloma(Some(&graph), &home)
+        .args([
+            "calling",
+            "voicemail",
+            "set",
+            "--trigger",
+            "reject,timeout",
+            "--trigger",
+            "REJECT",
+            "--ring-seconds",
+            "20",
+            "--announcement",
+            "938884519013664",
+        ])
+        .assert()
+        .success()
+        .stderr(predicate::str::contains("call hours"));
+    paloma(Some(&graph), &home)
+        .args(["calling", "voicemail", "disable"])
+        .assert()
+        .success();
+}
+
+#[tokio::test]
+async fn media_upload_marks_a_voicemail_announcement() {
+    let graph = MockServer::start().await;
+    Mock::given(method("POST"))
+        .and(path(format!("/v26.0/{PHONE}/media")))
+        .and(body_string_contains("name=\"use_case\""))
+        .and(body_string_contains("call_voicemail_announcement"))
+        .and(body_string_contains("OGGDATA"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({ "id": "MEDIA1" })))
+        .expect(1)
+        .mount(&graph)
+        .await;
+    let home = TempDir::new().unwrap();
+    let greeting = home.path().join("greeting.ogg");
+    std::fs::write(&greeting, "OGGDATA").unwrap();
+    paloma(Some(&graph), &home)
+        .args(["media", "upload", "--voicemail-announcement", "-q"])
+        .arg(&greeting)
+        .assert()
+        .success()
+        .stdout("MEDIA1\n");
+    let mp3 = home.path().join("greeting.mp3");
+    std::fs::write(&mp3, "MP3DATA").unwrap();
+    paloma(Some(&graph), &home)
+        .args(["media", "upload", "--voicemail-announcement"])
+        .arg(&mp3)
+        .assert()
+        .code(5)
+        .stderr(predicate::str::contains("audio/ogg"));
+}

@@ -9,8 +9,15 @@ pub fn template() -> Value {
         "status": "",
         "callIconVisibility": "",
         "callbackPermissionStatus": "",
+        "callIcons": { "restrictToUserCountries": [] },
         "sip": { "status": "", "servers": [] },
-        "audio": { "additionalCodecs": [] }
+        "srtpKeyExchangeProtocol": "",
+        "audio": { "additionalCodecs": [] },
+        "voicemail": {
+            "status": "",
+            "triggers": [],
+            "audio": { "default": { "announcementMediaId": "", "timeoutSeconds": "" } }
+        }
     })
 }
 

@@ -9,14 +9,33 @@ use crate::{FormPart, Request};
 
 /// `POST /{phone-number-id}/media` (multipart).
 pub fn upload(phone_number_id: &str, path: &Path, mime: &str) -> Request {
+    upload_parts(phone_number_id, path, mime, None)
+}
+
+/// A calling voicemail greeting. Meta keeps it past the usual 30-day media lifetime, and it
+/// can't be sent as a message.
+pub fn upload_voicemail_announcement(phone_number_id: &str, path: &Path, mime: &str) -> Request {
+    upload_parts(
+        phone_number_id,
+        path,
+        mime,
+        Some("call_voicemail_announcement"),
+    )
+}
+
+fn upload_parts(phone_number_id: &str, path: &Path, mime: &str, use_case: Option<&str>) -> Request {
     let file_name = path
         .file_name()
         .map_or_else(|| "upload".to_owned(), |n| n.to_string_lossy().into_owned());
-    Request::post(format!("{phone_number_id}/media")).multipart(vec![
+    let mut parts = vec![
         FormPart::text("messaging_product", MESSAGING_PRODUCT),
         FormPart::text("type", mime),
-        FormPart::file("file", path, file_name, mime),
-    ])
+    ];
+    if let Some(use_case) = use_case {
+        parts.push(FormPart::text("use_case", use_case));
+    }
+    parts.push(FormPart::file("file", path, file_name, mime));
+    Request::post(format!("{phone_number_id}/media")).multipart(parts)
 }
 
 /// The MIME type for a local file, guessed from its extension. `mime_guess` calls `.m4a`

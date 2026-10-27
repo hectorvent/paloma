@@ -272,3 +272,6 @@ pub const MAX_PIN_DAYS: u32 = 30;
 /// Call hours: opening periods per weekday, and holiday overrides.
 pub const MAX_CALL_HOURS_PER_DAY: usize = 2;
 pub const MAX_CALL_HOLIDAYS: usize = 20;
+
+/// How long a call rings before voicemail answers, for the `TIMEOUT` trigger, in seconds.
+pub const MAX_VOICEMAIL_TIMEOUT_SECONDS: u32 = 30;

@@ -38,6 +38,9 @@ pub struct Upload {
     /// Get a resumable upload handle, for template headers, instead of a media id.
     #[arg(long)]
     handle: bool,
+    /// Upload a calling voicemail greeting (OGG/Opus, under 60 seconds).
+    #[arg(long, conflicts_with = "handle")]
+    voicemail_announcement: bool,
 }
 
 #[derive(Debug, Args)]
@@ -69,9 +72,19 @@ impl MediaCommand {
                 if let Some(warning) = validate::media_upload(&mime, size)? {
                     app.out.warn(warning);
                 }
+                let essence = mime.split(';').next().unwrap_or_default().trim();
+                if a.voicemail_announcement && !essence.eq_ignore_ascii_case("audio/ogg") {
+                    return Err(Error::validation(format!(
+                        "a voicemail announcement must be audio/ogg with the Opus codec, not {mime}"
+                    )));
+                }
                 let phone = app.ctx()?.require_phone_number_id()?.to_owned();
-                app.send_and_emit(&media::upload(&phone, &path, &mime), field_id)
-                    .await
+                let request = if a.voicemail_announcement {
+                    media::upload_voicemail_announcement(&phone, &path, &mime)
+                } else {
+                    media::upload(&phone, &path, &mime)
+                };
+                app.send_and_emit(&request, field_id).await
             }
             Self::Get { media_id } => app.send_and_emit(&media::get(&media_id), field_id).await,
             Self::Delete { media_id } => {

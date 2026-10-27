@@ -13,7 +13,7 @@ paloma media <verb> [args] [flags]
 Upload a local file and print its media id.
 
 ```
-paloma media upload <file> [--type <mime>] [--handle]
+paloma media upload <file> [--type <mime>] [--handle | --voicemail-announcement]
 ```
 
 | Flag | Description |
@@ -21,6 +21,7 @@ paloma media upload <file> [--type <mime>] [--handle]
 | `<file>` | Local file to upload (positional) |
 | `--type <mime>` | Content type, e.g. `image/jpeg`. Auto-detected from the extension if omitted, and used for the checks below if set. |
 | `--handle` | Print a resumable upload handle instead of a media id |
+| `--voicemail-announcement` | Upload a greeting for [`calling voicemail`](calling.md#paloma-calling-voicemail) |
 
 ```bash
 ID=$(paloma media upload ./flyer.jpg -q)
@@ -51,6 +52,16 @@ The type decides the limit, and a file over it exits 5.
   isn't OPUS.
 
 Paloma judges the file by its extension, or by `--type` if you set it, not by its contents.
+
+### Voicemail announcements
+
+```bash
+GREETING=$(paloma media upload ./greeting.ogg --voicemail-announcement -q)
+```
+
+The greeting must be `audio/ogg` with the Opus codec, and any other type exits 5. Meta also
+requires it to be under 60 seconds, which it checks itself. Meta keeps it for as long as voicemail
+uses it, past the usual 30 days, and it can't be sent as a message.
 
 ### Upload handles
 

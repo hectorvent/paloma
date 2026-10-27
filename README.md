@@ -93,8 +93,18 @@ spec:
   sip:
     status: DISABLED
     servers: []
+  # callIcons:
+  #   restrictToUserCountries: []
+  # srtpKeyExchangeProtocol:
   # audio:
   #   additionalCodecs: []
+  # voicemail:
+  #   status:
+  #   triggers: []
+  #   audio:
+  #     default:
+  #       announcementMediaId:
+  #       timeoutSeconds:
 ```
 
 **2. Edit it** to turn on SIP and callback permission, **then ask what would change.**
