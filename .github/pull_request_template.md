@@ -23,6 +23,6 @@ paloma …
 
 - [ ] Title and every commit follow Conventional Commits; every commit is signed off (`git commit -s`)
 - [ ] `cargo fmt --all --check`, `cargo clippy --workspace --all-targets` and `cargo test --workspace` pass
-- [ ] New or changed commands have a contract test in `crates/paloma-cli/tests/cli.rs` (exit code, stdout vs stderr, request body)
+- [ ] New or changed commands have a contract test in `crates/paloma-cli/tests/cli/<group>.rs` (exit code, stdout vs stderr, request body)
 - [ ] Behavior changes update `docs/commands/*.md` (and `docs/README.md` / `README.md` when the command list changes)
 - [ ] Breaking changes are marked with `!` or a `BREAKING CHANGE:` footer

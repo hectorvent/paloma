@@ -36,7 +36,7 @@ finds the ones you miss. Add `pub mod` in `kinds/mod.rs`.
 ## 3. Tests
 
 - Unit tests in the module for plan output (in sync, drift, field removal).
-- Contract tests in `crates/paloma-cli/tests/cli.rs`, modeled on
+- Contract tests in `crates/paloma-cli/tests/cli/<group>.rs`, modeled on
   `diff_exits_1_on_drift_and_0_in_sync`, `apply_dry_run_reads_but_never_writes` and
   `apply_writes_only_drift`: `diff` exits 1 on drift and 0 in sync, `apply --dry-run`
   reads but never writes, `apply` writes only the drift.

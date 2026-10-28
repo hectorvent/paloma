@@ -75,7 +75,7 @@ cargo test --workspace
 cargo deny check          # when dependencies changed
 ```
 
-- New or changed commands get a contract test in `crates/paloma-cli/tests/cli.rs`
+- New or changed commands get a contract test in `crates/paloma-cli/tests/cli/<group>.rs`
   asserting the exit code, what lands on stdout vs stderr, and the exact request body.
 - Commands and docs move together: `docs/commands/*.md`, the table in
   `docs/README.md`, and `README.md` when the command list changes.

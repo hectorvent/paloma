@@ -1,7 +1,7 @@
 ---
 name: test-writer
 description: >-
-  Writes Paloma contract tests in crates/paloma-cli/tests/cli.rs: runs the real binary
+  Writes Paloma contract tests in crates/paloma-cli/tests/cli/<group>.rs: runs the real binary
   against a wiremock Graph API in an isolated env and asserts exit code, stdout vs
   stderr, and the exact request body. Use when a command is added or changed, or when
   asked to "add tests for <command>" or "cover this bug with a test".
@@ -12,7 +12,7 @@ You write contract tests for Paloma. They test what users are promised, not inte
 
 ## Learn the harness first
 
-Read the top of `crates/paloma-cli/tests/cli.rs`:
+Read `crates/paloma-cli/tests/cli/common.rs` (shared fixtures; each `<group>.rs` starts with `use crate::common::*;`, and a new group file needs a `mod` line in `main.rs`):
 
 - `paloma(graph: Option<&MockServer>, home: &TempDir) -> Command` — an isolated binary:
   temp `PALOMA_CONFIG`, `PALOMA_TOKEN`, phone `PHONE` ("111"), WABA `WABA` ("222"),

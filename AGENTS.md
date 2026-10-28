@@ -98,7 +98,7 @@ it exists to satisfy. Match that; don't narrate code.
 3. In `run`: validate → resolve ids from `app.ctx()?` → `app.send_and_emit(..)`.
    Payload shaping belongs in `paloma-graph`, not in the command.
 4. Not built yet → `planned("group verb", "vX.Y")`, so it stays discoverable.
-5. Contract test in `crates/paloma-cli/tests/cli.rs` (exit code, stdout vs stderr,
+5. Contract test in `crates/paloma-cli/tests/cli/<group>.rs` (exit code, stdout vs stderr,
    exact request body); docs page under `docs/commands/`, linked from `docs/README.md`.
 
 ## How to add a manifest kind
@@ -173,4 +173,4 @@ See [.agents/README.md](.agents/README.md) for the layout and discovery checks.
 |-------|-----------|
 | `contract-reviewer` | Review a diff against the output, exit-code, dry-run and secrets contracts |
 | `docs-auditor` | Find drift between `--help`, `docs/` and `README.md` |
-| `test-writer` | Write contract tests in `crates/paloma-cli/tests/cli.rs` |
+| `test-writer` | Write contract tests in `crates/paloma-cli/tests/cli/<group>.rs` |

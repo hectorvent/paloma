@@ -71,7 +71,7 @@ and nothing touches the keyring until a request is actually sent, or a listener 
    `app.send_and_emit(&request, primary_id)` (or `app.send` / `app.fetch` for
    multi-step flows). Destructive writes call `app.confirm_or_abort(..)` first.
 5. Not built yet? Return `planned("group verb", "vX.Y")` so it stays in `--help`.
-6. Add a contract test in `crates/paloma-cli/tests/cli.rs` and a docs page.
+6. Add a contract test in `crates/paloma-cli/tests/cli/<group>.rs` and a docs page.
 
 ## Adding a manifest kind
 
@@ -94,6 +94,6 @@ request at a time, so a thread pool would only cost startup time. The same runti
 ## Testing
 
 - Unit tests next to the code (`cargo test --workspace`).
-- Contract tests in `crates/paloma-cli/tests/cli.rs` run the real binary against a
+- Contract tests in `crates/paloma-cli/tests/cli/<group>.rs` run the real binary against a
   `wiremock` Graph API and assert exit codes, stdout vs stderr, and exact request
   bodies (`insta` snapshots for dry-run output).

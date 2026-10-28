@@ -40,7 +40,7 @@ Scope them to the change: `git diff --name-only main...HEAD` plus uncommitted fi
   with a behavior change has a changed `docs/commands/<group>.md`. If a verb was added
   or un-planned: `docs/README.md` table, `docs/commands/planned.md`, and the README
   command table also updated.
-- **Contract test.** A new verb or flag has a test in `crates/paloma-cli/tests/cli.rs`
+- **Contract test.** A new verb or flag has a test in `crates/paloma-cli/tests/cli/<group>.rs`
   asserting exit code, stdout vs stderr, and the request body.
 - **Pure builders.** New code in `crates/paloma-graph/src/api/` does no I/O and takes
   no `App`/`Context`.

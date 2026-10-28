@@ -60,7 +60,7 @@ Return the right `paloma_core::Error` variant: `Validation` (5), `Auth` (3),
 Un-planning: delete the `planned("group verb", "vX.Y")` arm and the "(planned vX.Y)" from
 the doc comment.
 
-## 4. Contract test (`crates/paloma-cli/tests/cli.rs`)
+## 4. Contract test (`crates/paloma-cli/tests/cli/<group>.rs`)
 
 Use the `paloma(Some(&graph), &home)` helper and `MockServer`; model on
 `send_text_posts_with_bearer_and_quiet_prints_wamid`. Assert:
