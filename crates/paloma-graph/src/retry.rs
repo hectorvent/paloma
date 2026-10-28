@@ -32,6 +32,11 @@ pub enum Failure {
     },
 }
 
+/// The server errors that say nothing about the request itself, so a read may repeat it.
+pub const fn is_server_error(status: u16) -> bool {
+    matches!(status, 500 | 502 | 503 | 504)
+}
+
 /// How long to wait before repeating try number `attempt`, or `None` to stop.
 pub fn delay(
     method: Method,
@@ -51,9 +56,11 @@ pub fn delay(
             retry_after: Some(wait),
         } => Some(wait),
         Failure::Status {
-            status: 429 | 500 | 502 | 503 | 504,
+            status,
             retry_after,
-        } if is_read => Some(retry_after.unwrap_or(backoff)),
+        } if is_read && (status == 429 || is_server_error(status)) => {
+            Some(retry_after.unwrap_or(backoff))
+        }
         Failure::Status { .. } => None,
     };
     wait.filter(|wait| *wait <= MAX_WAIT)

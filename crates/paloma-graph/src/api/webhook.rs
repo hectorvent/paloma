@@ -133,42 +133,6 @@ pub fn subscribed_fields(subscriptions: &Value) -> Vec<String> {
         .collect()
 }
 
-/// The app id to manage field subscriptions for: the explicit one, else the first app
-/// subscribed to the WABA.
-pub async fn resolve_app_id(
-    client: &crate::Client,
-    explicit: Option<&str>,
-    waba_id: &str,
-) -> paloma_core::Result<String> {
-    if let Some(id) = explicit.filter(|s| !s.trim().is_empty()) {
-        return Ok(id.to_owned());
-    }
-    let subscribed = client.execute(&subscribed_apps(waba_id)).await?.json()?;
-    subscribed_app_id(&subscribed).ok_or_else(|| {
-        paloma_core::Error::validation(
-            "no app id: pass --app-id, set PALOMA_APP_ID, or subscribe an app to the WABA first",
-        )
-    })
-}
-
-/// The WABA-scoped manifest callback: WABA override, then app-level configuration.
-/// Number overrides must stay out of WABA exports and reconciliation.
-pub async fn current_callback_url(
-    client: &crate::Client,
-    waba_id: &str,
-    phone_number_id: Option<&str>,
-) -> paloma_core::Result<Option<String>> {
-    let subscribed = client.execute(&subscribed_apps(waba_id)).await?.json()?;
-    if let Some(url) = override_callback(&subscribed) {
-        return Ok(Some(url));
-    }
-    if let Some(phone) = phone_number_id {
-        let cfg = client.execute(&configuration(phone)).await?.json()?;
-        return Ok(application_callback(&cfg));
-    }
-    Ok(None)
-}
-
 /// `data[0].override_callback_uri` of a `subscribed_apps` response.
 pub fn override_callback(subscribed: &Value) -> Option<String> {
     subscribed

@@ -8,7 +8,7 @@ use crate::{
 use clap::{Args, Subcommand, ValueEnum};
 use paloma_core::{Error, Result, validate};
 use paloma_graph::{api::account, paging};
-use serde_json::{Value, json};
+use serde_json::Value;
 use std::path::{Path, PathBuf};
 
 /// The lookback for Meta's reach estimate. Its names are Meta's, also exposed by clap.
@@ -225,60 +225,50 @@ async fn list_sequences(app: &App, req: &paloma_graph::Request) -> Result<()> {
     Ok(())
 }
 
+const IN_ADS: &str = "change or delete a welcome sequence used by click-to-WhatsApp ads";
+
 impl WelcomeSequence {
     pub async fn run(self, app: &App) -> Result<()> {
-        let (read, delete, id, body, limit) = match self {
+        let req = match self {
             Self::List { id, limit } => {
                 if let Some(id) = &id {
                     validate::numeric_id(id, "sequence id")?;
                 }
                 validate::page_size(limit, None)?;
-                (true, false, id, Value::Null, limit)
+                let waba = app.ctx()?.require_waba_id()?.to_owned();
+                let req = account::welcome_sequences(&waba, id.as_deref(), limit);
+                return list_sequences(app, &req).await;
             }
             Self::Delete { id } => {
                 validate::numeric_id(&id, "sequence id")?;
-                (false, true, Some(id), Value::Null, None)
+                let waba = app.ctx()?.require_waba_id()?.to_owned();
+                if !app.confirm_or_abort(IN_ADS)? {
+                    return Ok(());
+                }
+                account::delete_welcome_sequence(&waba, &id)
             }
             Self::Create { name, file } => {
                 validate::not_blank(&name, "sequence name")?;
                 let sequence = content(&file)?;
-                (
-                    false,
-                    false,
-                    None,
-                    json!({"name":name,"welcome_message_sequence":sequence}),
-                    None,
-                )
+                let waba = app.ctx()?.require_waba_id()?.to_owned();
+                account::create_welcome_sequence(&waba, &name, &sequence)
             }
             Self::Set { id, name, file } => {
                 validate::numeric_id(&id, "sequence id")?;
                 if name.is_none() && file.is_none() {
                     return Err(Error::validation("pass --name or --file"));
                 }
-                let mut body = json!({});
-                if let Some(name) = name {
-                    validate::not_blank(&name, "sequence name")?;
-                    body["name"] = json!(name);
+                if let Some(name) = &name {
+                    validate::not_blank(name, "sequence name")?;
                 }
-                if let Some(file) = file {
-                    body["welcome_message_sequence"] = content(&file)?;
+                let sequence = file.as_deref().map(content).transpose()?;
+                let waba = app.ctx()?.require_waba_id()?.to_owned();
+                if !app.confirm_or_abort(IN_ADS)? {
+                    return Ok(());
                 }
-                (false, false, Some(id), body, None)
+                account::update_welcome_sequence(&waba, &id, name.as_deref(), sequence.as_ref())
             }
         };
-        let waba = app.ctx()?.require_waba_id()?.to_owned();
-        if !read
-            && id.is_some()
-            && !app.confirm_or_abort(
-                "change or delete a welcome sequence used by click-to-WhatsApp ads",
-            )?
-        {
-            return Ok(());
-        }
-        let req = account::welcome_sequence(&waba, read, delete, id.as_deref(), body, limit);
-        if read {
-            return list_sequences(app, &req).await;
-        }
         app.send_and_emit(&req, |v| {
             v.get("sequence_id")
                 .and_then(Value::as_str)

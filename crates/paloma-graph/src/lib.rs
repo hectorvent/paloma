@@ -9,6 +9,7 @@
 pub mod api;
 pub mod client;
 pub mod error_map;
+pub mod lookup;
 pub mod paging;
 pub mod request;
 pub mod retry;

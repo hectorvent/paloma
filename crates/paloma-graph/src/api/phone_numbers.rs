@@ -115,8 +115,32 @@ pub fn settings(phone: &str) -> Request {
     Request::get(format!("{phone}/settings"))
 }
 
+/// A caller-built settings object (a manifest spec).
 pub fn set_settings(phone: &str, body: Value) -> Request {
     Request::post(format!("{phone}/settings")).json(body)
+}
+
+/// Turn in-country storage on (in `region`) or off. Meta takes it only on a deregistered
+/// number.
+pub fn set_storage(phone: &str, enabled: bool, region: Option<&str>) -> Request {
+    let status = if enabled {
+        "IN_COUNTRY_STORAGE_ENABLED"
+    } else {
+        "IN_COUNTRY_STORAGE_DISABLED"
+    };
+    let mut storage = json!({ "status": status });
+    if let Some(region) = region {
+        storage["data_localization_region"] = json!(region);
+    }
+    set_settings(phone, json!({ "storage_configuration": storage }))
+}
+
+/// Require (or stop requiring) the customer's identity hash to match before delivery.
+pub fn set_identity_check(phone: &str, enabled: bool) -> Request {
+    set_settings(
+        phone,
+        json!({ "user_identity_change": { "enable_identity_key_check": enabled } }),
+    )
 }
 
 pub fn username(phone: &str) -> Request {

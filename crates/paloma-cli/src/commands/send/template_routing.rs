@@ -4,7 +4,7 @@
 use paloma_core::{Error, Result};
 use paloma_graph::api::messages::TemplateEndpoint;
 use paloma_graph::api::{messages, templates};
-use paloma_graph::{Response, paging};
+use paloma_graph::{Response, error_map, paging};
 use serde_json::Value;
 
 use super::TemplateVia;
@@ -88,28 +88,13 @@ async fn lookup_endpoint(
         .ok_or_else(|| Error::other("template has a missing or unsupported category; select --via cloud|marketing explicitly if you know its current category"))
 }
 
+/// Only Meta's explicit category refusals justify a fresh category check; any other
+/// rejection is final.
 fn category_may_have_changed(error: &Error, endpoint: TemplateEndpoint) -> bool {
-    // Cloud explicitly rejects marketing/max-price templates with these codes.
-    // An MM invalid-parameter rejection (100) permits a fresh category check.
-    // A generic 400 can instead be auth, policy or another refusal: never retry it.
-    matches!(
-        (endpoint, error),
-        (
-            TemplateEndpoint::Cloud,
-            Error::Api {
-                status: 400,
-                code: Some(131_061 | 131_063),
-                ..
-            }
-        ) | (
-            TemplateEndpoint::Marketing,
-            Error::Api {
-                status: 400,
-                code: Some(100),
-                ..
-            }
-        )
-    )
+    match endpoint {
+        TemplateEndpoint::Cloud => error_map::is_cloud_marketing_refusal(error),
+        TemplateEndpoint::Marketing => error_map::is_marketing_parameter_refusal(error),
+    }
 }
 
 fn emit(app: &App, response: Option<Response>) -> Result<()> {

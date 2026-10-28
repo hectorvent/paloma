@@ -62,7 +62,7 @@ pub async fn plan(cx: Cx<'_>, spec: &Value) -> Result<KindPlan> {
     let waba = cx.ctx.require_waba_id()?;
 
     // Follow the cursor: stopping short would plan a create for a template that exists.
-    let found = templates::find_page(cx.client, waba, &name, Some(&language)).await?;
+    let found = paloma_graph::lookup::find_page(cx.client, waba, &name, Some(&language)).await?;
     let Some(current) = found.as_ref().and_then(|page| {
         templates::exact_matches(page, &name, Some(&language))
             .first()

@@ -1,5 +1,3 @@
-use std::io::{IsTerminal, Read};
-
 use clap::Subcommand;
 use paloma_config::ProfileKey;
 use paloma_config::secrets::{keyring_ref, token_account};
@@ -8,6 +6,7 @@ use paloma_graph::api::{phone_numbers, tokens};
 use secrecy::ExposeSecret;
 use serde_json::{Value, json};
 
+use super::{SecretSource, read_secret};
 use crate::app::App;
 use crate::output::Output;
 
@@ -84,30 +83,34 @@ impl AuthCommand {
 }
 
 fn login(app: &App, with_token: bool) -> Result<()> {
-    let token = if with_token {
-        let mut buf = String::new();
-        std::io::stdin()
-            .read_to_string(&mut buf)
-            .map_err(|e| Error::io("cannot read token from stdin", e))?;
-        buf.trim().to_owned()
-    } else if let Some(t) = app.globals.token.clone().filter(|t| !t.trim().is_empty()) {
-        t
-    } else if std::io::stdin().is_terminal() && std::io::stderr().is_terminal() {
-        dialoguer::Password::new()
-            .with_prompt("Access token")
-            .interact()
-            .map_err(|e| Error::other(format!("prompt failed: {e}")))?
-    } else {
-        return Err(Error::auth(
-            "no token provided: pipe it with --with-token, or set PALOMA_TOKEN",
-        ));
-    };
+    // clap merges `--token` with PALOMA_TOKEN; only a value that didn't come from the
+    // environment was typed on the command line, so only that one warns.
+    let env = std::env::var("PALOMA_TOKEN").ok();
+    let from_flag = app
+        .globals
+        .token
+        .as_ref()
+        .map(ExposeSecret::expose_secret)
+        .filter(|t| env.as_deref() != Some(*t));
+    let token = read_secret(
+        app,
+        &SecretSource {
+            what: "access token",
+            flag: "--token",
+            stdin_flag: "--with-token",
+            env: "PALOMA_TOKEN",
+            missing_is_auth: true,
+        },
+        from_flag,
+        with_token,
+    )?;
+    let token = token.expose_secret();
     let name = app.profile_name()?;
     let g = &app.globals;
     let out = store_login(
         app,
         &name,
-        &token,
+        token,
         g.phone_number_id.as_deref(),
         g.waba_id.as_deref(),
         g.api_version.as_deref(),

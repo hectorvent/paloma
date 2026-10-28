@@ -62,15 +62,10 @@ impl App {
 
     /// The selected profile name (flag/env, else the config default).
     pub fn profile_name(&self) -> Result<String> {
-        match self
-            .globals
-            .profile
-            .as_deref()
-            .filter(|p| !p.trim().is_empty())
-        {
-            Some(p) => Ok(p.to_owned()),
-            None => Ok(self.config()?.default_profile_name().to_owned()),
-        }
+        Ok(self
+            .config()?
+            .selected_profile_name(self.globals.profile.as_deref())
+            .to_owned())
     }
 
     pub fn overrides(&self) -> Overrides {

@@ -112,6 +112,7 @@ impl VerifyTokenInput {
                 flag: "--verify-token",
                 stdin_flag: "--verify-token-stdin",
                 env: "PALOMA_VERIFY_TOKEN",
+                missing_is_auth: false,
             },
             self.verify_token.as_deref(),
             self.verify_token_stdin,

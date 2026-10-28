@@ -537,9 +537,13 @@ impl TemplateCommand {
                 let id = if app.dry_run() {
                     "<template-id>".to_owned()
                 } else {
-                    let t =
-                        templates::find_one(app.client()?, &waba, &a.name, a.language.as_deref())
-                            .await?;
+                    let t = paloma_graph::lookup::find_one(
+                        app.client()?,
+                        &waba,
+                        &a.name,
+                        a.language.as_deref(),
+                    )
+                    .await?;
                     field_id(&t).ok_or_else(|| Error::other("template has no id"))?
                 };
                 app.send_and_emit(&templates::edit(&id, body), |_| Some(id.clone()))
@@ -976,7 +980,7 @@ pub async fn list(
 async fn status(app: &App, name: &str) -> Result<Value> {
     let waba = app.ctx()?.require_waba_id()?.to_owned();
     let missing = || Error::other(format!("no template named '{name}' on this WABA"));
-    let page = templates::find_page(app.client()?, &waba, name, None)
+    let page = paloma_graph::lookup::find_page(app.client()?, &waba, name, None)
         .await?
         .ok_or_else(missing)?;
     let matches = templates::exact_matches(&page, name, None);
@@ -1066,7 +1070,8 @@ async fn delete(app: &App, a: Delete) -> Result<()> {
         (None, Some(_), true) => Some("<template-id>".to_owned()),
         (None, Some(l), false) => {
             // Without an id this would delete every language, not the one confirmed.
-            let found = templates::find_one(app.client()?, &waba, &name, Some(l)).await?;
+            let found =
+                paloma_graph::lookup::find_one(app.client()?, &waba, &name, Some(l)).await?;
             Some(field_id(&found).ok_or_else(|| Error::other("the template has no id"))?)
         }
     };

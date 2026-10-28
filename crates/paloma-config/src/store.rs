@@ -35,6 +35,14 @@ impl Config {
             .unwrap_or(DEFAULT_PROFILE)
     }
 
+    /// The profile a command acts on: the `--profile`/`PALOMA_PROFILE` value when it isn't
+    /// blank, else the default. Every caller goes through here so the precedence is one rule.
+    pub fn selected_profile_name<'a>(&'a self, requested: Option<&'a str>) -> &'a str {
+        requested
+            .filter(|p| !p.trim().is_empty())
+            .unwrap_or_else(|| self.default_profile_name())
+    }
+
     pub fn profile(&self, name: &str) -> Option<&Profile> {
         self.profiles.get(name)
     }

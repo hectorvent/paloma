@@ -15,7 +15,7 @@ use std::fmt;
 use std::sync::{Arc, OnceLock};
 
 use paloma_core::{Error, Result};
-use secrecy::SecretString;
+use secrecy::{ExposeSecret, SecretString};
 
 use crate::profile::Profile;
 use crate::secrets::{SecretStore, keyring_account};
@@ -25,11 +25,11 @@ use crate::store::Config;
 #[derive(Debug, Clone, Default)]
 pub struct Overrides {
     pub profile: Option<String>,
-    pub token: Option<String>,
+    pub token: Option<SecretString>,
     pub phone_number_id: Option<String>,
     pub waba_id: Option<String>,
     pub app_id: Option<String>,
-    pub app_secret: Option<String>,
+    pub app_secret: Option<SecretString>,
     pub api_version: Option<String>,
     pub messaging_account_id: Option<String>,
 }
@@ -107,23 +107,23 @@ impl Context {
         default_api_version: &str,
         store: Arc<dyn SecretStore>,
     ) -> Self {
-        let profile_name = non_blank(overrides.profile.as_deref())
-            .unwrap_or_else(|| config.default_profile_name())
+        let profile_name = config
+            .selected_profile_name(overrides.profile.as_deref())
             .to_owned();
         let empty = Profile::default();
         let profile = config.profile(&profile_name).unwrap_or(&empty);
         let mut warnings = Vec::new();
 
-        let token = match non_blank(overrides.token.as_deref()) {
-            Some(t) => SecretSource::Literal(t.to_owned().into()),
+        let token = match non_blank_secret(overrides.token.as_ref()) {
+            Some(t) => SecretSource::Literal(t.clone()),
             None => reference_source(profile.token_ref.as_deref(), || {
                 warnings.push(format!(
                     "profile '{profile_name}' stores a plaintext token in config; prefer the keyring (`paloma auth login`)"
                 ));
             }),
         };
-        let app_secret = match non_blank(overrides.app_secret.as_deref()) {
-            Some(s) => SecretSource::Literal(s.to_owned().into()),
+        let app_secret = match non_blank_secret(overrides.app_secret.as_ref()) {
+            Some(s) => SecretSource::Literal(s.clone()),
             None => reference_source(profile.app_secret_ref.as_deref(), || {}),
         };
 
@@ -234,6 +234,10 @@ fn reference_source(reference: Option<&str>, on_plaintext: impl FnOnce()) -> Sec
 
 fn non_blank(s: Option<&str>) -> Option<&str> {
     s.filter(|v| !v.trim().is_empty())
+}
+
+fn non_blank_secret(s: Option<&SecretString>) -> Option<&SecretString> {
+    s.filter(|v| !v.expose_secret().trim().is_empty())
 }
 
 #[cfg(test)]

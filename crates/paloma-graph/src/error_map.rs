@@ -23,6 +23,32 @@ const fn is_auth_code(code: i64) -> bool {
     matches!(code, 0 | 3 | 10 | 190 | 131_005 | 200..=299)
 }
 
+/// `/messages` refusing a template that now belongs on `/marketing_messages`: a max-price
+/// template (131061), or a WABA that turned marketing off on Cloud API (131063).
+pub fn is_cloud_marketing_refusal(error: &Error) -> bool {
+    matches!(
+        error,
+        Error::Api {
+            status: 400,
+            code: Some(131_061 | 131_063),
+            ..
+        }
+    )
+}
+
+/// `/marketing_messages` refusing a parameter (100), which a template that is no longer
+/// marketing causes. A bare 400 can be auth, policy or anything else, so it doesn't count.
+pub fn is_marketing_parameter_refusal(error: &Error) -> bool {
+    matches!(
+        error,
+        Error::Api {
+            status: 400,
+            code: Some(100),
+            ..
+        }
+    )
+}
+
 pub fn map_error(status: u16, body: &str) -> Error {
     let root: Value = serde_json::from_str(body).unwrap_or(Value::Null);
     let error = root.get("error").unwrap_or(&root);

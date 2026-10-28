@@ -551,59 +551,6 @@ pub fn group_analytics(
         .query("template_group_ids", id_array(group_ids))
 }
 
-/// The first lookup page holding `name` exactly (and `language`, if given), following the
-/// cursor only as far as needed. Graph's `name` filter also returns other names, so a
-/// page can be full without holding the one asked for.
-pub async fn find_page(
-    client: &crate::Client,
-    waba_id: &str,
-    name: &str,
-    language: Option<&str>,
-) -> paloma_core::Result<Option<Value>> {
-    crate::paging::find_page(
-        client,
-        |after| lookup_page(waba_id, name, language, after),
-        |page| !exact_matches(page, name, language).is_empty(),
-    )
-    .await
-}
-
-/// Find the single template matching `name` (and `language`, if given) by executing a
-/// lookup. With a language, the first match ends the search. Without one, every page is
-/// read first, because a translation on a later page makes the name ambiguous. Several
-/// languages without `--language` is a validation error, because acting on an arbitrary
-/// one would be a surprise.
-pub async fn find_one(
-    client: &crate::Client,
-    waba_id: &str,
-    name: &str,
-    language: Option<&str>,
-) -> paloma_core::Result<Value> {
-    use paloma_core::Error;
-    let page = match language {
-        Some(_) => find_page(client, waba_id, name, language).await?,
-        None => Some(
-            crate::paging::collect_all(client, None, |after| {
-                lookup_page(waba_id, name, None, after)
-            })
-            .await?,
-        ),
-    }
-    .unwrap_or_default();
-    let matches = exact_matches(&page, name, language);
-    match matches.as_slice() {
-        [] => Err(Error::other(format!(
-            "no template named '{name}'{} on this WABA",
-            language.map(|l| format!(" ({l})")).unwrap_or_default()
-        ))),
-        [one] => Ok((*one).clone()),
-        _ if language.is_none() => Err(Error::validation(format!(
-            "template '{name}' exists in multiple languages; pass --language"
-        ))),
-        [first, ..] => Ok((*first).clone()),
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;

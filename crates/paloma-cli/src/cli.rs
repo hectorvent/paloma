@@ -3,6 +3,7 @@
 use std::path::PathBuf;
 
 use clap::{Args, Parser, ValueEnum};
+use secrecy::SecretString;
 
 use crate::commands::Command;
 
@@ -40,6 +41,13 @@ pub enum Format {
     Raw,
 }
 
+/// Parse a secret flag straight into a [`SecretString`], so it never sits in a plain
+/// `String` that a `Debug` print could show.
+#[allow(clippy::unnecessary_wraps)] // clap value parsers return a Result
+fn secret(value: &str) -> Result<SecretString, std::convert::Infallible> {
+    Ok(SecretString::from(value))
+}
+
 /// Flags accepted at any level of the command tree.
 #[derive(Debug, Clone, Args)]
 #[command(next_help_heading = "Global options")]
@@ -55,9 +63,10 @@ pub struct GlobalArgs {
         global = true,
         env = "PALOMA_TOKEN",
         hide = true,
-        hide_env_values = true
+        hide_env_values = true,
+        value_parser = secret
     )]
-    pub token: Option<String>,
+    pub token: Option<SecretString>,
 
     /// Meta app secret (app-level webhook subscriptions, webhook signatures).
     #[arg(
@@ -65,9 +74,10 @@ pub struct GlobalArgs {
         global = true,
         env = "PALOMA_APP_SECRET",
         hide = true,
-        hide_env_values = true
+        hide_env_values = true,
+        value_parser = secret
     )]
-    pub app_secret: Option<String>,
+    pub app_secret: Option<SecretString>,
 
     /// Output format.
     #[arg(

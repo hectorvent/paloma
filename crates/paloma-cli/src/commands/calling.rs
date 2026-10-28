@@ -7,7 +7,6 @@ use clap::{Args, Subcommand, ValueEnum};
 use paloma_core::limits::{DEFAULT_SIP_PORT, MAX_VOICEMAIL_TIMEOUT_SECONDS};
 use paloma_core::{Error, Result, validate};
 use paloma_graph::api::calling;
-use serde_json::{Map, Value, json};
 
 use super::read_json;
 use crate::app::{App, no_id};
@@ -197,37 +196,53 @@ impl CallingCommand {
             }
             other => other,
         };
-        let calling = match command {
+        let phone =
+            |app: &App| -> Result<String> { Ok(app.ctx()?.require_phone_number_id()?.to_owned()) };
+        let req = match command {
             Self::Hours(_) | Self::Permission { .. } | Self::Analytics(_) | Self::Status { .. } => {
                 unreachable!("handled above")
             }
-            Self::Enable => json!({ "status": "ENABLED" }),
-            Self::Disable => json!({ "status": "DISABLED" }),
-            Self::Set(a) => settings(a)?,
-            Self::Sip(Sip::Set(a)) => sip_set(&a)?,
-            Self::Sip(Sip::Disable) => json!({ "sip": { "status": "DISABLED" } }),
+            Self::Enable => calling::set_status(&phone(app)?, true),
+            Self::Disable => calling::set_status(&phone(app)?, false),
+            Self::Set(a) => return set(app, a).await,
+            Self::Sip(Sip::Set(a)) => {
+                let servers = a
+                    .servers
+                    .iter()
+                    .map(|s| parse_server(s))
+                    .collect::<Result<Vec<_>>>()?;
+                calling::set_sip(
+                    &phone(app)?,
+                    &servers,
+                    a.tgrp.as_deref(),
+                    a.context.as_deref(),
+                    a.enable_calling,
+                )
+            }
+            Self::Sip(Sip::Disable) => calling::disable_sip(&phone(app)?),
             Self::Codecs(Codecs::Set { codecs }) => {
                 let names: Vec<String> = codecs.iter().map(enum_str).collect();
-                json!({ "audio": { "additional_codecs": names } })
+                let names: Vec<&str> = names.iter().map(String::as_str).collect();
+                calling::set_codecs(&phone(app)?, &names)
             }
-            Self::Codecs(Codecs::Clear) => json!({ "audio": { "additional_codecs": [] } }),
+            Self::Codecs(Codecs::Clear) => calling::set_codecs(&phone(app)?, &[]),
             Self::Voicemail(Voicemail::Set(a)) => {
-                let body = voicemail(&a)?;
+                let (triggers, media_id, timeout) = voicemail(&a)?;
+                let triggers: Vec<&str> = triggers.iter().map(String::as_str).collect();
+                let req = calling::set_voicemail(&phone(app)?, &triggers, media_id, timeout);
                 app.out.note(
                     "Meta advises turning call hours off while voicemail is on, because people \
                      can't call outside them (paloma calling hours disable)",
                 );
-                body
+                req
             }
-            Self::Voicemail(Voicemail::Disable) => json!({ "voicemail": { "status": "DISABLED" } }),
+            Self::Voicemail(Voicemail::Disable) => calling::disable_voicemail(&phone(app)?),
         };
-        let phone = app.ctx()?.require_phone_number_id()?.to_owned();
-        app.send_and_emit(&calling::set(&phone, calling), no_id)
-            .await
+        app.send_and_emit(&req, no_id).await
     }
 }
 
-fn settings(a: Set) -> Result<Value> {
+async fn set(app: &App, a: Set) -> Result<()> {
     if let Some(file) = a.file {
         let v = read_json(&file)?;
         if !v.is_object() {
@@ -235,54 +250,54 @@ fn settings(a: Set) -> Result<Value> {
                 "--file must hold a JSON object (the `calling` settings)",
             ));
         }
-        return Ok(v);
+        let phone = app.ctx()?.require_phone_number_id()?.to_owned();
+        return app.send_and_emit(&calling::set(&phone, v), no_id).await;
     }
-    let mut m = Map::new();
-    if let Some(s) = a.status {
-        m.insert("status".into(), enum_str(&s).into());
-    }
-    if let Some(i) = a.call_icon {
-        m.insert("call_icon_visibility".into(), enum_str(&i).into());
-    }
-    if let Some(c) = a.callback_permission {
-        m.insert("callback_permission_status".into(), enum_str(&c).into());
-    }
-    if !a.icon_countries.is_empty() || a.icon_everywhere {
-        let countries = a
-            .icon_countries
-            .iter()
-            .map(|c| {
-                let c = c.trim().to_ascii_uppercase();
-                validate::country_code(&c).map(|()| c)
-            })
-            .collect::<Result<Vec<_>>>()?;
-        m.insert(
-            "call_icons".into(),
-            json!({ "restrict_to_user_countries": countries }),
-        );
-    }
-    if let Some(p) = a.srtp {
-        m.insert("srtp_key_exchange_protocol".into(), enum_str(&p).into());
-    }
-    if m.is_empty() {
+    let icon_countries = if a.icon_countries.is_empty() && !a.icon_everywhere {
+        None
+    } else {
+        Some(
+            a.icon_countries
+                .iter()
+                .map(|c| {
+                    let c = c.trim().to_ascii_uppercase();
+                    validate::country_code(&c).map(|()| c)
+                })
+                .collect::<Result<Vec<_>>>()?,
+        )
+    };
+    let status = a.status.map(|v| enum_str(&v));
+    let call_icon = a.call_icon.map(|v| enum_str(&v));
+    let callback = a.callback_permission.map(|v| enum_str(&v));
+    let srtp = a.srtp.map(|v| enum_str(&v));
+    let settings = calling::Settings {
+        status: status.as_deref(),
+        call_icon_visibility: call_icon.as_deref(),
+        callback_permission_status: callback.as_deref(),
+        icon_countries,
+        srtp_key_exchange_protocol: srtp.as_deref(),
+    };
+    if settings.is_empty() {
         return Err(Error::validation(
             "pass at least one of --status, --call-icon, --callback-permission, --icon-countries, \
              --icon-everywhere, --srtp, --file",
         ));
     }
-    Ok(Value::Object(m))
+    let phone = app.ctx()?.require_phone_number_id()?.to_owned();
+    app.send_and_emit(&calling::set_settings(&phone, &settings), no_id)
+        .await
 }
 
-/// Meta silently drops a `TIMEOUT` trigger without a timeout, so that is refused here.
-fn voicemail(a: &VoicemailSet) -> Result<Value> {
+/// Triggers (deduplicated, in order), the greeting's media id and the ring timeout. Meta
+/// silently drops a `TIMEOUT` trigger without a timeout, so that is refused here.
+fn voicemail(a: &VoicemailSet) -> Result<(Vec<String>, u64, Option<u32>)> {
     let announcement = a.announcement.trim();
     validate::numeric_id(announcement, "--announcement")?;
     let media_id: u64 = announcement
         .parse()
         .map_err(|_| Error::validation("--announcement is too long for a media id"))?;
     let on_timeout = a.triggers.contains(&VoicemailTrigger::Timeout);
-    let mut audio = json!({ "announcement_media_id": media_id });
-    match (on_timeout, a.ring_seconds) {
+    let timeout = match (on_timeout, a.ring_seconds) {
         (true, None) => {
             return Err(Error::validation(
                 "--trigger timeout needs --ring-seconds, or Meta ignores the trigger",
@@ -298,9 +313,9 @@ fn voicemail(a: &VoicemailSet) -> Result<Value> {
                 "--ring-seconds must be 0-{MAX_VOICEMAIL_TIMEOUT_SECONDS}"
             )));
         }
-        (true, Some(seconds)) => audio["timeout_seconds"] = json!(seconds),
-        (false, None) => {}
-    }
+        (true, Some(seconds)) => Some(seconds),
+        (false, None) => None,
+    };
     let mut triggers: Vec<String> = Vec::new();
     for trigger in &a.triggers {
         let name = enum_str(trigger);
@@ -308,46 +323,11 @@ fn voicemail(a: &VoicemailSet) -> Result<Value> {
             triggers.push(name);
         }
     }
-    Ok(json!({ "voicemail": {
-        "status": "ENABLED",
-        "triggers": triggers,
-        "audio": { "default": audio },
-    } }))
-}
-
-fn sip_set(a: &SipSet) -> Result<Value> {
-    let mut params = Map::new();
-    if let Some(t) = a.tgrp.as_deref().filter(|s| !s.is_empty()) {
-        params.insert("tgrp".into(), t.into());
-    }
-    if let Some(c) = a.context.as_deref().filter(|s| !s.is_empty()) {
-        params.insert("context".into(), c.into());
-    }
-    let servers = a
-        .servers
-        .iter()
-        .map(|s| {
-            let (host, port) = parse_server(s)?;
-            let mut server = json!({ "hostname": host, "port": port });
-            if !params.is_empty() {
-                server["request_uri_user_params"] = Value::Object(params.clone());
-            }
-            Ok(server)
-        })
-        .collect::<Result<Vec<_>>>()?;
-    let mut calling = Map::new();
-    if a.enable_calling {
-        calling.insert("status".into(), "ENABLED".into());
-    }
-    calling.insert(
-        "sip".into(),
-        json!({ "status": "ENABLED", "servers": servers }),
-    );
-    Ok(Value::Object(calling))
+    Ok((triggers, media_id, timeout))
 }
 
 /// `host[:port]`, split on the last colon.
-fn parse_server(spec: &str) -> Result<(String, u16)> {
+fn parse_server(spec: &str) -> Result<calling::SipServer> {
     let spec = spec.trim();
     let (host, port) = match spec.rsplit_once(':') {
         Some((h, p)) => {
@@ -361,7 +341,10 @@ fn parse_server(spec: &str) -> Result<(String, u16)> {
     if host.is_empty() {
         return Err(Error::validation(format!("--server '{spec}' has no host")));
     }
-    Ok((host.to_owned(), port))
+    Ok(calling::SipServer {
+        hostname: host.to_owned(),
+        port,
+    })
 }
 
 #[cfg(test)]
@@ -372,11 +355,17 @@ mod tests {
     fn server_parsing() {
         assert_eq!(
             parse_server("sip.example.com").unwrap(),
-            ("sip.example.com".into(), 5061)
+            calling::SipServer {
+                hostname: "sip.example.com".into(),
+                port: 5061
+            }
         );
         assert_eq!(
             parse_server("sip.example.com:5060").unwrap(),
-            ("sip.example.com".into(), 5060)
+            calling::SipServer {
+                hostname: "sip.example.com".into(),
+                port: 5060
+            }
         );
         assert!(parse_server("sip.example.com:0").is_err());
         assert!(parse_server("sip.example.com:99999").is_err());

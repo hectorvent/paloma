@@ -180,27 +180,41 @@ pub fn users(
     .query_opt("limit", limit)
     .query_opt("after", after)
 }
-pub fn welcome_sequence(
+fn welcome_sequences_node(waba: &str) -> String {
+    format!("{waba}/welcome_message_sequences")
+}
+
+/// The WABA's welcome sequences, or only `id`.
+pub fn welcome_sequences(waba: &str, id: Option<&str>, limit: Option<u32>) -> Request {
+    Request::get(welcome_sequences_node(waba))
+        .query_opt("sequence_id", id)
+        .query_opt("limit", limit)
+}
+
+pub fn create_welcome_sequence(waba: &str, name: &str, sequence: &Value) -> Request {
+    Request::post(welcome_sequences_node(waba))
+        .json(json!({ "name": name, "welcome_message_sequence": sequence }))
+}
+
+/// Change a sequence's name, content or both; `None` keeps that part.
+pub fn update_welcome_sequence(
     waba: &str,
-    read: bool,
-    delete: bool,
-    id: Option<&str>,
-    mut body: Value,
-    limit: Option<u32>,
+    id: &str,
+    name: Option<&str>,
+    sequence: Option<&Value>,
 ) -> Request {
-    let node = format!("{waba}/welcome_message_sequences");
-    if read {
-        return Request::get(node)
-            .query_opt("sequence_id", id)
-            .query_opt("limit", limit);
+    let mut body = json!({ "sequence_id": id });
+    if let Some(name) = name {
+        body["name"] = json!(name);
     }
-    if delete {
-        return Request::delete(node).query_opt("sequence_id", id);
+    if let Some(sequence) = sequence {
+        body["welcome_message_sequence"] = sequence.clone();
     }
-    if let Some(id) = id {
-        body["sequence_id"] = json!(id);
-    }
-    Request::post(node).json(body)
+    Request::post(welcome_sequences_node(waba)).json(body)
+}
+
+pub fn delete_welcome_sequence(waba: &str, id: &str) -> Request {
+    Request::delete(welcome_sequences_node(waba)).query("sequence_id", id)
 }
 
 #[cfg(test)]

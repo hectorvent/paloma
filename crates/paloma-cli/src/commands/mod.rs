@@ -156,6 +156,9 @@ pub struct SecretSource {
     pub flag: &'static str,
     pub stdin_flag: &'static str,
     pub env: &'static str,
+    /// A missing access token is an auth failure (exit 3); any other missing secret is
+    /// invalid input (exit 5).
+    pub missing_is_auth: bool,
 }
 
 /// Read a secret from stdin, the flag, the environment or a prompt, in that order. The
@@ -194,10 +197,15 @@ pub fn read_secret(
             .interact()
             .map_err(|e| Error::other(format!("prompt failed: {e}")))?
     } else {
-        return Err(Error::validation(format!(
+        let message = format!(
             "no {} given: pipe it with {}, or set {}",
             source.what, source.stdin_flag, source.env
-        )));
+        );
+        return Err(if source.missing_is_auth {
+            Error::auth(message)
+        } else {
+            Error::validation(message)
+        });
     };
     let value = value.trim();
     if value.is_empty() {
@@ -221,16 +229,9 @@ pub async fn app_id(app: &App) -> Result<String> {
             "no app id: pass --app-id, set PALOMA_APP_ID, or set a WABA id to look it up",
         ));
     };
-    let subscribed = app
-        .client()?
-        .execute(&webhook::subscribed_apps(&waba))
-        .await?
-        .json()?;
-    let id = webhook::subscribed_app_id(&subscribed).ok_or_else(|| {
-        Error::validation(
-            "no app id: pass --app-id, set PALOMA_APP_ID, or subscribe an app to the WABA first",
-        )
-    })?;
+    let subscribed = app.fetch(&webhook::subscribed_apps(&waba)).await?.json()?;
+    let id = webhook::subscribed_app_id(&subscribed)
+        .ok_or_else(paloma_graph::lookup::no_subscribed_app)?;
     let count = subscribed["data"].as_array().map_or(0, Vec::len);
     if count > 1 {
         app.out.warn(format!(
@@ -365,14 +366,11 @@ impl HandleUpload {
 
 /// A transport failure or a server error, which says nothing about the request itself.
 fn interrupted(error: &Error) -> bool {
-    matches!(error, Error::Other(_))
-        || matches!(
-            error,
-            Error::Api {
-                status: 500 | 502 | 503 | 504,
-                ..
-            }
-        )
+    match error {
+        Error::Other(_) => true,
+        Error::Api { status, .. } => retry::is_server_error(*status),
+        _ => false,
+    }
 }
 
 /// A report boundary or date: UNIX seconds, or `YYYY-MM-DD` at midnight UTC.

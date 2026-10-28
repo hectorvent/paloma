@@ -15,7 +15,8 @@ pub fn template() -> Value {
 /// `(app_id, subscriptions response)`; needs an app id and the app secret.
 async fn subscriptions(cx: Cx<'_>) -> Result<(String, Value)> {
     let waba = cx.ctx.require_waba_id()?;
-    let app_id = webhook::resolve_app_id(cx.client, cx.ctx.app_id.as_deref(), waba).await?;
+    let app_id =
+        paloma_graph::lookup::resolve_app_id(cx.client, cx.ctx.app_id.as_deref(), waba).await?;
     let subs = read(cx, &webhook::app_subscriptions(&app_id)).await?;
     Ok((app_id, subs))
 }
@@ -23,8 +24,12 @@ async fn subscriptions(cx: Cx<'_>) -> Result<(String, Value)> {
 pub async fn export(cx: Cx<'_>) -> Result<Vec<Value>> {
     let waba = cx.ctx.require_waba_id()?;
     let mut spec = Map::new();
-    if let Some(url) =
-        webhook::current_callback_url(cx.client, waba, cx.ctx.phone_number_id.as_deref()).await?
+    if let Some(url) = paloma_graph::lookup::current_callback_url(
+        cx.client,
+        waba,
+        cx.ctx.phone_number_id.as_deref(),
+    )
+    .await?
     {
         spec.insert("callback_url".into(), url.into());
     }
@@ -55,9 +60,12 @@ pub async fn plan(cx: Cx<'_>, spec: &Value) -> Result<KindPlan> {
     let mut preview = Map::new();
 
     if let Some(desired) = text("callback_url") {
-        let current =
-            webhook::current_callback_url(cx.client, waba, cx.ctx.phone_number_id.as_deref())
-                .await?;
+        let current = paloma_graph::lookup::current_callback_url(
+            cx.client,
+            waba,
+            cx.ctx.phone_number_id.as_deref(),
+        )
+        .await?;
         if current.as_deref() != Some(desired) {
             let token = verify_token.ok_or_else(|| {
                 Error::validation("Webhook change needs a 'verifyToken' in the spec (a secret), or use `paloma webhook subscribe`")

@@ -63,7 +63,7 @@ fn range(value: &str, flag: &str) -> Result<(String, String)> {
     Ok((open.to_owned(), close.to_owned()))
 }
 
-fn weekly(specs: &[String]) -> Result<Vec<Value>> {
+fn weekly(specs: &[String]) -> Result<Vec<calling::OpeningHours>> {
     let mut entries: Vec<(usize, String, String)> = Vec::new();
     for spec in specs {
         let (day, times) = spec
@@ -92,13 +92,15 @@ fn weekly(specs: &[String]) -> Result<Vec<Value>> {
     }
     Ok(entries
         .into_iter()
-        .map(|(index, open, close)| {
-            json!({ "day_of_week": DAYS[index], "open_time": open, "close_time": close })
+        .map(|(index, open_time, close_time)| calling::OpeningHours {
+            day_of_week: DAYS[index],
+            open_time,
+            close_time,
         })
         .collect())
 }
 
-fn holiday_schedule(specs: &[String]) -> Result<Vec<Value>> {
+fn holiday_schedule(specs: &[String]) -> Result<Vec<calling::Holiday>> {
     if specs.len() > limits::MAX_CALL_HOLIDAYS {
         return Err(Error::validation(format!(
             "at most {} holiday overrides",
@@ -114,8 +116,12 @@ fn holiday_schedule(specs: &[String]) -> Result<Vec<Value>> {
                 return Err(invalid());
             }
             super::super::timestamp(date, "--holiday")?;
-            let (start, end) = range(times, "--holiday")?;
-            Ok(json!({ "date": date, "start_time": start, "end_time": end }))
+            let (start_time, end_time) = range(times, "--holiday")?;
+            Ok(calling::Holiday {
+                date: date.to_owned(),
+                start_time,
+                end_time,
+            })
         })
         .collect()
 }
@@ -150,19 +156,14 @@ impl Hours {
                 ))? {
                     return Ok(());
                 }
-                let body = json!({ "call_hours": {
-                    "status": "ENABLED",
-                    "timezone_id": a.timezone,
-                    "weekly_operating_hours": weekly_hours,
-                    "holiday_schedule": holidays,
-                }});
-                app.send_and_emit(&calling::set(&phone, body), no_id).await
+                let req = calling::set_hours(&phone, &a.timezone, &weekly_hours, &holidays);
+                app.send_and_emit(&req, no_id).await
             }
             Self::Disable => {
                 let phone = app.ctx()?.require_phone_number_id()?.to_owned();
                 // Meta requires the schedule even when disabling, and deletes holidays left out.
                 let current = app.fetch(&calling::get(&phone, false)).await?.json()?;
-                let Some(mut hours) = current.pointer("/calling/call_hours").cloned() else {
+                let Some(hours) = current.pointer("/calling/call_hours").cloned() else {
                     app.out.info("call hours aren't set on this number");
                     return Ok(());
                 };
@@ -175,9 +176,8 @@ impl Hours {
                 ))? {
                     return Ok(());
                 }
-                hours["status"] = json!("DISABLED");
-                let body = json!({ "call_hours": hours });
-                app.send_and_emit(&calling::set(&phone, body), no_id).await
+                app.send_and_emit(&calling::disable_hours(&phone, hours), no_id)
+                    .await
             }
         }
     }
@@ -199,12 +199,9 @@ mod tests {
             "MONDAY=0800-1200",
         ]))
         .unwrap();
-        let days: Vec<_> = hours
-            .iter()
-            .map(|h| h["open_time"].as_str().unwrap())
-            .collect();
+        let days: Vec<_> = hours.iter().map(|h| h.open_time.as_str()).collect();
         assert_eq!(days, ["0800", "1300", "0900"]);
-        assert_eq!(hours[2]["day_of_week"], "TUESDAY");
+        assert_eq!(hours[2].day_of_week, "TUESDAY");
     }
 
     #[test]
@@ -228,7 +225,11 @@ mod tests {
     fn holidays_need_a_real_date_and_a_range() {
         assert_eq!(
             holiday_schedule(&specs(&["2026-01-01=0000-2359"])).unwrap()[0],
-            json!({"date":"2026-01-01","start_time":"0000","end_time":"2359"})
+            calling::Holiday {
+                date: "2026-01-01".into(),
+                start_time: "0000".into(),
+                end_time: "2359".into(),
+            }
         );
         for bad in ["2026-13-01=0000-2359", "1767225600=0000-2359", "2026-01-01"] {
             assert!(holiday_schedule(&specs(&[bad])).is_err(), "{bad}");

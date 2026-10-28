@@ -5,7 +5,6 @@ use crate::app::{App, no_id};
 use clap::Subcommand;
 use paloma_core::{Result, validate};
 use paloma_graph::api::phone_numbers;
-use serde_json::json;
 
 #[derive(Debug, Subcommand)]
 pub enum SettingsCommand {
@@ -37,7 +36,7 @@ impl SettingsCommand {
             validate::data_localization_region(region)?;
         }
         let phone = app.ctx()?.require_phone_number_id()?.to_owned();
-        let body = match self {
+        let req = match self {
             Self::Get => {
                 return app
                     .send_and_emit(&phone_numbers::settings(&phone), no_id)
@@ -45,20 +44,13 @@ impl SettingsCommand {
             }
             Self::Storage { region, disable } => {
                 app.out.note("local storage changes require a deregistered number; register it again afterward");
-                let mut storage = json!({"status": if disable {"IN_COUNTRY_STORAGE_DISABLED"} else {"IN_COUNTRY_STORAGE_ENABLED"}});
-                if let Some(region) = region {
-                    storage["data_localization_region"] = json!(region);
-                }
-                json!({"storage_configuration": storage})
+                phone_numbers::set_storage(&phone, !disable, region.as_deref())
             }
-            Self::IdentityCheck { enabled } => {
-                json!({"user_identity_change": {"enable_identity_key_check": enabled}})
-            }
+            Self::IdentityCheck { enabled } => phone_numbers::set_identity_check(&phone, enabled),
         };
         if !app.confirm_or_abort(&format!("change settings for number {phone}"))? {
             return Ok(());
         }
-        app.send_and_emit(&phone_numbers::set_settings(&phone, body), no_id)
-            .await
+        app.send_and_emit(&req, no_id).await
     }
 }
