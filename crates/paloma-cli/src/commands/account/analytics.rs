@@ -124,9 +124,7 @@ fn api_values(values: &[impl ValueEnum]) -> Vec<String> {
     values
         .iter()
         .map(|v| {
-            v.to_possible_value()
-                .expect("no skipped analytics variants")
-                .get_name()
+            crate::commands::util::enum_name(v)
                 .replace('-', "_")
                 .to_ascii_uppercase()
         })
@@ -135,8 +133,8 @@ fn api_values(values: &[impl ValueEnum]) -> Vec<String> {
 
 impl Analytics {
     pub async fn run(self, app: &App) -> Result<()> {
-        let start = crate::commands::timestamp(&self.start, "--start")?;
-        let end = crate::commands::timestamp(&self.end, "--end")?;
+        let start = crate::commands::util::timestamp(&self.start, "--start")?;
+        let end = crate::commands::util::timestamp(&self.end, "--end")?;
         validate::analytics_range(start, end)?;
         self.phone_number
             .iter()

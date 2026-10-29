@@ -1,7 +1,7 @@
 //! Migration copies rather than moves, and key installation accepts only a public PEM
 //! file, keeping private material out of requests.
 use crate::app::{App, no_id};
-use crate::commands::read_file;
+use crate::commands::util::read_file;
 use crate::output::Output;
 use clap::{Args, Subcommand};
 use paloma_core::{Error, Result, limits, validate};
@@ -20,9 +20,10 @@ impl Migrate {
     pub async fn run(self, app: &App) -> Result<()> {
         validate::numeric_id(&self.source_waba_id, "source WABA id")?;
         if self.names.len() > limits::MAX_FLOW_MIGRATION_NAMES {
-            return Err(Error::validation(
-                "at most 100 Flow names may be migrated per request",
-            ));
+            return Err(Error::validation(format!(
+                "at most {} Flow names may be migrated per request",
+                limits::MAX_FLOW_MIGRATION_NAMES
+            )));
         }
         for name in &self.names {
             validate::not_blank(name, "Flow name")?;

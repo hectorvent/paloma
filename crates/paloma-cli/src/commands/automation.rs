@@ -1,7 +1,7 @@
 //! Conversational settings share the manifest endpoint, with explicit empty lists for
 //! clearing prompts and commands rather than treating omitted flags as deletion.
 
-use super::read_json;
+use super::util::read_json;
 use crate::app::{App, field_id, no_id};
 use clap::{Args, Subcommand};
 use paloma_core::{Error, Result, limits, validate};

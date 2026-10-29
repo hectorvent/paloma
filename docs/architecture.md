@@ -64,7 +64,7 @@ and nothing touches the keyring until a request is actually sent, or a listener 
 ## Adding a command
 
 1. Pick the group module in `crates/paloma-cli/src/commands/` (or add one and a variant
-   in `commands/mod.rs`).
+   in `commands.rs`).
 2. Add an `Args` struct (or inline fields) and a variant to the group's `Subcommand`
    enum; doc comments become `--help` text.
 3. If it calls a new Graph node, add a pure builder to `paloma_graph::api::<resource>`.

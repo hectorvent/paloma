@@ -5,7 +5,7 @@ use paloma_core::{Error, Result, limits, validate};
 use paloma_graph::api::profile;
 use serde_json::{Map, Value};
 
-use super::{HandleUpload, app_id};
+use super::upload::{HandleUpload, app_id};
 use crate::app::{App, no_id};
 use crate::output::Output;
 
@@ -101,10 +101,7 @@ enum Vertical {
 
 impl Vertical {
     fn as_api_value(self) -> String {
-        self.to_possible_value()
-            .expect("no variant is skipped")
-            .get_name()
-            .to_owned()
+        super::util::enum_name(&self)
     }
 }
 

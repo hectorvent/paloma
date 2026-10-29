@@ -217,7 +217,7 @@ fn print_changes(app: &App, plan: &KindPlan) {
 
 /// Parse, interpolate and plan every document, failing before any write if one is bad.
 async fn plans(app: &App, file: &std::path::Path) -> Result<Vec<(String, KindPlan)>> {
-    let text = super::read_file(file)?;
+    let text = super::util::read_file(file)?;
     let docs = yaml::read_documents(&text, &file.display().to_string())?;
     let lookup = |scheme: Scheme, name: &str| -> Option<String> {
         match scheme {

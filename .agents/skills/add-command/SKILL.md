@@ -29,14 +29,14 @@ pub fn add(phone_number_id: &str, users: &[String]) -> Request {
 ```
 
 Payload shaping (JSON bodies, `MESSAGING_PRODUCT`, multipart) lives here. New module →
-`pub mod` in `api/mod.rs`. Add a unit test for any non-trivial body.
+`pub mod` in `api.rs`. Add a unit test for any non-trivial body.
 
 ## 2. clap variant (`crates/paloma-cli/src/commands/<group>.rs`)
 
 - Doc comments become `--help`; write them for users.
 - Several flags → an `Args` struct. Closed sets → `clap::ValueEnum`.
 - Env-backed flags use `env = "PALOMA_…"`. Never take a secret as an argument.
-- New top-level group → module + variant in `commands/mod.rs`.
+- New top-level group → module + variant in `commands.rs`.
 
 ## 3. `run`
 

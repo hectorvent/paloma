@@ -39,6 +39,10 @@ pub struct SampleContext {
     pub nonce: String,
 }
 
+/// Meta's example ids, for samples when no WABA or number is configured.
+pub const EXAMPLE_WABA_ID: &str = "102290129340398";
+pub const EXAMPLE_PHONE_NUMBER_ID: &str = "106540352242922";
+
 impl SampleContext {
     fn message_id(&self) -> String {
         format!("wamid.PALOMASIMULATED{}", self.nonce)

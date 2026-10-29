@@ -8,8 +8,8 @@ use paloma_graph::Request;
 use paloma_graph::api::flows::{self, DEFAULT_GET_FIELDS, FLOW_JSON_NAME, PREVIEW_FIELD};
 use serde_json::{Map, Value, json};
 
-use super::read_file;
-use super::template::list;
+use super::listing::list;
+use super::util::{enum_name, read_file};
 use crate::app::{App, field_id};
 use crate::output::Output;
 
@@ -29,14 +29,7 @@ enum Category {
 }
 
 fn categories(cats: &[Category]) -> Vec<Value> {
-    cats.iter()
-        .map(|c| {
-            c.to_possible_value()
-                .expect("no skipped variants")
-                .get_name()
-                .into()
-        })
-        .collect()
+    cats.iter().map(|c| enum_name(c).into()).collect()
 }
 
 #[derive(Debug, Subcommand)]

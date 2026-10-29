@@ -73,7 +73,7 @@ impl Version {
             verify_token,
         }) = self.command
         else {
-            let app_id = super::super::app_id(app).await?;
+            let app_id = super::super::upload::app_id(app).await?;
             let Some(response) = app.send(&webhook::app_subscriptions(&app_id)).await? else {
                 return Ok(());
             };
@@ -89,7 +89,7 @@ impl Version {
         } else {
             None
         };
-        let app_id = super::super::app_id(app).await?;
+        let app_id = super::super::upload::app_id(app).await?;
         let read = webhook::app_subscriptions(&app_id);
         let current = app.fetch(&read).await?.json()?;
         let fields = webhook::subscribed_fields(&current);

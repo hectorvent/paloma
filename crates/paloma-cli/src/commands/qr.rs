@@ -162,7 +162,7 @@ impl QrCommand {
                     .await
             }
             Self::List { all, after, limit } => {
-                super::template::list(
+                super::listing::list(
                     app,
                     all,
                     after,

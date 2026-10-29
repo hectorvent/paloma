@@ -31,7 +31,7 @@ builders in `paloma-graph/src/api/` (add one if missing).
 
 Add the variant, then every `match`: `ALL`, `name`, `parse`, `phone_scoped` (true when
 the node hangs off a phone number id), `spec_template`, `export`, `plan`. The compiler
-finds the ones you miss. Add `pub mod` in `kinds/mod.rs`.
+finds the ones you miss. Add `pub mod` in `kinds.rs`.
 
 ## 3. Tests
 

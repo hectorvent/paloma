@@ -3,7 +3,7 @@
 use crate::output::Output;
 use crate::{
     app::{App, no_id},
-    commands::read_json,
+    commands::util::read_json,
 };
 use clap::{Args, Subcommand, ValueEnum};
 use paloma_core::{Error, Result, validate};

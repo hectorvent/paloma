@@ -68,8 +68,8 @@ pub struct Analytics {
 
 impl Analytics {
     pub async fn run(self, app: &App) -> Result<()> {
-        let start = super::super::timestamp(&self.start, "--start")?;
-        let end = super::super::timestamp(&self.end, "--end")?;
+        let start = super::super::util::timestamp(&self.start, "--start")?;
+        let end = super::super::util::timestamp(&self.end, "--end")?;
         validate::analytics_range(start, end)?;
         self.phone_number
             .iter()

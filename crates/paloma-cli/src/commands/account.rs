@@ -7,7 +7,7 @@ use clap::{Args, Subcommand};
 use paloma_core::{Error, Result, limits, validate};
 use paloma_graph::api::{account, webhook};
 
-use super::read_json;
+use super::util::read_json;
 use crate::{cli::Format, output::Output};
 use paloma_graph::Request;
 use serde_json::json;
@@ -238,7 +238,7 @@ impl AccountCommand {
         let waba = app.ctx()?.require_waba_id()?.to_owned();
         match self {
             Self::Activities(a) => {
-                super::template::list(
+                super::listing::list(
                     app,
                     a.page.all,
                     a.page.after,
@@ -271,7 +271,7 @@ impl AccountCommand {
             }
             Self::Health => show_health(app, &account::get(&waba, account::HEALTH_FIELDS)).await,
             Self::Limits(a) => {
-                super::template::list(
+                super::listing::list(
                     app,
                     a.page.all,
                     a.page.after,
@@ -281,7 +281,7 @@ impl AccountCommand {
                 .await
             }
             Self::SubscribedApps(a) => {
-                super::template::list(
+                super::listing::list(
                     app,
                     a.all,
                     a.after,

@@ -8,7 +8,7 @@ mod settings;
 
 use secrecy::{ExposeSecret, SecretString};
 
-use super::{SecretSource, read_secret};
+use super::util::{SecretSource, read_secret};
 use crate::app::{App, field_id, no_id};
 
 const LIST_COLUMNS: &[&str] = &[
@@ -189,7 +189,7 @@ impl NumberCommand {
                     oldest_first: matches!(a.sort, Some(Sort::LastOnboardedAsc)),
                     limit: a.limit,
                 };
-                super::template::list(
+                super::listing::list(
                     app,
                     a.all,
                     a.after,

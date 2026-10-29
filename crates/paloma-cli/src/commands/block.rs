@@ -61,7 +61,7 @@ impl BlockCommand {
     }
 }
 
-/// `template::list` trusts `paging.next`, which this edge doesn't document: without it a
+/// `listing::list` trusts `paging.next`, which this edge doesn't document: without it a
 /// full page and the last page look the same, so `--all` walks to an empty page, and a
 /// single page can only say that more may exist.
 async fn list(app: &App, phone: &str, a: &ListArgs) -> Result<()> {

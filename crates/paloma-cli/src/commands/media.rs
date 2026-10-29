@@ -6,7 +6,7 @@ use paloma_graph::Request;
 use paloma_graph::api::media;
 use serde_json::json;
 
-use super::{HandleUpload, app_id};
+use super::upload::{HandleUpload, app_id};
 use crate::app::{App, field_id};
 use crate::output::Output;
 

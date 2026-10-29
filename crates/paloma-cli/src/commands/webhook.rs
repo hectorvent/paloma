@@ -11,7 +11,7 @@ use paloma_graph::webhook_samples::{self, SAMPLE_EVENTS, SampleContext};
 use secrecy::{ExposeSecret, SecretString};
 use serde_json::{Value, json};
 
-use super::{SecretSource, read_secret};
+use super::util::{SecretSource, read_secret};
 use crate::app::{App, no_id};
 use crate::output::Output;
 
@@ -313,11 +313,11 @@ impl SimulateArgs {
                     waba_id: ctx
                         .waba_id
                         .clone()
-                        .unwrap_or_else(|| "102290129340398".into()),
+                        .unwrap_or_else(|| webhook_samples::EXAMPLE_WABA_ID.into()),
                     phone_number_id: ctx
                         .phone_number_id
                         .clone()
-                        .unwrap_or_else(|| "106540352242922".into()),
+                        .unwrap_or_else(|| webhook_samples::EXAMPLE_PHONE_NUMBER_ID.into()),
                     timestamp: std::time::SystemTime::now()
                         .duration_since(std::time::UNIX_EPOCH)
                         .map_or(0, |d| d.as_secs()),
@@ -428,7 +428,7 @@ impl Fields {
                 Ok(())
             }
             None => {
-                let app_id = super::app_id(app).await?;
+                let app_id = super::upload::app_id(app).await?;
                 app.send_and_emit(&webhook::app_subscriptions(&app_id), no_id)
                     .await
             }
@@ -450,7 +450,7 @@ impl Fields {
                     None
                 };
                 app.ensure_can_confirm("change the app's webhook subscriptions")?;
-                let app_id = super::app_id(app).await?;
+                let app_id = super::upload::app_id(app).await?;
                 if !app.confirm_or_abort(&format!(
                     "subscribe app {app_id} to: {}",
                     fields.join(", ")

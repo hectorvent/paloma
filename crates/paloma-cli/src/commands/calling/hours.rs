@@ -115,7 +115,7 @@ fn holiday_schedule(specs: &[String]) -> Result<Vec<calling::Holiday>> {
             if date.len() != 10 || !date.contains('-') {
                 return Err(invalid());
             }
-            super::super::timestamp(date, "--holiday")?;
+            super::super::util::timestamp(date, "--holiday")?;
             let (start_time, end_time) = range(times, "--holiday")?;
             Ok(calling::Holiday {
                 date: date.to_owned(),

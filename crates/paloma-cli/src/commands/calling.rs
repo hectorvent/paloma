@@ -8,7 +8,7 @@ use paloma_core::limits::{DEFAULT_SIP_PORT, MAX_VOICEMAIL_TIMEOUT_SECONDS};
 use paloma_core::{Error, Result, validate};
 use paloma_graph::api::calling;
 
-use super::read_json;
+use super::util::{enum_name, read_json};
 use crate::app::{App, no_id};
 
 #[derive(Debug, Subcommand)]
@@ -83,13 +83,6 @@ enum VoicemailTrigger {
     Reject,
     /// Nobody accepts or rejects the call within --ring-seconds.
     Timeout,
-}
-
-fn enum_str(v: &impl ValueEnum) -> String {
-    v.to_possible_value()
-        .expect("no skipped variants")
-        .get_name()
-        .to_owned()
 }
 
 #[derive(Debug, Args)]
@@ -221,7 +214,7 @@ impl CallingCommand {
             }
             Self::Sip(Sip::Disable) => calling::disable_sip(&phone(app)?),
             Self::Codecs(Codecs::Set { codecs }) => {
-                let names: Vec<String> = codecs.iter().map(enum_str).collect();
+                let names: Vec<String> = codecs.iter().map(enum_name).collect();
                 let names: Vec<&str> = names.iter().map(String::as_str).collect();
                 calling::set_codecs(&phone(app)?, &names)
             }
@@ -266,10 +259,10 @@ async fn set(app: &App, a: Set) -> Result<()> {
                 .collect::<Result<Vec<_>>>()?,
         )
     };
-    let status = a.status.map(|v| enum_str(&v));
-    let call_icon = a.call_icon.map(|v| enum_str(&v));
-    let callback = a.callback_permission.map(|v| enum_str(&v));
-    let srtp = a.srtp.map(|v| enum_str(&v));
+    let status = a.status.map(|v| enum_name(&v));
+    let call_icon = a.call_icon.map(|v| enum_name(&v));
+    let callback = a.callback_permission.map(|v| enum_name(&v));
+    let srtp = a.srtp.map(|v| enum_name(&v));
     let settings = calling::Settings {
         status: status.as_deref(),
         call_icon_visibility: call_icon.as_deref(),
@@ -318,7 +311,7 @@ fn voicemail(a: &VoicemailSet) -> Result<(Vec<String>, u64, Option<u32>)> {
     };
     let mut triggers: Vec<String> = Vec::new();
     for trigger in &a.triggers {
-        let name = enum_str(trigger);
+        let name = enum_name(trigger);
         if !triggers.contains(&name) {
             triggers.push(name);
         }

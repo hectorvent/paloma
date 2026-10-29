@@ -32,6 +32,10 @@ pub fn lookup(waba_id: &str, name: &str, language: Option<&str>) -> Request {
     lookup_page(waba_id, name, language, None)
 }
 
+/// Rows per lookup page. Paloma's choice, not Meta's limit (none is documented): the name
+/// filter also matches other names, so a bigger page means fewer round trips.
+const LOOKUP_PAGE_SIZE: u32 = 100;
+
 /// One page of a [`lookup`], for following its cursor.
 pub fn lookup_page(
     waba_id: &str,
@@ -59,7 +63,7 @@ pub fn lookup_fields_page(
         name: Some(name.to_owned()),
         language: language.map(str::to_owned),
         fields: fields.map(str::to_owned),
-        limit: Some(100),
+        limit: Some(LOOKUP_PAGE_SIZE),
         ..ListFilter::default()
     };
     list(waba_id, &filter, after)

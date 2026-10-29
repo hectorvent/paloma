@@ -2,7 +2,7 @@
 //! registration steps. Validate their required documents before credentials or HTTP.
 use crate::{
     app::{App, no_id},
-    commands::read_json,
+    commands::util::read_json,
 };
 use clap::Subcommand;
 use paloma_core::{Error, Result, limits, validate};

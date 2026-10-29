@@ -14,6 +14,11 @@ use paloma_graph::{Client, ClientConfig, Request, Response, RetryNotice};
 use crate::cli::GlobalArgs;
 use crate::output::{Output, Printer};
 
+/// A person could answer a prompt: stdin and stderr are both terminals.
+pub fn interactive() -> bool {
+    std::io::stdin().is_terminal() && std::io::stderr().is_terminal()
+}
+
 #[derive(Debug)]
 pub struct App {
     pub globals: GlobalArgs,
@@ -182,10 +187,7 @@ impl App {
     /// Fail if a confirmation could never pass, for commands that would otherwise spend a
     /// call before reaching [`Self::confirm`].
     pub fn ensure_can_confirm(&self, what: &str) -> Result<()> {
-        if self.globals.yes
-            || self.dry_run()
-            || (std::io::stdin().is_terminal() && std::io::stderr().is_terminal())
-        {
+        if self.globals.yes || self.dry_run() || interactive() {
             return Ok(());
         }
         Err(Error::validation(format!(

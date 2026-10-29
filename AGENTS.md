@@ -93,7 +93,7 @@ it exists to satisfy. Match that; don't narrate code.
 
 1. Add a variant (and an `Args` struct if it has several flags) to the group's
    `Subcommand` enum in `crates/paloma-cli/src/commands/<group>.rs`; doc comments become
-   `--help`. New top-level group → new module + variant in `commands/mod.rs`.
+   `--help`. New top-level group → new module + variant in `commands.rs`.
 2. New Graph node → a pure builder in `crates/paloma-graph/src/api/<resource>.rs`.
 3. In `run`: validate → resolve ids from `app.ctx()?` → `app.send_and_emit(..)`.
    Payload shaping belongs in `paloma-graph`, not in the command.

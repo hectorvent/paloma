@@ -6,7 +6,7 @@ use paloma_graph::api::{phone_numbers, tokens};
 use secrecy::ExposeSecret;
 use serde_json::{Value, json};
 
-use super::{SecretSource, read_secret};
+use super::util::{SecretSource, read_secret};
 use crate::app::App;
 use crate::output::Output;
 
