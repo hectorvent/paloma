@@ -2,6 +2,9 @@
 //! what users are promised: exit codes, what lands on stdout vs stderr, and the exact
 //! request sent (or printed under `--dry-run`).
 
+// A contract test reads as one scenario, setup to assertions; splitting it hides the story.
+#![allow(clippy::too_many_lines)]
+
 mod account;
 mod auth_config;
 mod block;

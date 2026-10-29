@@ -177,6 +177,7 @@ impl SetArgs {
 }
 
 impl AccountCommand {
+    #[allow(clippy::too_many_lines)] // one short arm per verb; each arm calls into its module
     pub async fn run(self, app: &App) -> Result<()> {
         if let Self::Reach(command) = self {
             return command.run(app).await;

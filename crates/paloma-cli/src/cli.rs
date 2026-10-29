@@ -51,6 +51,7 @@ fn secret(value: &str) -> Result<SecretString, std::convert::Infallible> {
 /// Flags accepted at any level of the command tree.
 #[derive(Debug, Clone, Args)]
 #[command(next_help_heading = "Global options")]
+#[allow(clippy::struct_excessive_bools)] // independent switches (--dry-run, --yes, -q, ...), not a state machine
 pub struct GlobalArgs {
     /// Named credential/context profile.
     #[arg(short = 'p', long, global = true, env = "PALOMA_PROFILE")]

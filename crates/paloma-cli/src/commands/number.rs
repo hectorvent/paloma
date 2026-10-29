@@ -179,6 +179,7 @@ impl PinInput {
 }
 
 impl NumberCommand {
+    #[allow(clippy::too_many_lines)] // one short arm per verb; each arm calls into its module
     pub async fn run(self, app: &App) -> Result<()> {
         match self {
             Self::List(a) => {

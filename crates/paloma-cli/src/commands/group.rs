@@ -268,6 +268,7 @@ async fn pin(app: &App, group: &str, message: &str, days: Option<u32>) -> Result
 }
 
 impl GroupCommand {
+    #[allow(clippy::too_many_lines)] // one short arm per verb; each arm calls into its module
     pub async fn run(self, app: &App) -> Result<()> {
         match self {
             Self::Create(a) => {

@@ -137,6 +137,7 @@ pub struct Assets {
 }
 
 impl FlowCommand {
+    #[allow(clippy::too_many_lines)] // one short arm per verb; each arm calls into its module
     pub async fn run(self, app: &App) -> Result<()> {
         match self {
             Self::Migrate(a) => a.run(app).await,

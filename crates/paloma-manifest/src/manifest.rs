@@ -49,7 +49,7 @@ impl Manifest {
     }
 
     /// Build the envelope for export.
-    #[allow(clippy::needless_pass_by_value)]
+    #[allow(clippy::needless_pass_by_value)] // callers build the spec only to hand it over
     pub fn document(kind: &str, phone_number_id: Option<&str>, spec_camel: Value) -> Value {
         let mut metadata = Map::new();
         if let Some(id) = phone_number_id {

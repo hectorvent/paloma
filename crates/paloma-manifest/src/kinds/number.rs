@@ -44,6 +44,7 @@ pub async fn export(cx: Cx<'_>) -> Result<Vec<Value>> {
     }
     Ok(vec![live])
 }
+#[allow(clippy::too_many_lines)] // one block per Number field, each with its own write and confirmation
 pub async fn plan(cx: Cx<'_>, spec: &Value) -> Result<KindPlan> {
     let object = spec
         .as_object()

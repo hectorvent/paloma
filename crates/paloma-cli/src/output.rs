@@ -143,7 +143,7 @@ impl Printer {
     }
 
     /// A human-facing diagnostic on stderr.
-    #[allow(clippy::unused_self)]
+    #[allow(clippy::unused_self)] // a method so every diagnostic goes through the Printer
     pub fn info(&self, msg: impl AsRef<str>) {
         let _ = writeln!(std::io::stderr().lock(), "{}", msg.as_ref());
     }

@@ -107,6 +107,7 @@ impl SampleContext {
 }
 
 /// The delivery for a name in [`SAMPLE_EVENTS`].
+#[allow(clippy::too_many_lines)] // one sample per arm, kept beside the others so they stay alike
 pub fn payload(event: &str, cx: &SampleContext) -> Option<Value> {
     let text = json!({ "body": "Does it come in another color?" });
     Some(match event {

@@ -169,7 +169,7 @@ impl Request {
 
     /// Add a query parameter only when a value is present and non-blank.
     #[must_use]
-    #[allow(clippy::needless_pass_by_value)]
+    #[allow(clippy::needless_pass_by_value)] // `Option<impl ToString>` reads cleanly at call sites
     pub fn query_opt(self, key: &str, value: Option<impl ToString>) -> Self {
         match value
             .as_ref()
