@@ -1,3 +1,6 @@
+//! Flows stay drafts until published, and Meta reports Flow JSON errors in the response
+//! body, so those are printed and the command exits 5.
+
 mod tools;
 
 use std::path::PathBuf;

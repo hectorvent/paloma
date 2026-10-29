@@ -1,3 +1,6 @@
+//! Calling settings are partial updates of one `calling` object. Inputs Meta would drop
+//! without an error (a timeout trigger with no timeout, a bad SIP port) are refused here.
+
 mod hours;
 mod insights;
 

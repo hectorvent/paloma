@@ -1,3 +1,6 @@
+//! `export`, `apply` and `diff`. Every manifest is planned against live state first, so
+//! only drift is written, a dry run never writes, and `diff` exits 1 on drift.
+
 use std::path::PathBuf;
 
 use clap::Args;

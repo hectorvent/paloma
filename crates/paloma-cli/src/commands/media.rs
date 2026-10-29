@@ -1,3 +1,6 @@
+//! Uploads are checked against Meta's per-type limits before any call. A download writes
+//! only a complete body, so a retry or a failure never leaves a partial file behind.
+
 use std::path::PathBuf;
 
 use clap::{Args, Subcommand};

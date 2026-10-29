@@ -1,3 +1,6 @@
+//! The `Commerce` kind: cart and catalog visibility. Turning either off confirms, like
+//! `commerce set`, because customers notice it.
+
 use paloma_core::Result;
 use paloma_graph::api::commerce;
 use serde_json::{Value, json};

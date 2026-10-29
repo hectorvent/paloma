@@ -1,3 +1,6 @@
+//! Phone-number lifecycle: registration, PIN, display name and identity. These writes can
+//! take a number offline, so they confirm, and PINs and codes never come from argv.
+
 use clap::{Args, Subcommand, ValueEnum};
 use paloma_core::limits::MAX_PHONE_NUMBERS_PAGE;
 use paloma_core::{Result, validate};

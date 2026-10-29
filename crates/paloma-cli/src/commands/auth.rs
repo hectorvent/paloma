@@ -1,3 +1,6 @@
+//! Tokens live in the OS keyring, never in config or argv. `status` asks Meta about the
+//! token, so a bad one fails with exit 3 before a script relies on it.
+
 use clap::Subcommand;
 use paloma_config::ProfileKey;
 use paloma_config::secrets::{keyring_ref, token_account};

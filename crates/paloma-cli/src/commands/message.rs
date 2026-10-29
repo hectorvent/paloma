@@ -1,3 +1,6 @@
+//! Read receipts, typing indicators and delivery history. History follows every page of
+//! events and refuses entries for another message, which a lookup can return.
+
 use clap::{Args, Subcommand};
 use paloma_core::{Error, Result, validate};
 use paloma_graph::api::{message_history, messages};

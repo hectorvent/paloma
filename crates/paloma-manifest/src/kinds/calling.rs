@@ -1,3 +1,6 @@
+//! The `Calling` kind: the phone number's `calling` settings. Server-assigned and secret SIP
+//! fields are dropped on read, so an export never holds a password and never drifts on one.
+
 use paloma_core::Result;
 use paloma_graph::api::{MESSAGING_PRODUCT, calling};
 use serde_json::{Map, Value, json};

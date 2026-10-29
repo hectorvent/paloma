@@ -1,3 +1,6 @@
+//! `paloma send`. Every message type shares the recipient check, `--reply-to` and the 24-hour
+//! window guard, so each family module only shapes its own body.
+
 use super::util::{read_file, read_json, read_stdin, split_rows};
 use crate::app::App;
 use crate::output::Output;

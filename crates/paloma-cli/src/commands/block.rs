@@ -1,3 +1,6 @@
+//! The block list takes phone numbers or business-scoped user IDs, but Meta fails a parent
+//! BSUID here. Its pages don't promise `paging.next`, so `--all` walks to an empty page.
+
 use clap::{Args, Subcommand};
 use paloma_core::limits::MAX_BLOCKLIST_USERS;
 use paloma_core::{Result, validate};

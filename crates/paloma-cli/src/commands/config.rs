@@ -1,3 +1,6 @@
+//! `config.toml` edits go through `toml_edit`, so a hand-edited file keeps its comments and
+//! order. Secrets never land in it: token keys hold keyring references.
+
 use std::io::IsTerminal;
 
 use clap::{Args, Subcommand};

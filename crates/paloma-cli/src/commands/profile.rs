@@ -1,3 +1,6 @@
+//! Meta rejects a whole profile update for one field over its limit, so each field is checked
+//! locally. A photo goes up through a resumable upload before the profile points at it.
+
 use std::path::PathBuf;
 
 use clap::{Args, Subcommand, ValueEnum};

@@ -1,3 +1,6 @@
+//! The `ConversationalAutomation` kind: welcome message, ice breakers and bot commands. The
+//! spec has the shape Graph returns, so an export applies back unchanged.
+
 use paloma_core::Result;
 use paloma_graph::api::conversational_automation as automation;
 use serde_json::{Value, json};

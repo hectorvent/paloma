@@ -1,3 +1,5 @@
+//! wa.me links are built offline, with no token or API call, so they work anywhere.
+
 use clap::{Args, Subcommand};
 use paloma_core::{Error, Result};
 use percent_encoding::{AsciiSet, NON_ALPHANUMERIC, utf8_percent_encode};

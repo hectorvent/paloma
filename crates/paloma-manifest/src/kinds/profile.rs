@@ -1,3 +1,6 @@
+//! The `Profile` kind: the business profile. The picture URL is read-only and expires, so it
+//! stays out of exports; set the photo with `paloma profile photo`.
+
 use paloma_core::{Error, Result};
 use paloma_graph::api::profile;
 use serde_json::{Value, json};
