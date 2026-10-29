@@ -2,11 +2,10 @@
 //! build a request with `paloma_graph::api`, hand it to [`App`], emit the result.
 //!
 //! To add a command: add an `Args` struct and a variant to the group's enum, and match
-//! it in the group's `run`. A verb that is not built yet returns [`planned`] so it stays
-//! discoverable in `--help` and exits honestly.
+//! it in the group's `run`.
 
 use clap::Subcommand;
-use paloma_core::{Error, Result};
+use paloma_core::Result;
 
 use crate::app::App;
 
@@ -139,12 +138,4 @@ impl Command {
             }
         }
     }
-}
-
-/// A verb wired into the tree but not built yet.
-pub fn planned(command: &str, phase: &'static str) -> Result<()> {
-    Err(Error::NotImplemented {
-        command: format!("paloma {command}"),
-        phase,
-    })
 }

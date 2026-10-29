@@ -1,10 +1,10 @@
 ---
 name: add-command
 description: >-
-  Add a `paloma <group> <verb>` command end to end, or implement one that is still a
-  `planned(..)` stub: clap variant, pure Graph builder, run wiring, contract test and
-  docs. Use when the user says "add a command", "implement paloma qr create", "un-plan
-  X", "add a --flag to send", "new resource group", or "wire up the <endpoint> endpoint".
+  Add a `paloma <group> <verb>` command end to end: clap variant, pure Graph builder, run
+  wiring, contract test and docs. Use when the user says "add a command", "implement
+  paloma qr create", "add a --flag to send", "new resource group", or "wire up the
+  <endpoint> endpoint".
 ---
 
 # Add a command
@@ -57,9 +57,6 @@ Order is the contract:
 Return the right `paloma_core::Error` variant: `Validation` (5), `Auth` (3),
 `Policy` (6), `Usage` (2); `Api` comes from `error_map`.
 
-Un-planning: delete the `planned("group verb", "vX.Y")` arm and the "(planned vX.Y)" from
-the doc comment.
-
 ## 4. Contract test (`crates/paloma-cli/tests/cli/<group>.rs`)
 
 Use the `paloma(Some(&graph), &home)` helper and `MockServer`; model on
@@ -76,7 +73,6 @@ The `test-writer` agent can draft these.
 
 - `docs/commands/<group>.md`: usage, flags, an example, exit codes worth knowing.
 - `docs/README.md` command table; `README.md` command table if the verb list changed.
-- Remove it from `docs/commands/planned.md` when un-planning.
 
 ## 6. Check
 

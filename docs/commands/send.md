@@ -707,13 +707,9 @@ that has only one member (#131020).
 Outside the 24-hour customer-service window, non-template sends are subject to a
 guardrail:
 
-- **Default mode:** permitted (a warning will be added once window tracking
-  lands).
+- **Default mode:** permitted.
 - **`--strict`:** free-form sends are blocked with exit code `6` unless the window is
   known to be open. Nothing tracks it yet, so today that's all of them. Use `--force`
   instead to send anyway; combining the two exits 2.
 - **`--force`:** always permitted.
 - **Templates:** always permitted.
-
-Full window tracking (derived from events seen by `paloma webhook listen`) is
-[future work](planned.md).

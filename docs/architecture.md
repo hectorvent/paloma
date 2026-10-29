@@ -71,8 +71,7 @@ and nothing touches the keyring until a request is actually sent, or a listener 
 4. In `run`: validate locally first, then `app.ctx()?.require_…()`, then
    `app.send_and_emit(&request, primary_id)` (or `app.send` / `app.fetch` for
    multi-step flows). Destructive writes call `app.confirm_or_abort(..)` first.
-5. Not built yet? Return `planned("group verb", "vX.Y")` so it stays in `--help`.
-6. Add a contract test in `crates/paloma-cli/tests/cli/<group>.rs` and a docs page.
+5. Add a contract test in `crates/paloma-cli/tests/cli/<group>.rs` and a docs page.
 
 ## Adding a manifest kind
 

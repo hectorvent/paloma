@@ -7,6 +7,8 @@ rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
 authors.workspace = true
+# Not on crates.io: Paloma ships as one binary.
+publish = false
 
 [dependencies]
 ring.workspace = true

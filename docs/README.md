@@ -17,7 +17,6 @@ New here? Start with [Installation](installation.md) → [Getting started](getti
 | [Scripting & automation](scripting.md) | `--output json`, `--quiet`, `--dry-run`, CI usage |
 | [Billing currency](billing-currency.md) | Migrate to INR or BRL billing before Meta's deadlines, then update Paloma |
 | [Architecture](architecture.md) | How the tool is built (for contributors) |
-| [Planned commands](commands/planned.md) | Work that hasn't shipped yet |
 
 ## Command reference
 
@@ -44,9 +43,6 @@ New here? Start with [Installation](installation.md) → [Getting started](getti
 | `paloma account` | get · set · limits · health · activities · subscribed-apps · billing-currency · analytics · reach · users · welcome-sequence | [commands/account.md](commands/account.md) |
 | `paloma qr` | create · list · get · update · delete | [commands/qr.md](commands/qr.md) |
 | `paloma automation` | get · set · bot | [commands/automation.md](commands/automation.md) |
-
-> Every command listed here is implemented. For work that hasn't shipped, see the
-> [planned commands](commands/planned.md).
 
 ## Conventions
 

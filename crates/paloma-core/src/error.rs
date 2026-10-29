@@ -64,12 +64,6 @@ pub enum Error {
         message: String,
     },
 
-    /// A verb wired into the help tree but not built yet (exit 1).
-    #[error("{command}: not yet implemented (planned for {phase})")]
-    NotImplemented {
-        command: String,
-        phase: &'static str,
-    },
 
     /// Local I/O failure, with the operation that failed.
     #[error("{context}: {source}")]
@@ -125,7 +119,7 @@ impl Error {
             Self::RateLimited(_) => ExitCode::RateLimited,
             Self::Policy(_) => ExitCode::Policy,
             Self::Usage(_) => ExitCode::Usage,
-            Self::Api { .. } | Self::NotImplemented { .. } | Self::Io { .. } | Self::Other(_) => {
+            Self::Api { .. } | Self::Io { .. } | Self::Other(_) => {
                 ExitCode::Generic
             }
         }

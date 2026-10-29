@@ -21,7 +21,6 @@ paloma-config = { version = "0.1.0", path = "crates/paloma-config" }
 paloma-graph = { version = "0.1.0", path = "crates/paloma-graph" }
 paloma-manifest = { version = "0.1.0", path = "crates/paloma-manifest" }
 
-anstream = "1.0"
 anstyle = "1.0"
 clap = { version = "4.6", features = ["derive", "env", "wrap_help"] }
 clap_complete = "4.6"
@@ -36,7 +35,6 @@ indicatif = "0.18"
 keyring-core = "1.0"
 mime_guess = "2.0"
 percent-encoding = "2.3"
-regex = { version = "1.13", default-features = false, features = ["std", "perf"] }
 reqwest = { version = "0.13", default-features = false, features = ["rustls-no-provider", "http2", "json", "multipart", "stream", "query"] }
 rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] }
 secrecy = "0.10"

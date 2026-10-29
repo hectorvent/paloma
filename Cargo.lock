@@ -1526,7 +1526,6 @@ dependencies = [
 name = "paloma-cli"
 version = "0.1.0"
 dependencies = [
- "anstream",
  "anstyle",
  "assert_cmd",
  "axum",
@@ -1544,12 +1543,10 @@ dependencies = [
  "percent-encoding",
  "predicates",
  "secrecy",
- "serde",
  "serde_json",
  "serde_norway",
  "tempfile",
  "tokio",
- "tracing",
  "tracing-subscriber",
  "wiremock",
 ]

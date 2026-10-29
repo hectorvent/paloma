@@ -97,8 +97,7 @@ it exists to satisfy. Match that; don't narrate code.
 2. New Graph node → a pure builder in `crates/paloma-graph/src/api/<resource>.rs`.
 3. In `run`: validate → resolve ids from `app.ctx()?` → `app.send_and_emit(..)`.
    Payload shaping belongs in `paloma-graph`, not in the command.
-4. Not built yet → `planned("group verb", "vX.Y")`, so it stays discoverable.
-5. Contract test in `crates/paloma-cli/tests/cli/<group>.rs` (exit code, stdout vs stderr,
+4. Contract test in `crates/paloma-cli/tests/cli/<group>.rs` (exit code, stdout vs stderr,
    exact request body); docs page under `docs/commands/`, linked from `docs/README.md`.
 
 ## How to add a manifest kind
@@ -166,7 +165,7 @@ See [.agents/README.md](.agents/README.md) for the layout and discovery checks.
 |-------|-----------|
 | `git-workflow` | Start a branch, write a commit, prepare or open a PR the project's way |
 | `preflight` | Run the CI checks plus the repo's contract checks before a PR |
-| `add-command` | Add or un-plan a `paloma <group> <verb>` end to end |
+| `add-command` | Add a `paloma <group> <verb>` end to end |
 | `add-manifest-kind` | Add a kind to `export` / `apply` / `diff` |
 
 | Agent | Use it to |

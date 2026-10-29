@@ -38,8 +38,7 @@ Scope them to the change: `git diff --name-only main...HEAD` plus uncommitted fi
   (before the runtime exists).
 - **Docs move with commands.** Each changed `crates/paloma-cli/src/commands/<group>.rs`
   with a behavior change has a changed `docs/commands/<group>.md`. If a verb was added
-  or un-planned: `docs/README.md` table, `docs/commands/planned.md`, and the README
-  command table also updated.
+  or renamed: the `docs/README.md` and README command tables also updated.
 - **Contract test.** A new verb or flag has a test in `crates/paloma-cli/tests/cli/<group>.rs`
   asserting exit code, stdout vs stderr, and the request body.
 - **Pure builders.** New code in `crates/paloma-graph/src/api/` does no I/O and takes

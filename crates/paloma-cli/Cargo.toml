@@ -10,6 +10,8 @@ authors.workspace = true
 readme = "../../README.md"
 keywords = ["whatsapp", "cli", "cloud-api", "meta", "graph-api"]
 categories = ["command-line-utilities"]
+# Not on crates.io: Paloma ships as one binary.
+publish = false
 
 [lib]
 path = "src/lib.rs"
@@ -24,7 +26,6 @@ paloma-core.workspace = true
 paloma-config.workspace = true
 paloma-graph.workspace = true
 paloma-manifest.workspace = true
-anstream.workspace = true
 anstyle.workspace = true
 clap.workspace = true
 clap_complete.workspace = true
@@ -34,18 +35,15 @@ humantime.workspace = true
 indicatif.workspace = true
 percent-encoding.workspace = true
 secrecy.workspace = true
-serde.workspace = true
 serde_json.workspace = true
 serde_norway.workspace = true
 tokio = { workspace = true, features = ["net", "signal", "sync"] }
-tracing.workspace = true
 tracing-subscriber.workspace = true
 
 [dev-dependencies]
 assert_cmd.workspace = true
 insta.workspace = true
 predicates.workspace = true
-serde_json.workspace = true
 tempfile.workspace = true
 tokio = { workspace = true, features = ["rt-multi-thread", "macros"] }
 wiremock.workspace = true
