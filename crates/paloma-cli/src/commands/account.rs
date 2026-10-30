@@ -15,6 +15,7 @@ use serde_json::json;
 mod administration;
 mod analytics;
 mod billing_currency;
+use super::listing::{Pagination, Rows};
 use crate::app::{App, field_id, no_id};
 use analytics::Analytics;
 use billing_currency::BillingCurrency;
@@ -60,32 +61,19 @@ pub enum AccountCommand {
     /// Report messaging counts or pricing analytics.
     Analytics(Analytics),
     /// List apps subscribed to the WABA.
-    SubscribedApps(PageArgs),
-}
-
-#[derive(Debug, Args)]
-pub struct PageArgs {
-    /// Follow every page.
-    #[arg(long)]
-    all: bool,
-    /// Start after this cursor.
-    #[arg(long)]
-    after: Option<String>,
+    SubscribedApps(Pagination),
 }
 
 #[derive(Debug, Args)]
 pub struct ActivitiesArgs {
     #[command(flatten)]
-    page: PageArgs,
-    /// Page size, at most 100.
-    #[arg(long)]
-    limit: Option<u32>,
+    page: Pagination,
 }
 
 #[derive(Debug, Args)]
 pub struct LimitsArgs {
     #[command(flatten)]
-    page: PageArgs,
+    page: Pagination,
     /// Read the shared limit directly from this business portfolio.
     #[arg(long, conflicts_with_all = ["all", "after"])]
     business_id: Option<String>,
@@ -234,24 +222,26 @@ impl AccountCommand {
                 .await;
         }
         if let Self::Activities(args) = &self {
-            validate::page_size(args.limit, Some(limits::MAX_ACTIVITIES_PAGE))?;
+            validate::page_size(args.page.limit, Some(limits::MAX_ACTIVITIES_PAGE))?;
         }
         let waba = app.ctx()?.require_waba_id()?.to_owned();
         match self {
             Self::Activities(a) => {
                 super::listing::list(
                     app,
-                    a.page.all,
-                    a.page.after,
-                    |after| account::activities_page(&waba, after, a.limit),
-                    &[
-                        "event_type",
-                        "timestamp",
-                        "actor_id",
-                        "actor_business_id",
-                        "category",
-                        "id",
-                    ],
+                    &a.page,
+                    |after| account::activities_page(&waba, after, a.page.limit),
+                    Rows {
+                        columns: &[
+                            "event_type",
+                            "timestamp",
+                            "actor_id",
+                            "actor_business_id",
+                            "category",
+                            "id",
+                        ],
+                        id: "id",
+                    },
                 )
                 .await
             }
@@ -274,20 +264,28 @@ impl AccountCommand {
             Self::Limits(a) => {
                 super::listing::list(
                     app,
-                    a.page.all,
-                    a.page.after,
-                    |after| account::limits(&waba, after),
-                    LIMIT_COLUMNS,
+                    &a.page,
+                    |after| account::limits(&waba, after).query_opt("limit", a.page.limit),
+                    Rows {
+                        columns: LIMIT_COLUMNS,
+                        id: "id",
+                    },
                 )
                 .await
             }
             Self::SubscribedApps(a) => {
                 super::listing::list(
                     app,
-                    a.all,
-                    a.after,
-                    |after| webhook::subscribed_apps(&waba).query_opt("after", after),
-                    APP_COLUMNS,
+                    &a,
+                    |after| {
+                        webhook::subscribed_apps(&waba)
+                            .query_opt("after", after)
+                            .query_opt("limit", a.limit)
+                    },
+                    Rows {
+                        columns: APP_COLUMNS,
+                        id: "/whatsapp_business_api_data/id",
+                    },
                 )
                 .await
             }

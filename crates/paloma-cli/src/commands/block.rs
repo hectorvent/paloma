@@ -7,6 +7,7 @@ use paloma_core::{Result, validate};
 use paloma_graph::api::block;
 use paloma_graph::paging;
 
+use super::listing::Pagination;
 use crate::app::{App, no_id};
 use crate::output::Output;
 
@@ -33,15 +34,8 @@ pub enum BlockCommand {
 
 #[derive(Debug, Args)]
 pub struct ListArgs {
-    /// Page size.
-    #[arg(long)]
-    limit: Option<u32>,
-    /// Follow every page.
-    #[arg(long)]
-    all: bool,
-    /// Start after this cursor.
-    #[arg(long)]
-    after: Option<String>,
+    #[command(flatten)]
+    page: Pagination,
 }
 
 impl BlockCommand {
@@ -50,7 +44,7 @@ impl BlockCommand {
             Self::Add { users } | Self::Remove { users } => {
                 users.iter().try_for_each(|u| validate::block_user(u))?;
             }
-            Self::List(a) => validate::page_size(a.limit, None)?,
+            Self::List(a) => validate::page_size(a.page.limit, None)?,
         }
         let phone = app.ctx()?.require_phone_number_id()?.to_owned();
         match self {
@@ -68,19 +62,21 @@ impl BlockCommand {
 /// full page and the last page look the same, so `--all` walks to an empty page, and a
 /// single page can only say that more may exist.
 async fn list(app: &App, phone: &str, a: &ListArgs) -> Result<()> {
-    let page = |after: Option<&str>| block::list(phone, a.limit, after);
+    let page = |after: Option<&str>| block::list(phone, a.page.limit, after);
     if app.dry_run() {
-        return app.print_dry_run(&[page(a.after.as_deref())]);
+        return app.print_dry_run(&[page(a.page.after.as_deref())]);
     }
-    if a.all {
+    if a.page.all {
         // Every page before the empty one holds at least one user.
         let max_pages = MAX_BLOCKLIST_USERS + 1;
         let merged =
-            paging::collect_until_empty(app.client()?, a.after.clone(), max_pages, page).await?;
+            paging::collect_until_empty(app.client()?, a.page.after.clone(), max_pages, page)
+                .await?;
+        let ids = user_ids(&merged);
         app.out
-            .emit(&Output::new(merged).table("/data", LIST_COLUMNS));
+            .emit(&Output::new(merged).table("/data", LIST_COLUMNS).id(ids));
     } else {
-        let resp = app.fetch(&page(a.after.as_deref())).await?;
+        let resp = app.fetch(&page(a.page.after.as_deref())).await?;
         let out = Output::response(&resp)?.table("/data", LIST_COLUMNS);
         if let Some(next) = paging::next_cursor(&out.data) {
             app.out.note(format!(
@@ -91,7 +87,26 @@ async fn list(app: &App, phone: &str, a: &ListArgs) -> Result<()> {
                 "more results may exist: re-run with --all, or page with --after {next}"
             ));
         }
-        app.out.emit(&out);
+        let ids = user_ids(&out.data);
+        app.out.emit(&out.id(ids));
     }
     Ok(())
+}
+
+/// Each blocked user as `block remove` takes them: the phone number, or the BSUID of a user
+/// whose number isn't shared.
+fn user_ids(data: &serde_json::Value) -> Option<String> {
+    let ids: Vec<&str> = data
+        .get("data")
+        .and_then(serde_json::Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter_map(|row| {
+            ["wa_id", "user_id"]
+                .iter()
+                .find_map(|key| row.get(*key).and_then(serde_json::Value::as_str))
+                .filter(|id| !id.is_empty())
+        })
+        .collect();
+    (!ids.is_empty()).then(|| ids.join("\n"))
 }

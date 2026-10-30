@@ -1,5 +1,6 @@
 //! QR image downloads use the signed CDN URL without forwarding Graph credentials.
 
+use super::listing::{Pagination, Rows};
 use crate::app::App;
 use crate::output::Output;
 use clap::{Args, Subcommand, ValueEnum};
@@ -20,13 +21,8 @@ pub enum QrCommand {
     },
     /// List message QR codes.
     List {
-        #[arg(long)]
-        all: bool,
-        #[arg(long)]
-        after: Option<String>,
-        /// Page size, at most 25.
-        #[arg(long)]
-        limit: Option<u32>,
+        #[command(flatten)]
+        page: Pagination,
     },
     /// Show a message QR code and optionally save its image.
     Get {
@@ -126,7 +122,7 @@ impl QrCommand {
                 validate::qr_message(message.value())?;
             }
             Self::Delete { code } => validate::qr_code(code)?,
-            Self::List { limit, .. } => validate::page_size(*limit, Some(limits::MAX_QR_PAGE))?,
+            Self::List { page } => page.check(Some(limits::MAX_QR_PAGE))?,
         }
         let phone = app.ctx()?.require_phone_number_id()?.to_owned();
         match self {
@@ -161,13 +157,15 @@ impl QrCommand {
                 app.send_and_emit(&qr::delete(&phone, &code), |_| Some(code.clone()))
                     .await
             }
-            Self::List { all, after, limit } => {
+            Self::List { page } => {
                 super::listing::list(
                     app,
-                    all,
-                    after,
-                    |after| qr::list(&phone, limit, after),
-                    COLUMNS,
+                    &page,
+                    |after| qr::list(&phone, page.limit, after),
+                    Rows {
+                        columns: COLUMNS,
+                        id: "code",
+                    },
                 )
                 .await
             }

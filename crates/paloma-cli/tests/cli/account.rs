@@ -134,11 +134,13 @@ async fn account_lists_render_nested_apps_and_limits_without_a_phone_context() {
         assert!(out.status.success());
         assert!(out.stderr.is_empty());
         assert_eq!(stdout_json(&out), body);
+        // A list prints one row id per line under -q.
+        let id = if verb == "limits" { PHONE } else { "333" };
         paloma(Some(&graph), &home)
             .args(["account", verb, "-q"])
             .assert()
             .success()
-            .stdout("")
+            .stdout(format!("{id}\n"))
             .stderr("");
     }
 }

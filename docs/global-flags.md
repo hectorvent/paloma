@@ -80,6 +80,26 @@ and routes diagnostics to **stderr**, so command substitution stays clean:
 MID=$(paloma send text 15551234567 "hi" -q)
 ```
 
+A list prints one row id per line (a blocked user without a shared number is listed by
+BSUID), and a bulk write prints the ids it acted on:
+
+```bash
+paloma template list --status PAUSED --all -q | xargs -n1 paloma template unpause
+```
+
+## Paging
+
+Every list takes the same flags:
+
+| Flag | What it does |
+|------|--------------|
+| `--limit <N>` | Rows per page. Meta picks when it's left out, and refuses more than the edge allows |
+| `--all` | Follow the cursor to the last page |
+| `--after <CURSOR>` | Start after this cursor |
+
+Without `--all`, a page that has more after it ends with a note on stderr naming the
+`--after` cursor.
+
 ## Exit codes
 
 `paloma` follows a strict exit-code contract so scripts can branch on the outcome:

@@ -10,6 +10,7 @@ use paloma_graph::api::{groups, messages};
 use paloma_graph::paging;
 use serde_json::{Value, json};
 
+use super::listing::{Pagination, Rows};
 use crate::app::{App, field_id};
 use crate::output::Output;
 
@@ -87,15 +88,8 @@ pub struct Create {
 
 #[derive(Debug, Args)]
 pub struct List {
-    /// Page size.
-    #[arg(long)]
-    limit: Option<u32>,
-    /// Follow every page.
-    #[arg(long)]
-    all: bool,
-    /// Start after this cursor.
-    #[arg(long)]
-    after: Option<String>,
+    #[command(flatten)]
+    page: Pagination,
 }
 
 #[derive(Debug, Args)]
@@ -134,12 +128,8 @@ pub enum Requests {
     /// List pending join requests.
     List {
         group_id: String,
-        #[arg(long)]
-        limit: Option<u32>,
-        #[arg(long)]
-        all: bool,
-        #[arg(long)]
-        after: Option<String>,
+        #[command(flatten)]
+        page: Pagination,
     },
     /// Approve join requests.
     Approve {
@@ -209,13 +199,13 @@ async fn send_partial(app: &App, req: &paloma_graph::Request, failed_key: &str) 
 }
 
 async fn list(app: &App, phone: &str, a: List) -> Result<()> {
-    let page = |after: Option<&str>| groups::list(phone, a.limit, after);
+    let page = |after: Option<&str>| groups::list(phone, a.page.limit, after);
     if app.dry_run() {
-        return app.print_dry_run(&[page(a.after.as_deref())]);
+        return app.print_dry_run(&[page(a.page.after.as_deref())]);
     }
-    let mut output = if a.all {
+    let mut output = if a.page.all {
         let mut found = Vec::new();
-        let mut after = a.after.clone();
+        let mut after = a.page.after.clone();
         for _ in 0..paging::MAX_PAGES {
             let current = app.fetch(&page(after.as_deref())).await?.json()?;
             found.extend(groups::page_groups(&current));
@@ -232,7 +222,7 @@ async fn list(app: &App, phone: &str, a: List) -> Result<()> {
         }
         Output::new(json!({ "data": { "groups": found } }))
     } else {
-        let response = app.fetch(&page(a.after.as_deref())).await?;
+        let response = app.fetch(&page(a.page.after.as_deref())).await?;
         let output = Output::response(&response)?;
         if let Some(cursor) = paging::next_cursor(&output.data) {
             app.out.note(format!(
@@ -297,7 +287,7 @@ impl GroupCommand {
                 Ok(())
             }
             Self::List(a) => {
-                validate::page_size(a.limit, Some(limits::MAX_GROUPS_PAGE))?;
+                validate::page_size(a.page.limit, Some(limits::MAX_GROUPS_PAGE))?;
                 let phone = app.ctx()?.require_phone_number_id()?.to_owned();
                 list(app, &phone, a).await
             }
@@ -394,20 +384,17 @@ impl GroupCommand {
                 .await
             }
             Self::Requests(command) => match command {
-                Requests::List {
-                    group_id,
-                    limit,
-                    all,
-                    after,
-                } => {
+                Requests::List { group_id, page } => {
                     validate::group_id(&group_id)?;
-                    validate::page_size(limit, None)?;
+                    page.check(None)?;
                     super::listing::list(
                         app,
-                        all,
-                        after,
-                        |after| groups::join_requests(&group_id, limit, after),
-                        REQUEST_COLUMNS,
+                        &page,
+                        |after| groups::join_requests(&group_id, page.limit, after),
+                        Rows {
+                            columns: REQUEST_COLUMNS,
+                            id: "join_request_id",
+                        },
                     )
                     .await
                 }

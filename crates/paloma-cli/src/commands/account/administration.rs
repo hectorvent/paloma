@@ -1,5 +1,6 @@
 //! Assigned-user reads require business context; welcome sequences are WABA-scoped
 //! ad assets, with explicit identifiers and confirmation on changes or deletion.
+use crate::commands::listing::{Pagination, Rows, list};
 use crate::output::Output;
 use crate::{
     app::{App, no_id},
@@ -7,7 +8,7 @@ use crate::{
 };
 use clap::{Args, Subcommand, ValueEnum};
 use paloma_core::{Error, Result, validate};
-use paloma_graph::{api::account, paging};
+use paloma_graph::api::account;
 use serde_json::Value;
 use std::path::{Path, PathBuf};
 
@@ -77,12 +78,8 @@ pub struct Users {
     /// List WABA system users instead of assigned users.
     #[arg(long)]
     system: bool,
-    #[arg(long)]
-    all: bool,
-    #[arg(long)]
-    after: Option<String>,
-    #[arg(long)]
-    limit: Option<u32>,
+    #[command(flatten)]
+    page: Pagination,
 }
 impl Users {
     pub async fn run(self, app: &App) -> Result<()> {
@@ -90,7 +87,7 @@ impl Users {
             validate::numeric_id(id, "business id")?;
         }
         validate::page_size(
-            self.limit,
+            self.page.limit,
             Some(paloma_core::limits::MAX_ASSIGNED_USERS_PAGE),
         )?;
         let waba = app.ctx()?.require_waba_id()?.to_owned();
@@ -99,38 +96,20 @@ impl Users {
                 &waba,
                 self.system,
                 self.business_id.as_deref(),
-                self.limit,
+                self.page.limit,
                 after,
             )
         };
-        if app.dry_run() {
-            return app.print_dry_run(&[page(self.after.as_deref())]);
-        }
-        let mut output = if self.all {
-            Output::new(paging::collect_all(app.client()?, self.after.clone(), page).await?)
-        } else {
-            let response = app.fetch(&page(self.after.as_deref())).await?;
-            let output = Output::response(&response)?;
-            if let Some(cursor) = paging::next_cursor(&output.data) {
-                app.out.note(format!(
-                    "more results exist: re-run with --all, or page with --after {cursor}"
-                ));
-            }
-            output
-        };
-        let ids = output
-            .data
-            .get("data")
-            .and_then(Value::as_array)
-            .into_iter()
-            .flatten()
-            .filter_map(|v| v.get("id").and_then(Value::as_str))
-            .collect::<Vec<_>>()
-            .join("\n");
-        output.primary_id = (!ids.is_empty()).then_some(ids);
-        app.out
-            .emit(&output.table("/data", &["id", "name", "tasks"]));
-        Ok(())
+        list(
+            app,
+            &self.page,
+            page,
+            Rows {
+                columns: &["id", "name", "tasks"],
+                id: "id",
+            },
+        )
+        .await
     }
 }
 #[derive(Debug, Subcommand)]

@@ -19,7 +19,7 @@ mod analytics;
 mod create;
 mod group;
 mod library;
-use super::listing::list;
+use super::listing::{Pagination, Rows, list};
 use analytics::{Analytics, Compare, analytics, compare};
 use create::{Create, Edit, Preview, preview, upsert};
 use group::{GroupCommand, group};
@@ -168,15 +168,8 @@ pub struct List {
     /// columns.
     #[arg(long, value_delimiter = ',', value_name = "FIELD,...")]
     fields: Vec<String>,
-    /// Page size.
-    #[arg(long)]
-    limit: Option<u32>,
-    /// Follow every page.
-    #[arg(long)]
-    all: bool,
-    /// Start after this cursor.
-    #[arg(long)]
-    after: Option<String>,
+    #[command(flatten)]
+    page: Pagination,
 }
 
 #[derive(Debug, Args)]
@@ -212,7 +205,7 @@ impl TemplateCommand {
     pub async fn run(self, app: &App) -> Result<()> {
         match self {
             Self::List(a) => {
-                validate::page_size(a.limit, None)?;
+                validate::page_size(a.page.limit, None)?;
                 if let Some(name) = &a.name {
                     validate::not_blank(name, "--name")?;
                 }
@@ -228,14 +221,13 @@ impl TemplateCommand {
                     category: a.category,
                     language: a.language,
                     fields: (!fields.is_empty()).then(|| fields.join(",")),
-                    limit: a.limit,
+                    limit: a.page.limit,
                 };
                 list(
                     app,
-                    a.all,
-                    a.after,
+                    &a.page,
                     |after| templates::list(&waba, &filter, after),
-                    columns,
+                    Rows { columns, id: "id" },
                 )
                 .await
             }

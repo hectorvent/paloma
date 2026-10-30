@@ -11,7 +11,7 @@ use paloma_graph::Request;
 use paloma_graph::api::flows::{self, DEFAULT_GET_FIELDS, FLOW_JSON_NAME, PREVIEW_FIELD};
 use serde_json::{Map, Value, json};
 
-use super::listing::list;
+use super::listing::{Pagination, Rows, list};
 use super::util::{enum_name, read_file};
 use crate::app::{App, field_id};
 use crate::output::Output;
@@ -62,13 +62,8 @@ pub enum FlowCommand {
 
 #[derive(Debug, Args)]
 pub struct ListArgs {
-    #[arg(long)]
-    limit: Option<u32>,
-    /// Follow every page.
-    #[arg(long)]
-    all: bool,
-    #[arg(long)]
-    after: Option<String>,
+    #[command(flatten)]
+    page: Pagination,
     /// Comma-separated fields to return.
     #[arg(long)]
     fields: Option<String>,
@@ -150,10 +145,12 @@ impl FlowCommand {
                 let fields = a.fields.clone();
                 list(
                     app,
-                    a.all,
-                    a.after,
-                    |after| flows::list(&waba, fields.as_deref(), a.limit, after),
-                    LIST_COLUMNS,
+                    &a.page,
+                    |after| flows::list(&waba, fields.as_deref(), a.page.limit, after),
+                    Rows {
+                        columns: LIST_COLUMNS,
+                        id: "id",
+                    },
                 )
                 .await
             }

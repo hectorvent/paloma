@@ -12,6 +12,12 @@ MID=$(paloma send text 15551234567 "your order is ready" -q)
 echo "sent $MID"
 ```
 
+A list prints one id per line, so it can feed another command:
+
+```bash
+for id in $(paloma flow list --all -q); do paloma flow get "$id" -o json; done
+```
+
 ## Pipe JSON to jq
 
 `--output json` emits the raw Cloud API response:

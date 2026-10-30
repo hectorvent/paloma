@@ -11,6 +11,7 @@ mod settings;
 
 use secrecy::{ExposeSecret, SecretString};
 
+use super::listing::{Pagination, Rows};
 use super::util::{SecretSource, read_secret};
 use crate::app::{App, field_id, no_id};
 
@@ -93,15 +94,8 @@ pub struct ListArgs {
     /// last-onboarded-desc.
     #[arg(long, value_enum)]
     sort: Option<Sort>,
-    /// Page size, at most 100.
-    #[arg(long)]
-    limit: Option<u32>,
-    /// Follow every page.
-    #[arg(long)]
-    all: bool,
-    /// Start after this cursor.
-    #[arg(long)]
-    after: Option<String>,
+    #[command(flatten)]
+    page: Pagination,
 }
 
 #[derive(Debug, Clone, Copy, ValueEnum)]
@@ -183,19 +177,21 @@ impl NumberCommand {
     pub async fn run(self, app: &App) -> Result<()> {
         match self {
             Self::List(a) => {
-                validate::page_size(a.limit, Some(MAX_PHONE_NUMBERS_PAGE))?;
+                validate::page_size(a.page.limit, Some(MAX_PHONE_NUMBERS_PAGE))?;
                 let waba = app.ctx()?.require_waba_id()?.to_owned();
                 let filter = ListFilter {
                     account_mode: a.account_mode.map(Into::into),
                     oldest_first: matches!(a.sort, Some(Sort::LastOnboardedAsc)),
-                    limit: a.limit,
+                    limit: a.page.limit,
                 };
                 super::listing::list(
                     app,
-                    a.all,
-                    a.after,
+                    &a.page,
                     |after| phone_numbers::list(&waba, &filter, after),
-                    LIST_COLUMNS,
+                    Rows {
+                        columns: LIST_COLUMNS,
+                        id: "id",
+                    },
                 )
                 .await
             }

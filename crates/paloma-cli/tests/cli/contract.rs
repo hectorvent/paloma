@@ -243,3 +243,43 @@ async fn new_disruptive_commands_refuse_without_confirmation_and_preview_offline
     }
     assert!(graph.received_requests().await.unwrap().is_empty());
 }
+
+/// Every list prints one row id per line under `-q`, so its output can feed another
+/// command; a blocked user without a shared number is listed by BSUID.
+#[tokio::test(flavor = "multi_thread")]
+async fn lists_print_one_row_id_per_line_under_quiet() {
+    let graph = MockServer::start().await;
+    let home = TempDir::new().unwrap();
+    for (args, node, body, expected) in [
+        (
+            vec!["template", "list"],
+            format!("/v26.0/{WABA}/message_templates"),
+            json!({"data":[{"id":"7","name":"a"},{"id":"8","name":"b"}]}),
+            "7\n8\n",
+        ),
+        (
+            vec!["flow", "list"],
+            format!("/v26.0/{WABA}/flows"),
+            json!({"data":[{"id":"9","name":"f"}]}),
+            "9\n",
+        ),
+        (
+            vec!["block", "list"],
+            format!("/v26.0/{PHONE}/block_users"),
+            json!({"data":[{"wa_id":"15551234567"},{"user_id":"US.13491208655302741918"}]}),
+            "15551234567\nUS.13491208655302741918\n",
+        ),
+    ] {
+        Mock::given(method("GET"))
+            .and(path(node))
+            .respond_with(ResponseTemplate::new(200).set_body_json(&body))
+            .mount(&graph)
+            .await;
+        paloma(Some(&graph), &home)
+            .args(&args)
+            .arg("-q")
+            .assert()
+            .success()
+            .stdout(expected);
+    }
+}

@@ -31,12 +31,8 @@ pub struct LibraryList {
     /// Filter by library template name.
     #[arg(long)]
     pub(super) name: Option<String>,
-    /// Follow every page.
-    #[arg(long)]
-    pub(super) all: bool,
-    /// Start after this cursor.
-    #[arg(long)]
-    pub(super) after: Option<String>,
+    #[command(flatten)]
+    page: Pagination,
 }
 
 #[derive(Debug, Args)]
@@ -72,10 +68,12 @@ pub(super) async fn library(app: &App, command: LibraryCommand) -> Result<()> {
             };
             list(
                 app,
-                a.all,
-                a.after,
-                |after| templates::library_list(&filter, after),
-                LIBRARY_COLUMNS,
+                &a.page,
+                |after| templates::library_list(&filter, after).query_opt("limit", a.page.limit),
+                Rows {
+                    columns: LIBRARY_COLUMNS,
+                    id: "id",
+                },
             )
             .await
         }
