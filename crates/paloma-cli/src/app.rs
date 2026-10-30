@@ -54,10 +54,7 @@ impl App {
         if let Some(f) = self.config_file.get() {
             return Ok(f);
         }
-        let (file, note) = ConfigFile::open(self.globals.config.as_deref())?;
-        if let Some(n) = note {
-            self.out.note(n);
-        }
+        let file = ConfigFile::open(self.globals.config.as_deref())?;
         Ok(self.config_file.get_or_init(|| file))
     }
 

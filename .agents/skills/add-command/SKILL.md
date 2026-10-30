@@ -15,7 +15,7 @@ This is the order of work, with the real names to copy.
 ## 0. Learn the endpoint
 
 Confirm the Graph node, method, fields and permissions from Meta's WhatsApp Cloud API
-reference (and the Java build in `../paloma` if it has the command). Note any limits
+docs (the local mirror when you have one). Note any limits
 (lengths, counts) for `paloma_core::limits`.
 
 ## 1. Graph builder (`crates/paloma-graph/src/api/<resource>.rs`)

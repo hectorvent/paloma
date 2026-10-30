@@ -103,12 +103,8 @@ These override the config file (and are themselves overridden by flags):
 - Writes (`config set`, `auth login`) edit the file in place, so comments and key
   order you added by hand survive.
 
-## Location and migration
+## Location
 
 The default path is `$XDG_CONFIG_HOME/paloma/config.toml` (`~/.config/paloma/config.toml`
 on Linux and macOS, `%APPDATA%\paloma\config.toml` on Windows). `--config` or
 `PALOMA_CONFIG` override it.
-
-If you used the Java build of paloma, its `~/.paloma/config.toml` is copied to the new
-location the first time paloma runs without one. Keyring entries keep the same names
-(service `paloma`, account `paloma/<profile>`), so stored tokens keep working.

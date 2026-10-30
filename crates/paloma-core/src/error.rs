@@ -64,7 +64,6 @@ pub enum Error {
         message: String,
     },
 
-
     /// Local I/O failure, with the operation that failed.
     #[error("{context}: {source}")]
     Io {
@@ -119,9 +118,7 @@ impl Error {
             Self::RateLimited(_) => ExitCode::RateLimited,
             Self::Policy(_) => ExitCode::Policy,
             Self::Usage(_) => ExitCode::Usage,
-            Self::Api { .. } | Self::Io { .. } | Self::Other(_) => {
-                ExitCode::Generic
-            }
+            Self::Api { .. } | Self::Io { .. } | Self::Other(_) => ExitCode::Generic,
         }
     }
 }

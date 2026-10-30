@@ -7,8 +7,7 @@ source of truth; tool-specific instruction files only import it.
 
 **Paloma**: an unofficial, single-binary CLI for the **real** WhatsApp Cloud API
 (`graph.facebook.com`). Not an emulator, not the Web protocol. Rust (2024 edition),
-clap + tokio (current-thread) + reqwest/rustls. A port of the Java/Quarkus build in
-`../paloma`.
+clap + tokio (current-thread) + reqwest/rustls.
 
 The command shape is always `paloma <resource> <verb> [args] [flags]`.
 

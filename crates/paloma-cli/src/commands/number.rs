@@ -154,11 +154,8 @@ pub enum SearchVisibility {
 /// The six-digit two-step verification PIN: from PALOMA_PIN, stdin or a prompt.
 #[derive(Debug, Args)]
 pub struct PinInput {
-    /// Deprecated: prefer PALOMA_PIN or --pin-stdin.
-    #[arg(long, hide = true)]
-    pin: Option<String>,
     /// Read the six-digit PIN from stdin. Otherwise uses PALOMA_PIN, or prompts.
-    #[arg(long, conflicts_with = "pin")]
+    #[arg(long)]
     pin_stdin: bool,
 }
 
@@ -168,12 +165,12 @@ impl PinInput {
             app,
             &SecretSource {
                 what: "PIN",
-                flag: "--pin",
+                flag: None,
                 stdin_flag: "--pin-stdin",
                 env: "PALOMA_PIN",
                 missing_is_auth: false,
             },
-            self.pin.as_deref(),
+            None,
             self.pin_stdin,
         )?;
         validate::pin(pin.expose_secret())?;
@@ -269,7 +266,7 @@ impl NumberCommand {
                     app,
                     &SecretSource {
                         what: "verification code",
-                        flag: "--code",
+                        flag: None,
                         stdin_flag: "--code-stdin",
                         env: "PALOMA_VERIFICATION_CODE",
                         missing_is_auth: false,

@@ -32,7 +32,8 @@ pub fn read_stdin(what: &str) -> Result<String> {
 #[derive(Debug)]
 pub struct SecretSource {
     pub what: &'static str,
-    pub flag: &'static str,
+    /// The command-line flag, for the one secret that has one (`--token`); it warns.
+    pub flag: Option<&'static str>,
     pub stdin_flag: &'static str,
     pub env: &'static str,
     /// A missing access token is an auth failure (exit 3); any other missing secret is
@@ -56,10 +57,10 @@ pub fn read_secret(
     };
     let value = if from_stdin {
         read_stdin(source.what)?
-    } else if let Some(value) = flag_value {
+    } else if let (Some(flag), Some(value)) = (source.flag, flag_value) {
         app.out.warn(format!(
-            "{} is visible to other processes; prefer {} or {}",
-            source.flag, source.env, source.stdin_flag
+            "{flag} is visible to other processes; prefer {} or {}",
+            source.env, source.stdin_flag
         ));
         value.to_owned()
     } else if let Some(value) = env_value() {

@@ -99,7 +99,7 @@ fn login(app: &App, with_token: bool) -> Result<()> {
         app,
         &SecretSource {
             what: "access token",
-            flag: "--token",
+            flag: Some("--token"),
             stdin_flag: "--with-token",
             env: "PALOMA_TOKEN",
             missing_is_auth: true,

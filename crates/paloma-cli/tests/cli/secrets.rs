@@ -7,15 +7,13 @@ fn secret_dry_runs_are_redacted_in_every_output_format() {
     let home = TempDir::new().unwrap();
     for format in ["table", "json", "yaml", "raw"] {
         for args in [
-            vec!["number", "register", "--pin", "825194"],
-            vec!["number", "set-pin", "--pin", "825194"],
+            vec!["number", "register"],
+            vec!["number", "set-pin"],
             vec![
                 "webhook",
                 "subscribe",
                 "--callback-url",
                 "https://example.test/hook",
-                "--verify-token",
-                "VERIFY_SENTINEL",
             ],
             vec![
                 "webhook",
@@ -24,12 +22,12 @@ fn secret_dry_runs_are_redacted_in_every_output_format() {
                 "messages",
                 "--callback-url",
                 "https://example.test/hook",
-                "--verify-token",
-                "VERIFY_SENTINEL",
             ],
         ] {
             let out = paloma(None, &home)
                 .env("PALOMA_APP_SECRET", "APP_SECRET_SENTINEL")
+                .env("PALOMA_PIN", "825194")
+                .env("PALOMA_VERIFY_TOKEN", "VERIFY_SENTINEL")
                 .args(args)
                 .args(["--app-id", "333", "--dry-run", "-vv", "-o", format])
                 .output()
@@ -68,7 +66,8 @@ async fn pin_reaches_api_while_verbose_diagnostics_are_redacted() {
         .await;
     let home = TempDir::new().unwrap();
     let out = paloma(Some(&graph), &home)
-        .args(["number", "set-pin", "--pin", "825194", "-vv", "-o", "raw"])
+        .env("PALOMA_PIN", "825194")
+        .args(["number", "set-pin", "-vv", "-o", "raw"])
         .output()
         .unwrap();
     assert!(
@@ -97,6 +96,7 @@ async fn verification_query_reaches_api_but_not_verbose_logs() {
     let home = TempDir::new().unwrap();
     let out = paloma(Some(&graph), &home)
         .env("PALOMA_APP_SECRET", "APP_SECRET_SENTINEL")
+        .env("PALOMA_VERIFY_TOKEN", "VERIFY_SENTINEL")
         .args([
             "webhook",
             "fields",
@@ -104,8 +104,6 @@ async fn verification_query_reaches_api_but_not_verbose_logs() {
             "messages",
             "--callback-url",
             "https://example.test/hook",
-            "--verify-token",
-            "VERIFY_SENTINEL",
             "--app-id",
             "333",
             "--yes",
@@ -159,15 +157,13 @@ async fn pin_from_env_or_stdin_reaches_the_api_without_a_warning() {
     }
 }
 
+/// A secret typed on the command line would be visible to other processes, so those
+/// flags don't exist, and the usage error doesn't echo the value.
 #[test]
-fn secret_flags_still_work_but_warn_without_echoing_the_value() {
+fn secret_value_flags_are_usage_errors_that_do_not_echo_the_value() {
     let home = TempDir::new().unwrap();
-    for (args, flag, value) in [
-        (
-            vec!["number", "set-pin", "--pin", "825194"],
-            "--pin",
-            "825194",
-        ),
+    for (args, value) in [
+        (vec!["number", "set-pin", "--pin", "825194"], "825194"),
         (
             vec![
                 "webhook",
@@ -177,7 +173,6 @@ fn secret_flags_still_work_but_warn_without_echoing_the_value() {
                 "--verify-token",
                 "VERIFY_SENTINEL",
             ],
-            "--verify-token",
             "VERIFY_SENTINEL",
         ),
     ] {
@@ -186,14 +181,10 @@ fn secret_flags_still_work_but_warn_without_echoing_the_value() {
             .args(["--dry-run"])
             .output()
             .unwrap();
-        assert!(out.status.success());
+        assert_eq!(out.status.code(), Some(2));
+        assert!(out.stdout.is_empty());
         let stderr = String::from_utf8_lossy(&out.stderr);
-        assert!(
-            stderr.contains(&format!("{flag} is visible to other processes")),
-            "{stderr}"
-        );
         assert!(!stderr.contains(value), "{stderr}");
-        assert!(!String::from_utf8_lossy(&out.stdout).contains(value));
     }
 }
 
@@ -270,12 +261,11 @@ fn bad_or_missing_secrets_exit_5_without_a_request() {
                 "fields",
                 "set",
                 "messages",
-                "--verify-token",
-                "t",
+                "--verify-token-stdin",
                 "--app-id",
                 "3",
             ],
-            None,
+            Some("t"),
             "needs --callback-url",
         ),
     ] {
@@ -289,15 +279,6 @@ fn bad_or_missing_secrets_exit_5_without_a_request() {
             .stdout(predicate::str::is_empty())
             .stderr(predicate::str::contains(needle));
     }
-}
-
-#[test]
-fn secret_flag_and_its_stdin_flag_conflict() {
-    let home = TempDir::new().unwrap();
-    paloma(None, &home)
-        .args(["number", "register", "--pin", "825194", "--pin-stdin"])
-        .assert()
-        .code(2);
 }
 
 #[test]

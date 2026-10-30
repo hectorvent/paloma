@@ -247,8 +247,6 @@ job needs no config file at all: just set `PALOMA_TOKEN` plus the IDs.
 - `paloma config list` hides secret values, and a plaintext token in the file triggers
   a warning.
 - `paloma config set` edits the file in place, **keeping your comments and key order**.
-- If you used the original Java build, `~/.paloma/config.toml` is moved to the new
-  location automatically, and stored tokens keep working.
 
 See [Configuration](docs/configuration.md) and [Authentication](docs/authentication.md).
 

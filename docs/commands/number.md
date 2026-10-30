@@ -103,8 +103,8 @@ Both commands read the PIN from one of these, and prompt if there's a terminal a
 | `--pin-stdin` | `printf '%s' "$PIN" \| paloma number register --pin-stdin` |
 
 With neither and no terminal, the command exits `5`, including under `--dry-run`, where any
-six digits will do because the output masks them. The older `--pin <value>` flag still
-works, but it warns, because other processes can read a command line.
+six digits will do because the output masks them. There is no `--pin <value>` flag,
+because other processes can read a command line.
 
 PIN values are redacted from dry-run output and verbose request diagnostics. The real request sends the supplied PIN.
 

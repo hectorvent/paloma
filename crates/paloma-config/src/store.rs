@@ -56,39 +56,13 @@ pub struct ConfigFile {
 
 impl ConfigFile {
     /// Open the config at `path` (from `--config` / `PALOMA_CONFIG`), or the platform
-    /// default. When falling back to the default and only the v1 `~/.paloma/config.toml`
-    /// exists, it is copied over first and the returned note says so; keyring references
-    /// are unchanged, so the migrated profiles keep working.
-    pub fn open(path: Option<&Path>) -> Result<(Self, Option<String>)> {
-        if let Some(p) = path {
-            return Ok((
-                Self {
-                    path: p.to_path_buf(),
-                },
-                None,
-            ));
-        }
-        let path = default_path()?;
-        let mut note = None;
-        if !path.exists()
-            && let Some(legacy) = legacy_path().filter(|p| p.is_file())
-        {
-            {
-                create_parent(&path)?;
-                fs::copy(&legacy, &path).map_err(|e| {
-                    Error::io(
-                        format!("cannot migrate {} to {}", legacy.display(), path.display()),
-                        e,
-                    )
-                })?;
-                note = Some(format!(
-                    "migrated config from {} to {}",
-                    legacy.display(),
-                    path.display()
-                ));
-            }
-        }
-        Ok((Self { path }, note))
+    /// default.
+    pub fn open(path: Option<&Path>) -> Result<Self> {
+        let path = match path {
+            Some(p) => p.to_path_buf(),
+            None => default_path()?,
+        };
+        Ok(Self { path })
     }
 
     pub fn at(path: impl Into<PathBuf>) -> Self {
@@ -220,13 +194,6 @@ pub fn default_path() -> Result<PathBuf> {
     let strategy = etcetera::choose_base_strategy()
         .map_err(|e| Error::other(format!("cannot locate the config directory: {e}")))?;
     Ok(strategy.config_dir().join("paloma").join("config.toml"))
-}
-
-/// Where v1 (the Java build) kept its config.
-fn legacy_path() -> Option<PathBuf> {
-    etcetera::home_dir()
-        .ok()
-        .map(|h| h.join(".paloma").join("config.toml"))
 }
 
 #[cfg(test)]

@@ -95,11 +95,8 @@ pub struct Fields {
 /// PALOMA_VERIFY_TOKEN, stdin or a prompt.
 #[derive(Debug, Args)]
 pub struct VerifyTokenInput {
-    /// Deprecated: prefer PALOMA_VERIFY_TOKEN or --verify-token-stdin.
-    #[arg(long, hide = true)]
-    verify_token: Option<String>,
     /// Read the verify token from stdin. Otherwise uses PALOMA_VERIFY_TOKEN, or prompts.
-    #[arg(long, conflicts_with = "verify_token")]
+    #[arg(long)]
     verify_token_stdin: bool,
 }
 
@@ -109,18 +106,18 @@ impl VerifyTokenInput {
             app,
             &SecretSource {
                 what: "verify token",
-                flag: "--verify-token",
+                flag: None,
                 stdin_flag: "--verify-token-stdin",
                 env: "PALOMA_VERIFY_TOKEN",
                 missing_is_auth: false,
             },
-            self.verify_token.as_deref(),
+            None,
             self.verify_token_stdin,
         )
     }
 
     fn given(&self) -> bool {
-        self.verify_token.is_some() || self.verify_token_stdin
+        self.verify_token_stdin
     }
 }
 

@@ -40,9 +40,8 @@ token, so it must match what your endpoint expects.
 
 The verify token comes from `--verify-token-stdin` or `PALOMA_VERIFY_TOKEN`, or from a
 prompt if there's a terminal. When `--callback-url` is supplied, having none of these
-sources and no terminal makes the command exit `5`. Default subscriptions need no token. The
-older `--verify-token <value>` flag still works, but it warns, because other processes can
-read a command line.
+sources and no terminal makes the command exit `5`. Default subscriptions need no token. There is
+no `--verify-token <value>` flag, because other processes can read a command line.
 
 ```bash
 printf '%s' "$VERIFY_TOKEN" | paloma webhook subscribe \
