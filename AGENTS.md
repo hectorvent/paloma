@@ -78,15 +78,43 @@ or `--dry-run`, refuses without a TTY.
 **Secrets never touch argv, config or logs.** Tokens live in the keyring
 (`paloma_config::secrets`), service `paloma`, account `paloma/<profile>`. `--token` is
 hidden; `PALOMA_TOKEN` and `auth login --with-token` are the scripting paths. Other
-secrets a command needs go through `commands::read_secret` (env, stdin or a prompt; a
-flag only warns). Secrets
-are `SecretString`s; `Request::describe` never includes them.
+secrets a command needs go through `commands::util::read_secret` (env, stdin or a
+prompt; there is no flag for the value). Secrets are `SecretString`s; `Request::describe`
+never includes them.
 
 **Lazy context.** `ctx.require_phone_number_id()` / `require_waba_id()` at the point of
 use; the keyring is read only when a request is sent, or a listener starts.
 
 **Docs explain why, not what.** Each module opens with a short `//!` on the constraint
 it exists to satisfy. Match that; don't narrate code.
+
+## CLI grammar
+
+Every command follows these rules, so a user who knows one group can guess the next.
+A new command that can't follow one says why in its doc comment.
+
+- **Verbs.** A resource with an id takes `list`, `get`, `create`, `update` and `delete`.
+  A singleton setting takes `get` and `set`. `enable`/`disable` turn a whole feature on
+  or off; `clear` empties a list setting.
+- **Groups aren't commands.** `paloma webhook fields` lists its verbs; reading is
+  `webhook fields get`. A sub-resource is a nested group (`number pin set`), never a
+  hyphenated verb (`number set-pin`).
+- **Arguments.** The resource's own id is positional; every other reference is a flag.
+  The recipient of a send is `<TO>`; any other person is `<USER>`.
+- **Booleans** are `--x`/`--no-x` pairs, never `--x <true|false>`.
+- **Lists** are a singular flag that repeats and also takes commas (`--id 1 --id 2`, or
+  `--id 1,2`), shown as `<NAME,...>`.
+- **Files.** `-f, --file <PATH>` reads one; `-O, --out <PATH>` writes one.
+- **Time.** `--start`/`--end <TIME>` take UNIX seconds or `YYYY-MM-DD`; durations are
+  humantime (`--ttl 10m`).
+- **Paging.** Every paged read flattens `listing::Pagination` (`--limit`, `--all`,
+  `--after`) and goes through `listing::list`.
+- **`-q`.** A create prints the new id, a list prints one row id per line, and a bulk
+  write prints the ids it acted on.
+- **Confirmation.** Anything that deletes, disables, or overwrites what Meta holds
+  calls `app.confirm_or_abort`.
+- **Help.** A verb's doc comment is one imperative sentence ("Show the …", not
+  "Read …"); clap drops its period. Every argument has a doc comment.
 
 ## How to add a command
 

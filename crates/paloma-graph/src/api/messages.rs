@@ -3,7 +3,7 @@
 //! The builders return the full JSON envelope so `--dry-run` shows exactly what would be
 //! sent. Optional fields are omitted rather than sent as `null`.
 //!
-//! Every builder goes through [`envelope`], which is where a recipient becomes `to` or
+//! Every builder goes through `envelope`, which is where a recipient becomes `to` or
 //! `recipient`. A new message type gets business-scoped user IDs by using it.
 
 use paloma_core::validate;
