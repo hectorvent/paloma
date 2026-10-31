@@ -155,6 +155,7 @@ impl FlowCommand {
             Self::Migrate(a) => a.run(app).await,
             Self::Key(a) => a.run(app).await,
             Self::List(a) => {
+                a.page.check(None)?;
                 let waba = app.ctx()?.require_waba_id()?.to_owned();
                 let fields = a.fields.clone();
                 list(

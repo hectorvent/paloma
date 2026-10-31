@@ -55,18 +55,36 @@ impl BlockCommand {
                 ))? {
                     return Ok(());
                 }
-                let ids = users.join("\n");
-                app.send_and_emit(&block::add(&phone, &users), |_| Some(ids.clone()))
-                    .await
+                write(app, &block::add(&phone, &users), "added_users").await
             }
             Self::Remove { users } => {
-                let ids = users.join("\n");
-                app.send_and_emit(&block::remove(&phone, &users), |_| Some(ids.clone()))
-                    .await
+                write(app, &block::remove(&phone, &users), "removed_users").await
             }
             Self::List(a) => list(app, &phone, &a).await,
         }
     }
+}
+
+/// Meta answers 200 even when some users fail, listing them in `failed_users`, so `-q`
+/// prints only the users it acted on and a partial failure exits 1.
+async fn write(app: &App, req: &paloma_graph::Request, ok: &str) -> Result<()> {
+    let Some(resp) = app.send(req).await? else {
+        return Ok(());
+    };
+    let out = Output::response(&resp)?;
+    let ids = super::util::acted_on(&out.data, &format!("/block_users/{ok}"), "input");
+    let failed = out
+        .data
+        .pointer("/block_users/failed_users")
+        .and_then(serde_json::Value::as_array)
+        .map_or(0, Vec::len);
+    app.out.emit(&out.id(ids));
+    if failed > 0 {
+        app.out
+            .warn(format!("{failed} user(s) failed; see failed_users"));
+        return Err(paloma_core::Error::Silent(paloma_core::ExitCode::Generic));
+    }
+    Ok(())
 }
 
 /// `listing::list` trusts `paging.next`, which this edge doesn't document: without it a

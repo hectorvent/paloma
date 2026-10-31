@@ -96,7 +96,7 @@ pub struct LimitsArgs {
     #[command(flatten)]
     page: Pagination,
     /// Read the shared limit directly from this business portfolio.
-    #[arg(long, conflicts_with_all = ["all", "after"])]
+    #[arg(long, conflicts_with_all = ["all", "after", "limit"])]
     business_id: Option<String>,
 }
 
@@ -231,6 +231,12 @@ impl AccountCommand {
         }
         if let Self::Analytics(args) = self {
             return args.run(app).await;
+        }
+        if let Self::Limits(args) = &self {
+            args.page.check(None)?;
+        }
+        if let Self::Apps(AppsCommand::List(page)) = &self {
+            page.check(None)?;
         }
         if let Self::Limits(args) = &self
             && let Some(id) = &args.business_id

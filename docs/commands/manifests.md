@@ -221,7 +221,7 @@ spec:
 ### QrCode
 
 `QrCode` manages the prefilled message of an existing phone-scoped code. Meta assigns
-code identities, so create one with `paloma qr create`, then `paloma export qrcode`.
+code identities, so create one with `paloma qr create`, then `paloma export qr-code`.
 Apply updates only that code; it never creates or deletes a code. Ambiguous, malformed
 or mismatched lookup responses fail before any write. Export includes only
 the code and message, leaving out generated links and image URLs.

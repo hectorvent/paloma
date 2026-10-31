@@ -39,8 +39,9 @@ in that case.
 
 Block or unblock one or more users by E.164 number or BSUID, in any mix. Paloma tells them
 apart [the same way `send` does](send.md#recipients) and writes `user` for a number and
-`user_id` for a BSUID. Both verbs support `--dry-run`, and `-q` prints each user they acted
-on. `add` confirms first (`--yes` to skip), because blocked users can't message or call you.
+`user_id` for a BSUID. Both verbs support `--dry-run`, and `-q` prints each user Meta acted
+on. Meta answers 200 even when some users fail; those are listed in `failed_users`, and the
+command warns and exits `1`. `add` confirms first (`--yes` to skip), because blocked users can't message or call you.
 
 ```bash
 paloma block add 15551234567 US.13491208655302741918 --yes

@@ -264,7 +264,7 @@ paloma template library create --name my_delivery_update \
 ```
 
 `library list` takes `--search`, `--topic`, `--usecase`, `--industry`, `--language`, `--name`,
-`--all` and `--after`. It doesn't need a WABA id, because the library is Meta's.
+`--limit`, `--all` and `--after`. It doesn't need a WABA id, because the library is Meta's.
 
 | `library create` flag | Description |
 |-----------------------|-------------|

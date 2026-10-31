@@ -230,6 +230,7 @@ async fn new_disruptive_commands_refuse_without_confirmation_and_preview_offline
         vec!["calling", "voicemail", "disable"],
         vec!["calling", "codecs", "clear"],
         vec!["block", "add", "15551234567"],
+        vec!["calling", "set", "--status", "DISABLED"],
         vec!["commerce", "set", "--no-cart"],
         vec!["flow", "migrate", "--source-waba-id", "333"],
     ] {
@@ -290,4 +291,81 @@ async fn lists_print_one_row_id_per_line_under_quiet() {
             .success()
             .stdout(expected);
     }
+}
+
+/// A confirmation that can never pass refuses before the template lookup, so no read is
+/// spent on a change that won't happen.
+#[tokio::test(flavor = "multi_thread")]
+async fn template_update_refuses_before_its_lookup_without_a_tty() {
+    let graph = MockServer::start().await;
+    let home = TempDir::new().unwrap();
+    let file = home.path().join("t.json");
+    std::fs::write(&file, r#"{"category":"UTILITY"}"#).unwrap();
+    paloma(Some(&graph), &home)
+        .args(["template", "update", "promo", "-f"])
+        .arg(&file)
+        .assert()
+        .code(5)
+        .stdout("")
+        .stderr(predicate::str::contains("--yes"));
+    assert!(graph.received_requests().await.unwrap().is_empty());
+}
+
+/// A zero page size is refused locally on every list, including those that only just
+/// gained --limit.
+#[test]
+fn a_zero_limit_exits_5_on_every_paged_list() {
+    let home = TempDir::new().unwrap();
+    for args in [
+        vec!["flow", "list"],
+        vec!["account", "limits"],
+        vec!["account", "apps", "list"],
+        vec!["template", "library", "list"],
+        vec!["template", "list"],
+    ] {
+        paloma(None, &home)
+            .args(&args)
+            .args(["--limit", "0", "--dry-run"])
+            .assert()
+            .code(5)
+            .stdout("");
+    }
+}
+
+/// Bulk writes answer 200 with per-item failures: -q prints only what Meta did, and a
+/// partial failure exits 1.
+#[tokio::test(flavor = "multi_thread")]
+async fn bulk_writes_print_only_what_meta_did_and_exit_1_on_a_partial_failure() {
+    let graph = MockServer::start().await;
+    let home = TempDir::new().unwrap();
+    Mock::given(method("POST"))
+        .and(path(format!("/v26.0/{PHONE}/block_users")))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "messaging_product": "whatsapp",
+            "block_users": {
+                "added_users": [{"input": "15551234567", "wa_id": "15551234567"}],
+                "failed_users": [{"input": "15557654321", "errors": [{"code": 139_100}]}]
+            }
+        })))
+        .mount(&graph)
+        .await;
+    paloma(Some(&graph), &home)
+        .args(["block", "add", "15551234567", "15557654321", "--yes", "-q"])
+        .assert()
+        .code(1)
+        .stdout("15551234567\n")
+        .stderr(predicate::str::contains("failed_users"));
+    Mock::given(method("POST"))
+        .and(path(format!("/v26.0/{WABA}/message_templates/archive")))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "archived_templates": ["1"],
+            "failed_templates": {"2": "bad"}
+        })))
+        .mount(&graph)
+        .await;
+    paloma(Some(&graph), &home)
+        .args(["template", "archive", "--id", "1,2", "--yes", "-q"])
+        .assert()
+        .code(1)
+        .stdout("1\n");
 }

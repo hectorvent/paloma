@@ -197,7 +197,7 @@ impl CallingCommand {
             |app: &App| -> Result<String> { Ok(app.ctx()?.require_phone_number_id()?.to_owned()) };
         // Turning a feature off, or emptying a list, changes what callers get.
         let confirm = match &command {
-            Self::Disable => Some("turn calling off, so people can't call the number"),
+            Self::Disable => Some(DISABLE_CALLING),
             Self::Sip(Sip::Disable) => {
                 Some("turn SIP off, so calls stop reaching your SIP servers")
             }
@@ -254,6 +254,8 @@ impl CallingCommand {
     }
 }
 
+const DISABLE_CALLING: &str = "turn calling off, so people can't call the number";
+
 async fn set(app: &App, a: Set) -> Result<()> {
     if let Some(file) = a.file {
         let v = read_json(&file)?;
@@ -263,6 +265,11 @@ async fn set(app: &App, a: Set) -> Result<()> {
             ));
         }
         let phone = app.ctx()?.require_phone_number_id()?.to_owned();
+        if v.get("status").and_then(serde_json::Value::as_str) == Some("DISABLED")
+            && !app.confirm_or_abort(DISABLE_CALLING)?
+        {
+            return Ok(());
+        }
         return app.send_and_emit(&calling::set(&phone, v), no_id).await;
     }
     let icon_countries = if a.icon_countries.is_empty() && !a.icon_everywhere {
@@ -296,6 +303,9 @@ async fn set(app: &App, a: Set) -> Result<()> {
         ));
     }
     let phone = app.ctx()?.require_phone_number_id()?.to_owned();
+    if settings.status == Some("DISABLED") && !app.confirm_or_abort(DISABLE_CALLING)? {
+        return Ok(());
+    }
     app.send_and_emit(&calling::set_settings(&phone, &settings), no_id)
         .await
 }

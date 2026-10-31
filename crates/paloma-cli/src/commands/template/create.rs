@@ -42,8 +42,11 @@ pub(super) async fn create(app: &App, a: Create) -> Result<()> {
 }
 
 pub(super) async fn update(app: &App, a: Update) -> Result<()> {
+    validate::not_blank(&a.name, "template name")?;
     let body = read_json(&a.file)?;
     let waba = app.ctx()?.require_waba_id()?.to_owned();
+    // Refuse before the lookup when the confirmation could never pass.
+    app.ensure_can_confirm("change a template")?;
     let id = if app.dry_run() {
         "<template-id>".to_owned()
     } else {

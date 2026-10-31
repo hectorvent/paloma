@@ -42,8 +42,11 @@ impl UsernameCommand {
             }
             Self::List => {
                 if let Some(resp) = app.send(&phone_numbers::reserved_usernames(&phone)).await? {
+                    let out = Output::response(&resp)?;
+                    let ids =
+                        super::super::util::acted_on(&out.data, "/data/0/username_suggestions", "");
                     app.out
-                        .emit(&Output::response(&resp)?.table("/data", &["username_suggestions"]));
+                        .emit(&out.table("/data", &["username_suggestions"]).id(ids));
                 }
                 Ok(())
             }

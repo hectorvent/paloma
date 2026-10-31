@@ -58,6 +58,7 @@ pub struct LibraryCreate {
 pub(super) async fn library(app: &App, command: LibraryCommand) -> Result<()> {
     match command {
         LibraryCommand::List(a) => {
+            a.page.check(None)?;
             let filter = LibraryFilter {
                 search: a.search,
                 topic: a.topic,

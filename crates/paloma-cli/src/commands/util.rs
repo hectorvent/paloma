@@ -29,6 +29,22 @@ pub fn toggle(on: bool, off: bool) -> Option<bool> {
     }
 }
 
+/// The ids a bulk write acted on, one per line, from the response's `ok` list. Each entry is
+/// an id string, or an object whose `field` holds one.
+pub fn acted_on(response: &serde_json::Value, ok: &str, field: &str) -> Option<String> {
+    let ids: Vec<&str> = response
+        .pointer(ok)
+        .and_then(serde_json::Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter_map(|v| {
+            v.as_str()
+                .or_else(|| v.get(field).and_then(serde_json::Value::as_str))
+        })
+        .collect();
+    (!ids.is_empty()).then(|| ids.join("\n"))
+}
+
 /// All of stdin, for `--*-stdin` flags and piped payloads.
 pub fn read_stdin(what: &str) -> Result<String> {
     let mut buf = String::new();

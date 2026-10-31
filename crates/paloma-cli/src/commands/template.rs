@@ -269,7 +269,12 @@ impl TemplateCommand {
             Self::Unarchive(a) => {
                 validate::template_ids_within(&a.ids, limits::MAX_TEMPLATE_ARCHIVE_IDS)?;
                 let waba = app.ctx()?.require_waba_id()?.to_owned();
-                send_bulk(app, &templates::unarchive(&waba, &a.ids), &a.ids).await
+                send_bulk(
+                    app,
+                    &templates::unarchive(&waba, &a.ids),
+                    "/unarchived_templates",
+                )
+                .await
             }
             Self::Unpause { id } => {
                 validate::template_id(&id)?;
@@ -298,16 +303,23 @@ async fn archive(app: &App, a: &Ids) -> Result<()> {
     if !app.confirm_or_abort(&what)? {
         return Ok(());
     }
-    send_bulk(app, &templates::archive(&waba, &a.ids), &a.ids).await
+    send_bulk(
+        app,
+        &templates::archive(&waba, &a.ids),
+        "/archived_templates",
+    )
+    .await
 }
 
 /// Send a bulk write that answers 200 even when some templates fail. Those are still a
 /// failure for a script, so the response is printed and the exit code says so.
-async fn send_bulk(app: &App, req: &paloma_graph::Request, ids: &[String]) -> Result<()> {
+async fn send_bulk(app: &App, req: &paloma_graph::Request, ok: &str) -> Result<()> {
     let Some(resp) = app.send(req).await? else {
         return Ok(());
     };
-    let out = Output::response(&resp)?.id((!ids.is_empty()).then(|| ids.join("\n")));
+    let out = Output::response(&resp)?;
+    let ids = super::util::acted_on(&out.data, ok, "id");
+    let out = out.id(ids);
     let failed = templates::failed_count(&out.data);
     app.out.emit(&out);
     if failed > 0 {
@@ -343,7 +355,12 @@ async fn migrate(app: &App, a: &Migrate) -> Result<()> {
         count: a.count,
         template_ids: &a.ids,
     };
-    send_bulk(app, &templates::migrate(&waba, &migration), &a.ids).await
+    send_bulk(
+        app,
+        &templates::migrate(&waba, &migration),
+        "/migrated_templates",
+    )
+    .await
 }
 
 /// Template ids where Meta types them as integers.

@@ -43,8 +43,7 @@ Most flags also read an environment variable: `PALOMA_PROFILE`, `PALOMA_TOKEN`,
 request still read it: `apply --dry-run` compares against live config, and
 `webhook fields set --dry-run`, `media upload --handle --dry-run` and
 `profile photo --dry-run` look up the app id unless you set it, and `template get --status` and
-`template watch` read the template, since reading is all they do. Template upsert reads
-existing translations to plan creates and edits. `webhook listen --dry-run` only notes
+`template watch` read the template, since reading is all they do. `webhook listen --dry-run` only notes
 the bind address; it does not open a socket or read verification secrets. Other commands
 print requests or a multi-step plan without sending them; command pages describe any
 required live lookups. Multi-step commands (`send image --file`, `flow update`
@@ -89,7 +88,7 @@ paloma template list --status PAUSED --all -q | xargs -n1 paloma template unpaus
 
 ## Paging
 
-Every list takes the same flags:
+Every paged list takes the same flags:
 
 | Flag | What it does |
 |------|--------------|

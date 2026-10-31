@@ -210,11 +210,28 @@ fn report_partial(app: &App, data: &Value, failed_key: &str) -> Result<()> {
     Ok(())
 }
 
-async fn send_partial(app: &App, req: &paloma_graph::Request, failed_key: &str) -> Result<()> {
+/// `-q` prints the ids in `requested` that Meta didn't list under `failed_key`.
+async fn send_partial(
+    app: &App,
+    req: &paloma_graph::Request,
+    failed_key: &str,
+    requested: &[String],
+) -> Result<()> {
     let Some(response) = app.send(req).await? else {
         return Ok(());
     };
     let output = Output::response(&response)?;
+    let failed = output
+        .data
+        .get(failed_key)
+        .map(Value::to_string)
+        .unwrap_or_default();
+    let done: Vec<&str> = requested
+        .iter()
+        .map(String::as_str)
+        .filter(|id| !failed.contains(&format!("\"{id}\"")))
+        .collect();
+    let output = output.id((!done.is_empty()).then(|| done.join("\n")));
     app.out.emit(&output);
     report_partial(app, &output.data, failed_key)
 }
@@ -401,6 +418,7 @@ impl GroupCommand {
                     app,
                     &groups::remove_participants(&group_id, &users),
                     "failed_participants",
+                    &users,
                 )
                 .await
             }
@@ -429,6 +447,7 @@ impl GroupCommand {
                         app,
                         &groups::approve_join_requests(&group_id, &request_ids),
                         "failed_join_requests",
+                        &request_ids,
                     )
                     .await
                 }
@@ -448,6 +467,7 @@ impl GroupCommand {
                         app,
                         &groups::reject_join_requests(&group_id, &request_ids),
                         "failed_join_requests",
+                        &request_ids,
                     )
                     .await
                 }
