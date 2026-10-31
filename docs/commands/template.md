@@ -127,7 +127,7 @@ Use `--dry-run` to print the exact request body without submitting.
 | `--button <spec>` | A button, in display order; repeatable (see below) |
 | `--url-example <v>` | Example for a URL button's variable; repeat in the order of those buttons |
 | `--allow-category-change` | Sends `allow_category_change`. Meta has reassigned categories by default since April 9, 2025 |
-| `--ttl-seconds <n>` | Sends `message_send_ttl_seconds` (see below) |
+| `--ttl <duration>` | Sends `message_send_ttl_seconds`, such as `10m` or `12h` (see below) |
 
 Each variable needs an example, and positional variables are numbered from `{{1}}` without
 gaps. Otherwise the command exits 5 before any API call.
@@ -148,11 +148,13 @@ of this and exits 5.
 
 ### Time-to-live
 
-| Category | `--ttl-seconds` |
-|----------|-----------------|
-| `AUTHENTICATION` | 30 to 900, or `-1` for 30 days |
-| `UTILITY` | 30 to 43200, or `-1` for 30 days |
-| `MARKETING` | 43200 to 2592000 (applies to the Marketing Messages API) |
+`--ttl` takes a duration (`90s`, `15m`, `12h`, `30d`) and sends it in seconds.
+
+| Category | `--ttl` |
+|----------|---------|
+| `AUTHENTICATION` | `30s` to `15m`, or `30d` for Meta's 30-day default (sent as `-1`) |
+| `UTILITY` | `30s` to `12h`, or `30d` for Meta's 30-day default (sent as `-1`) |
+| `MARKETING` | `12h` to `30d` (applies to the Marketing Messages API) |
 
 ### What needs `--file`
 

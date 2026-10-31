@@ -35,8 +35,7 @@ paloma auth login --phone-number-id <PHONE_NUMBER_ID> --waba-id <WABA_ID>
 Confirm it works (this makes a live call to validate the token):
 
 ```bash
-paloma auth status
-paloma auth whoami      # active WABA, sender number, business name
+paloma auth status      # token check, plus the active WABA, sender number and business name
 ```
 
 ## 3. Send your first message

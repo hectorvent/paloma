@@ -528,12 +528,12 @@ enabled** on that number; see [calling](calling.md).
 | Flag | Meaning | Limit | Meta's default |
 |------|---------|-------|----------------|
 | `--display` | Button label | 20 characters | `Call Now` |
-| `--ttl-minutes` | How long the button lasts | 1 to 43200 (30 days) | 10080 (7 days) |
+| `--ttl <duration>` | How long the button lasts, in whole minutes | `1m` to `30d` | 7 days |
 | `--payload` | A string returned as `cta_payload` in the `calls` webhook, for tracking; needs WhatsApp 2.25.27 or later | 512 characters | |
 
 ```bash
 paloma send interactive call 15551234567 --body "Call us now for faster service" \
-      --display "Call on WhatsApp" --ttl-minutes 1440 --payload campaign-7
+      --display "Call on WhatsApp" --ttl 1d --payload campaign-7
 ```
 
 An app too old for the button makes Meta report error `131026` in a webhook. See Meta's

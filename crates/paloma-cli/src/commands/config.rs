@@ -4,8 +4,8 @@
 use std::io::IsTerminal;
 
 use clap::{Args, Subcommand};
-use paloma_config::secrets::{keyring_account, keyring_ref, token_account};
-use paloma_config::{Profile, ProfileKey};
+use paloma_config::secrets::keyring_account;
+use paloma_config::ProfileKey;
 use paloma_core::{Error, Result};
 use secrecy::{ExposeSecret, SecretString};
 use serde_json::{Map, Value, json};
@@ -16,12 +16,6 @@ use crate::output::Output;
 
 #[derive(Debug, Subcommand)]
 pub enum ConfigCommand {
-    /// Write a skeleton config file.
-    Init {
-        /// Overwrite an existing config file.
-        #[arg(long)]
-        force: bool,
-    },
     /// List all profiles (secrets redacted).
     List,
     /// Print one key of the selected profile.
@@ -49,32 +43,6 @@ impl ConfigCommand {
     pub fn run(self, app: &App) -> Result<()> {
         let file = app.config_file()?;
         match self {
-            Self::Init { force } => {
-                if file.exists() && !force {
-                    return Err(Error::validation(format!(
-                        "config already exists at {}; pass --force to overwrite",
-                        file.path().display()
-                    )));
-                }
-                let name = app
-                    .globals
-                    .profile
-                    .clone()
-                    .unwrap_or_else(|| "default".into());
-                if force {
-                    let _ = std::fs::remove_file(file.path());
-                }
-                let skeleton = Profile {
-                    token_ref: Some(keyring_ref(&token_account(&name))),
-                    ..Profile::default()
-                };
-                file.upsert_profile(&name, &skeleton, true)?;
-                let path = file.path().display().to_string();
-                app.out.info(format!("wrote skeleton config to {path}"));
-                app.out.info("next: `paloma auth login` to store a token, then set waba_id / phone_number_id");
-                app.out
-                    .emit(&Output::new(json!({ "path": path, "profile": name })).id(Some(path)));
-            }
             Self::List => {
                 let config = file.load()?;
                 let profiles: Map<String, Value> = config

@@ -34,8 +34,8 @@ New here? Start with [Installation](installation.md) → [Getting started](getti
 | `paloma flow` | list · get · create · update · publish · deprecate · delete · assets · migrate · key | [commands/flow.md](commands/flow.md) |
 | `paloma block` | add · remove · list | [commands/block.md](commands/block.md) |
 | `paloma group` | create · list · get · update · delete · invite · members · requests · pin · unpin | [commands/group.md](commands/group.md) |
-| `paloma auth` | login · status · whoami · logout | [commands/auth.md](commands/auth.md) |
-| `paloma config`, `paloma configure` | init · list · get · set · unset · use · path; guided setup | [commands/config.md](commands/config.md) |
+| `paloma auth` | login · status · logout | [commands/auth.md](commands/auth.md) |
+| `paloma config`, `paloma configure` | list · get · set · unset · use · path; guided setup | [commands/config.md](commands/config.md) |
 | `paloma version` | the installed version | |
 | `paloma link` | create (offline) | [commands/link.md](commands/link.md) |
 | `paloma export` · `apply` · `diff` | your WhatsApp setup as code (declarative YAML: Account, Calling, Profile, Number, PhoneSettings, Commerce, ConversationalAutomation, QrCode, Template, Webhook) | [commands/manifests.md](commands/manifests.md) |

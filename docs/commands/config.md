@@ -19,20 +19,6 @@ Requires an interactive terminal; in scripts, use `paloma auth login` + `paloma 
 
 ---
 
-## `paloma config init`
-
-Write a skeleton config file for a profile.
-
-```
-paloma config init [--profile <name>] [--force]
-```
-
-| Flag | Description |
-|------|-------------|
-| `--force` | Overwrite an existing config file |
-
----
-
 ## `paloma config list`
 
 Show all profiles with secrets redacted (keyring handles shown as-is, plaintext

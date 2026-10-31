@@ -299,7 +299,7 @@ error: text body is 5000 chars; max is 4096        # exit 5
 | `automation` | get · set · bot get |
 | `commerce` | get · set |
 | `export` · `apply` · `diff` | your setup as code: declarative YAML for the ten kinds above |
-| `auth` | login · status · whoami · logout |
+| `auth` | login · status · logout |
 | `config` · `configure` | profiles and settings |
 | `link` | `wa.me` click-to-chat links, offline, no token needed |
 | `completion` | bash · zsh · fish · powershell · elvish |

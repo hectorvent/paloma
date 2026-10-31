@@ -68,7 +68,10 @@ WEBHOOK_URL=https://tunnel.hectorvent.dev/whatsapp/webhook paloma diff -f webhoo
 ## `paloma export <kind>`
 
 Render the live config as a manifest (YAML by default, `-o json` for JSON).
-`--template` emits the field skeleton with no API call.
+`<kind>` is kebab-case: `account`, `calling`, `commerce`, `conversational-automation`,
+`number`, `phone-settings`, `profile`, `qr-code`, `template` or `webhook`. The manifest's
+own PascalCase name (`PhoneSettings`) works too. `--skeleton` emits the field skeleton with
+no API call.
 
 Fields a kind supports but that are **not set** are emitted as commented-out stubs, so
 the manifest documents what else you can configure:
@@ -91,7 +94,7 @@ of a Template.
 paloma export calling > calling.yaml
 paloma export profile                 # set fields + commented unset fields
 paloma export profile --minimal       # only the fields that are set
-paloma export calling --template      # full commented skeleton for authoring
+paloma export calling --skeleton      # full commented skeleton for authoring
 ```
 
 ## `paloma apply -f <file>`

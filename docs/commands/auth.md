@@ -33,7 +33,8 @@ The sender/WABA/version values come from the global flags
 
 ## `paloma auth status`
 
-Validate the active token by probing the phone-number node, and show its context.
+Validate the active token by probing the phone-number node, and show what it acts as: the
+profile, WABA, sender number, its business name and its quality rating.
 Exits with code `3` if the token is missing or invalid.
 
 ```bash
@@ -55,16 +56,6 @@ paloma auth status --scopes -o json   # Meta's response, unchanged
 It exits `3` if the token is missing or Meta doesn't report it as valid. With `-q` it prints
 `valid`. Times are Unix timestamps as Meta returns them. Meta's example for a system user
 token shows `expires_at` as `0`, but its docs don't define that value.
-
----
-
-## `paloma auth whoami`
-
-Show the active WABA, sender number, and business name for the current profile.
-
-```bash
-paloma auth whoami
-```
 
 ---
 

@@ -427,7 +427,7 @@ async fn template_create_inline_sends_every_typed_component() {
         .args(["--button", "phone_number:Call=15550051310"])
         .args(["--button", "copy_code:25OFF"])
         .args(["--parameter-format", "positional"])
-        .args(["--allow-category-change", "--ttl-seconds", "3600", "-q"])
+        .args(["--allow-category-change", "--ttl", "1h", "-q"])
         .assert()
         .success()
         .stdout("572\n");
@@ -477,7 +477,7 @@ fn template_create_media_header_takes_an_upload_handle() {
         .args(["template", "create", "--name", "flyer"])
         .args(["--category", "MARKETING", "--language", "en_US"])
         .args(["--body", "Specials", "--header-media", "IMAGE"])
-        .args(["--header-handle", "4::aW", "--ttl-seconds", "43200"])
+        .args(["--header-handle", "4::aW", "--ttl", "12h"])
         .args(["--dry-run", "-o", "json"])
         .output()
         .unwrap();
@@ -501,7 +501,7 @@ fn template_create_accepts_the_30_day_ttl_value() {
     let home = TempDir::new().unwrap();
     let out = paloma(None, &home)
         .args(["template", "create", "--name", "t", "--category", "UTILITY"])
-        .args(["--language", "en", "--body", "Hi", "--ttl-seconds", "-1"])
+        .args(["--language", "en", "--body", "Hi", "--ttl", "30d"])
         .args(["--dry-run", "-o", "json"])
         .output()
         .unwrap();
@@ -530,8 +530,8 @@ async fn template_create_inline_validates_before_any_request() {
         (vec!["--header-text", &long_61], "--header-text is 61 chars"),
         (vec!["--header-text", "{{1}} {{2}}"], "at most 1 variable"),
         (vec!["--header-text", "Hi {{1}}"], "--header-example has 0"),
-        (vec!["--ttl-seconds", "43201"], "must be 30 to 43200"),
-        (vec!["--ttl-seconds", "0"], "must be 30 to 43200"),
+        (vec!["--ttl", "43201s"], "must be 30s to 43200s"),
+        (vec!["--ttl", "0s"], "must be 30s to 43200s"),
         (vec!["--button", &long_label], "label is 26 chars"),
         (vec!["--button", &long_url], "URL is 2"),
         (vec!["--button", &long_phone], "number is 21 chars"),
@@ -663,22 +663,22 @@ async fn template_create_inline_validates_before_any_request() {
             "t",
             "MARKETING",
             "Hi",
-            vec!["--ttl-seconds", "120"],
-            "43200 to 2592000",
+            vec!["--ttl", "2m"],
+            "43200s to 2592000s",
         ),
         (
             "t",
             "MARKETING",
             "Hi",
-            vec!["--ttl-seconds", "-1"],
-            "43200 to 2592000",
+            vec!["--ttl", "1s"],
+            "43200s to 2592000s",
         ),
         (
             "t",
             "AUTHENTICATION",
             "Hi",
-            vec!["--ttl-seconds", "901"],
-            "30 to 900",
+            vec!["--ttl", "901s"],
+            "30s to 900s",
         ),
     ] {
         paloma(Some(&graph), &home)

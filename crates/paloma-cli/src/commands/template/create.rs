@@ -70,7 +70,7 @@ pub struct Create {
     #[arg(long, conflicts_with_all = [
         "name", "category", "language", "body", "example", "header_text", "header_example",
         "header_media", "header_handle", "footer", "buttons", "url_examples",
-        "parameter_format", "allow_category_change", "ttl_seconds",
+        "parameter_format", "allow_category_change", "ttl",
     ])]
     pub(super) file: Option<PathBuf>,
     /// Template name (inline mode).
@@ -118,10 +118,10 @@ pub struct Create {
     /// April 2025.
     #[arg(long)]
     pub(super) allow_category_change: bool,
-    /// Time-to-live for messages using this template (message_send_ttl_seconds). The range
-    /// depends on --category.
-    #[arg(long, allow_negative_numbers = true, value_name = "SECONDS")]
-    pub(super) ttl_seconds: Option<i64>,
+    /// How long Meta keeps trying to deliver a message from this template, such as 10m or
+    /// 12h. The range depends on --category; 30d means Meta's 30-day default.
+    #[arg(long, value_name = "DURATION", value_parser = humantime::parse_duration)]
+    pub(super) ttl: Option<Duration>,
 }
 
 #[derive(Debug, Args)]
@@ -273,7 +273,8 @@ pub(super) fn inline_template(name: &str, a: &Create) -> Result<InlineTemplate> 
     if let Some(footer) = &a.footer {
         validate::template_text(footer, limits::MAX_TEMPLATE_FOOTER, "--footer")?;
     }
-    if let Some(ttl) = a.ttl_seconds {
+    let ttl_seconds = a.ttl.map(|ttl| ttl_seconds(category, ttl)).transpose()?;
+    if let Some(ttl) = ttl_seconds {
         validate::template_ttl(category, ttl)?;
     }
     Ok(InlineTemplate {
@@ -287,7 +288,7 @@ pub(super) fn inline_template(name: &str, a: &Create) -> Result<InlineTemplate> 
         footer: a.footer.clone(),
         buttons: parse_buttons(&a.buttons, &a.url_examples)?,
         allow_category_change: a.allow_category_change,
-        ttl_seconds: a.ttl_seconds,
+        ttl_seconds,
     })
 }
 
@@ -511,4 +512,17 @@ pub(super) fn parse_button<'a>(
         }
         _ => Err(USAGE.to_owned()),
     }
+}
+
+/// `message_send_ttl_seconds` for a `--ttl`. Authentication and utility templates spell
+/// Meta's 30-day default as -1; marketing takes 30 days in seconds like any other value.
+fn ttl_seconds(category: &str, ttl: Duration) -> Result<i64> {
+    const THIRTY_DAYS: u64 = 30 * 24 * 60 * 60;
+    if ttl.subsec_nanos() != 0 {
+        return Err(Error::validation("--ttl must be whole seconds"));
+    }
+    if ttl.as_secs() == THIRTY_DAYS && !category.eq_ignore_ascii_case("MARKETING") {
+        return Ok(limits::TEMPLATE_TTL_30_DAYS);
+    }
+    i64::try_from(ttl.as_secs()).map_err(|_| Error::validation("--ttl is too long"))
 }

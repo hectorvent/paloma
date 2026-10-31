@@ -95,6 +95,22 @@ impl Kind {
         }
     }
 
+    /// The kind as the CLI writes values: kebab-case (`phone-settings`).
+    pub const fn cli_name(self) -> &'static str {
+        match self {
+            Self::Account => "account",
+            Self::Calling => "calling",
+            Self::Commerce => "commerce",
+            Self::ConversationalAutomation => "conversational-automation",
+            Self::Number => "number",
+            Self::Profile => "profile",
+            Self::PhoneSettings => "phone-settings",
+            Self::QrCode => "qr-code",
+            Self::Template => "template",
+            Self::Webhook => "webhook",
+        }
+    }
+
     /// Resolve a `kind` name, case-insensitively.
     pub fn parse(name: &str) -> Result<Self> {
         Self::ALL

@@ -649,8 +649,8 @@ async fn call_button_sends_its_parameters() {
             "Call us",
             "--display",
             "Call on WhatsApp",
-            "--ttl-minutes",
-            "100",
+            "--ttl",
+            "100m",
             "--payload",
             "campaign-7",
             "--reply-to",
@@ -669,8 +669,8 @@ fn call_button_leaves_parameters_out_and_checks_its_limits() {
     let long_label = "x".repeat(21);
     let long_payload = "x".repeat(513);
     for extra in [
-        vec!["--ttl-minutes", "0"],
-        vec!["--ttl-minutes", "43201"],
+        vec!["--ttl", "0s"],
+        vec!["--ttl", "43201m"],
         vec!["--display", long_label.as_str()],
         vec!["--display", " "],
         vec!["--payload", long_payload.as_str()],
@@ -680,7 +680,7 @@ fn call_button_leaves_parameters_out_and_checks_its_limits() {
         assert_refused_locally(&args);
     }
     let mut at_limit = cmd.to_vec();
-    at_limit.extend(["--ttl-minutes", "43200"]);
+    at_limit.extend(["--ttl", "30d"]);
     assert_eq!(
         sent_dry_run_body(&at_limit)["interactive"]["action"]["parameters"]["ttl_minutes"],
         43200

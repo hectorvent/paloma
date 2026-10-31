@@ -21,15 +21,13 @@ pub enum AuthCommand {
         #[arg(long)]
         with_token: bool,
     },
-    /// Check that the token works against the active phone number.
+    /// Check that the token works, and show the profile, WABA and number it acts as.
     Status {
         /// Inspect the token instead: its type, scopes and expiry. Needs no phone number id,
         /// so it still answers when a missing permission is what fails the usual check.
         #[arg(long)]
         scopes: bool,
     },
-    /// Show who the active profile acts as.
-    Whoami,
     /// Remove the profile's token from the keyring.
     Logout,
 }
@@ -42,32 +40,18 @@ impl AuthCommand {
             Self::Status { scopes: false } => {
                 let (ctx, number) = phone_status(app).await?;
                 let Some(number) = number else { return Ok(()) };
+                let waba = app.ctx()?.waba_id.clone();
                 app.out.emit(
                     &Output::new(json!({
                         "token": "valid",
                         "profile": ctx.0,
+                        "waba_id": waba,
                         "phone_number_id": ctx.1,
                         "display_phone_number": number.get("display_phone_number"),
                         "verified_name": number.get("verified_name"),
                         "quality_rating": number.get("quality_rating"),
                     }))
                     .id(Some("valid".into())),
-                );
-                Ok(())
-            }
-            Self::Whoami => {
-                let (ctx, number) = phone_status(app).await?;
-                let Some(number) = number else { return Ok(()) };
-                let waba = app.ctx()?.waba_id.clone();
-                app.out.emit(
-                    &Output::new(json!({
-                        "profile": ctx.0,
-                        "waba_id": waba.unwrap_or_else(|| "-".into()),
-                        "phone_number_id": ctx.1,
-                        "display_phone_number": number.get("display_phone_number"),
-                        "business_name": number.get("verified_name"),
-                    }))
-                    .id(Some(ctx.0)),
                 );
                 Ok(())
             }

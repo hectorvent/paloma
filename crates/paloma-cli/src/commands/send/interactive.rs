@@ -109,9 +109,10 @@ pub struct InteractiveCall {
     /// Button label. Meta defaults to "Call Now".
     #[arg(long)]
     pub(super) display: Option<String>,
-    /// How long the button lasts, in minutes (1 to 43200). Meta defaults to 7 days.
-    #[arg(long, value_name = "MINUTES")]
-    pub(super) ttl_minutes: Option<u32>,
+    /// How long the button lasts, in whole minutes up to 30d, such as 90m or 2d. Meta
+    /// defaults to 7 days.
+    #[arg(long, value_name = "DURATION", value_parser = humantime::parse_duration)]
+    pub(super) ttl: Option<std::time::Duration>,
     /// A string returned in the `calls` webhook as `cta_payload`, for tracking.
     #[arg(long)]
     pub(super) payload: Option<String>,
@@ -299,22 +300,30 @@ impl Interactive {
                     validate::not_blank(display, "--display")?;
                     validate::max_chars(display, limits::MAX_CALL_BUTTON_TEXT, "--display")?;
                 }
-                if let Some(ttl) = a.ttl_minutes
-                    && !limits::CALL_BUTTON_TTL_MINUTES.contains(&ttl)
-                {
-                    return Err(Error::validation(format!(
-                        "--ttl-minutes must be between {} and {}",
-                        limits::CALL_BUTTON_TTL_MINUTES.start(),
-                        limits::CALL_BUTTON_TTL_MINUTES.end()
-                    )));
-                }
+                let ttl_minutes = a
+                    .ttl
+                    .map(|ttl| {
+                        let minutes = u32::try_from(ttl.as_secs() / 60).ok().filter(|m| {
+                            ttl.as_secs() % 60 == 0
+                                && ttl.subsec_nanos() == 0
+                                && limits::CALL_BUTTON_TTL_MINUTES.contains(m)
+                        });
+                        minutes.ok_or_else(|| {
+                            Error::validation(format!(
+                                "--ttl must be whole minutes, from {}m to {}m",
+                                limits::CALL_BUTTON_TTL_MINUTES.start(),
+                                limits::CALL_BUTTON_TTL_MINUTES.end()
+                            ))
+                        })
+                    })
+                    .transpose()?;
                 if let Some(payload) = &a.payload {
                     validate::not_blank(payload, "--payload")?;
                     validate::max_chars(payload, limits::MAX_CALL_BUTTON_PAYLOAD, "--payload")?;
                 }
                 let button = messages::CallButton {
                     display_text: a.display.as_deref(),
-                    ttl_minutes: a.ttl_minutes,
+                    ttl_minutes,
                     payload: a.payload.as_deref(),
                 };
                 messages::interactive_call(to, body, &button, reply_to)

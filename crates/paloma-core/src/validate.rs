@@ -353,13 +353,9 @@ pub fn template_ttl(category: &str, ttl: i64) -> Result<()> {
     if range.contains(&ttl) || (thirty_days && ttl == TEMPLATE_TTL_30_DAYS) {
         return Ok(());
     }
-    let special = if thirty_days {
-        format!(", or {TEMPLATE_TTL_30_DAYS} for 30 days")
-    } else {
-        String::new()
-    };
+    let special = if thirty_days { ", or 30d" } else { "" };
     Err(Error::validation(format!(
-        "--ttl-seconds for {category} must be {} to {}{special}",
+        "--ttl for {category} must be {}s to {}s{special}",
         range.start(),
         range.end()
     )))

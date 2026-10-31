@@ -101,7 +101,7 @@ fn export_template_is_offline_and_annotated() {
     let home = TempDir::new().unwrap();
     paloma(None, &home)
         .env_remove("PALOMA_TOKEN")
-        .args(["export", "calling", "--template"])
+        .args(["export", "calling", "--skeleton"])
         .assert()
         .success()
         .stdout(
@@ -709,7 +709,7 @@ async fn account_manifest_export_keeps_only_the_settings() {
     );
     paloma(None, &home)
         .env_remove("PALOMA_TOKEN")
-        .args(["export", "account", "--template"])
+        .args(["export", "account", "--skeleton"])
         .assert()
         .success()
         .stdout(
@@ -788,7 +788,7 @@ async fn qr_code_export_emits_only_the_code_and_message_and_round_trips() {
 fn qr_code_export_template_is_offline() {
     let home = TempDir::new().unwrap();
     paloma(None, &home)
-        .args(["export", "qrcode", "--template"])
+        .args(["export", "qrcode", "--skeleton"])
         .assert()
         .success()
         .stdout(

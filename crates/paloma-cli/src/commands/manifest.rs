@@ -14,13 +14,25 @@ use serde_json::Value;
 use crate::app::App;
 use crate::cli::Format;
 
+/// The kinds `export` takes, in kebab-case like every other CLI value. A manifest's `kind:`
+/// stays PascalCase, so the PascalCase name works here too.
+fn kind_names() -> clap::builder::PossibleValuesParser {
+    use clap::builder::PossibleValue;
+    Kind::ALL
+        .iter()
+        .map(|kind| PossibleValue::new(kind.cli_name()).alias(kind.name()))
+        .collect::<Vec<_>>()
+        .into()
+}
+
 #[derive(Debug, Args)]
 pub struct Export {
-    /// Account, Calling, Commerce, ConversationalAutomation, Number, PhoneSettings, Profile, QrCode, Template or Webhook.
+    /// The kind of resource to export.
+    #[arg(value_parser = kind_names(), ignore_case = true)]
     kind: String,
     /// Emit a skeleton manifest without calling the API.
     #[arg(long)]
-    template: bool,
+    skeleton: bool,
     /// Only emit fields that are set (no commented-out stubs).
     #[arg(long)]
     minimal: bool,
@@ -42,8 +54,8 @@ pub struct Diff {
 
 impl Export {
     pub async fn run(self, app: &App) -> Result<()> {
-        let kind = Kind::parse(&self.kind)?;
-        let manifests: Vec<Value> = if self.template {
+        let kind = Kind::parse(&self.kind.replace('-', ""))?;
+        let manifests: Vec<Value> = if self.skeleton {
             let phone = kind.phone_scoped().then_some("<phone-number-id>");
             vec![Manifest::document(
                 kind.name(),
