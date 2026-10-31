@@ -5,13 +5,13 @@ phone number. This uses the same endpoint as the `Commerce` manifest kind.
 
 ```bash
 paloma commerce get -o json
-paloma commerce set --cart-enabled true --catalog-visible true --dry-run
-paloma commerce set --catalog-visible false --yes
+paloma commerce set --cart --catalog --dry-run
+paloma commerce set --no-catalog --yes
 ```
 
 `get` preserves the `/data` response and renders cart/catalog columns in table mode;
 `-q` prints its settings ID when present. `set` requires at least one of
-`--cart-enabled <true|false>` or `--catalog-visible <true|false>`. Omitted flags leave
+`--cart`/`--no-cart` or `--catalog`/`--no-catalog`. Omitted flags leave
 the corresponding setting unchanged. Explicit false values are sent as query
 parameters, as Meta requires. Disabling either feature confirms before writing;
 `--yes` skips that prompt, and `--dry-run` previews without sending.

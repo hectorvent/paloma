@@ -1305,8 +1305,7 @@ async fn marketing_options_go_on_the_marketing_route_only() {
             "marketing",
             "--product-policy",
             "strict",
-            "--message-activity-sharing",
-            "false",
+            "--no-message-activity-sharing",
             "-q",
         ])
         .assert()

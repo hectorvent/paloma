@@ -29,11 +29,11 @@ New here? Start with [Installation](installation.md) → [Getting started](getti
 | `paloma number` | list · get · quality · health · add · register · deregister · verification · name · visibility · pin · username · contacts · settings · oba · compliance | [commands/number.md](commands/number.md) |
 | `paloma commerce` | get · set | [commands/commerce.md](commands/commerce.md) |
 | `paloma profile` | get · set · photo | [commands/profile.md](commands/profile.md) |
-| `paloma calling` | status · enable · disable · set · sip · codecs · voicemail · hours · permission · analytics | [commands/calling.md](commands/calling.md) |
+| `paloma calling` | get · enable · disable · set · sip · codecs · voicemail · hours · permission · analytics | [commands/calling.md](commands/calling.md) |
 | `paloma webhook` | get · subscribe · unsubscribe · fields get · fields list · fields set · version get · version set · listen · verify-url · simulate | [commands/webhook.md](commands/webhook.md) |
 | `paloma flow` | list · get · create · update · publish · deprecate · delete · assets · migrate · key | [commands/flow.md](commands/flow.md) |
 | `paloma block` | add · remove · list | [commands/block.md](commands/block.md) |
-| `paloma group` | create · list · get · set · delete · invite · members · requests · pin · unpin | [commands/group.md](commands/group.md) |
+| `paloma group` | create · list · get · update · delete · invite · members · requests · pin · unpin | [commands/group.md](commands/group.md) |
 | `paloma auth` | login · status · whoami · logout | [commands/auth.md](commands/auth.md) |
 | `paloma config`, `paloma configure` | init · list · get · set · unset · use · path; guided setup | [commands/config.md](commands/config.md) |
 | `paloma version` | the installed version | |
@@ -42,7 +42,7 @@ New here? Start with [Installation](installation.md) → [Getting started](getti
 | `paloma completion` | bash · zsh · fish · powershell · elvish | [commands/completion.md](commands/completion.md) |
 | `paloma account` | get · set · limits · health · activity · apps · users · billing-currency · analytics · reach · welcome-sequence | [commands/account.md](commands/account.md) |
 | `paloma qr` | create · list · get · update · delete | [commands/qr.md](commands/qr.md) |
-| `paloma automation` | get · set · bot | [commands/automation.md](commands/automation.md) |
+| `paloma automation` | get · set · bot get | [commands/automation.md](commands/automation.md) |
 
 ## Conventions
 

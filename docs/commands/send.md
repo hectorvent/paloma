@@ -678,11 +678,11 @@ accepts. Any other route exits `5`, including the default `--via auto`, which co
 | Flag | Meaning |
 |------|---------|
 | `--product-policy <cloud-api-fallback\|strict>` | Whether Meta may send through Cloud API when onboarding is incomplete. Meta defaults to falling back |
-| `--message-activity-sharing <true\|false>` | Whether to share this message's activity with Meta, overriding the account's setting |
+| `--message-activity-sharing` / `--no-message-activity-sharing` | Whether to share this message's activity with Meta, overriding the account's setting |
 
 ```bash
 paloma send template 15551234567 sale --language en_US --via marketing \
-  --product-policy strict --message-activity-sharing false
+  --product-policy strict --no-message-activity-sharing
 ```
 
 ## Sending to a group

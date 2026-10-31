@@ -317,8 +317,7 @@ async fn automation_reads_and_writes_typed_and_cleared_components() {
     for (args, body) in [
         (
             vec![
-                "--welcome",
-                "false",
+                "--no-welcome",
                 "--prompt",
                 "Support",
                 "--command",
@@ -418,8 +417,7 @@ fn automation_rejects_duplicate_commands_and_accepts_source_aliases() {
         .args([
             "automation",
             "set",
-            "--welcome-message",
-            "false",
+            "--no-welcome",
             "--ice-breaker",
             "Hello",
             "--command",
@@ -467,21 +465,12 @@ async fn commerce_uses_query_flags_including_false_and_preserves_list_output() {
         .mount(&graph)
         .await;
     paloma(Some(&graph), &home)
-        .args([
-            "commerce",
-            "set",
-            "--cart-enabled",
-            "false",
-            "--catalog-visible",
-            "true",
-            "--yes",
-            "-q",
-        ])
+        .args(["commerce", "set", "--no-cart", "--catalog", "--yes", "-q"])
         .assert()
         .success()
         .stdout("");
     assert_eq!(
-        dry_run_request(&home, &["commerce", "set", "--cart-enabled", "false"])["url"],
+        dry_run_request(&home, &["commerce", "set", "--no-cart"])["url"],
         format!("{GRAPH}/{PHONE}/whatsapp_commerce_settings?is_cart_enabled=false")
     );
 }

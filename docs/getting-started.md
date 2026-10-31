@@ -76,10 +76,10 @@ paloma send image 15551234567 --file ./flyer.jpg --caption "This week's specials
 # Account management
 paloma number list
 paloma profile get
-paloma block add 15557654321
+paloma block add 15557654321 --yes
 
 # Voice: read and configure WhatsApp calling (and SIP)
-paloma calling status
+paloma calling get
 paloma calling sip set --server pbx.example.com:5061 --enable-calling
 
 # Your WhatsApp setup, as code: snapshot to YAML, version it, re-apply idempotently

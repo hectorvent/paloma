@@ -9,11 +9,11 @@ async fn qr_lifecycle_uses_collection_posts_and_scoped_get_delete() {
     let code = "4O4YGZEG3RIVE1";
     for (args, body) in [
         (
-            vec!["create", "--message", "Hello"],
+            vec!["create", "Hello"],
             json!({"prefilled_message":"Hello"}),
         ),
         (
-            vec!["update", code, "--message", "Updated"],
+            vec!["update", code, "Updated"],
             json!({"code":code,"prefilled_message":"Updated"}),
         ),
     ] {
@@ -108,7 +108,6 @@ async fn qr_image_download_omits_authorization_and_preserves_graph_output() {
         .args([
             "qr",
             "create",
-            "--message",
             "Hello",
             "--image",
             "svg",
@@ -163,7 +162,7 @@ async fn qr_dry_run_prints_both_image_steps_and_invalid_input_never_sends() {
     assert!(!dest.exists());
     for args in [
         vec!["get", "../bad"],
-        vec!["create", "--message", &"x".repeat(141)],
+        vec!["create", &"x".repeat(141)],
         vec!["list", "--limit", "26"],
     ] {
         paloma(Some(&graph), &home)
@@ -183,7 +182,7 @@ async fn qr_dry_run_prints_both_image_steps_and_invalid_input_never_sends() {
     std::fs::write(&dest, b"existing").unwrap();
     paloma(Some(&graph), &home)
         .env_remove("PALOMA_PHONE_NUMBER_ID")
-        .args(["qr", "create", "--message", "x", "--image", "png", "--out"])
+        .args(["qr", "create", "x", "--image", "png", "--out"])
         .arg(&dest)
         .assert()
         .code(5)
@@ -217,7 +216,7 @@ async fn qr_image_refuses_a_file_created_while_the_graph_request_runs() {
         .mount(&cdn)
         .await;
     paloma(Some(&graph), &home)
-        .args(["qr", "create", "--message", "x", "--image", "svg", "--out"])
+        .args(["qr", "create", "x", "--image", "svg", "--out"])
         .arg(&dest)
         .assert()
         .code(1)

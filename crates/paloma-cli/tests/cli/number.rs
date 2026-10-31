@@ -509,7 +509,7 @@ async fn identity_and_settings_reject_bad_inputs_before_context_or_network() {
             " ",
         ],
         vec!["commerce", "set"],
-        vec!["automation", "bot", "../bad"],
+        vec!["automation", "bot", "get", "../bad"],
         vec!["flow", "migrate", "--source-waba-id", "../bad"],
         vec!["account", "users", "list", "--business-id", "../bad"],
     ] {

@@ -225,7 +225,12 @@ async fn new_disruptive_commands_refuse_without_confirmation_and_preview_offline
         vec!["number", "settings", "set", "--identity-check"],
         vec!["number", "visibility", "set", "VISIBLE"],
         vec!["number", "pin", "set"],
-        vec!["commerce", "set", "--cart-enabled", "false"],
+        vec!["calling", "disable"],
+        vec!["calling", "sip", "disable"],
+        vec!["calling", "voicemail", "disable"],
+        vec!["calling", "codecs", "clear"],
+        vec!["block", "add", "15551234567"],
+        vec!["commerce", "set", "--no-cart"],
         vec!["flow", "migrate", "--source-waba-id", "333"],
     ] {
         paloma(Some(&graph), &home)

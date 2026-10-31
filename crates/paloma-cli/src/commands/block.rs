@@ -8,7 +8,7 @@ use paloma_graph::api::block;
 use paloma_graph::paging;
 
 use super::listing::Pagination;
-use crate::app::{App, no_id};
+use crate::app::App;
 use crate::output::Output;
 
 /// `wa_id` is missing for a user whose phone number Meta can't share.
@@ -48,9 +48,20 @@ impl BlockCommand {
         }
         let phone = app.ctx()?.require_phone_number_id()?.to_owned();
         match self {
-            Self::Add { users } => app.send_and_emit(&block::add(&phone, &users), no_id).await,
+            Self::Add { users } => {
+                if !app.confirm_or_abort(&format!(
+                    "block {} user(s), so they can't message or call the number",
+                    users.len()
+                ))? {
+                    return Ok(());
+                }
+                let ids = users.join("\n");
+                app.send_and_emit(&block::add(&phone, &users), |_| Some(ids.clone()))
+                    .await
+            }
             Self::Remove { users } => {
-                app.send_and_emit(&block::remove(&phone, &users), no_id)
+                let ids = users.join("\n");
+                app.send_and_emit(&block::remove(&phone, &users), |_| Some(ids.clone()))
                     .await
             }
             Self::List(a) => list(app, &phone, &a).await,

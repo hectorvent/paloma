@@ -42,23 +42,14 @@ pub enum QrCommand {
 
 #[derive(Debug, Args)]
 pub struct MessageArgs {
-    /// Prefilled message (alternative to --message).
-    #[arg(
-        value_name = "MESSAGE",
-        required_unless_present = "message",
-        conflicts_with = "message"
-    )]
-    text: Option<String>,
-    #[arg(long, required_unless_present = "text")]
-    message: Option<String>,
+    /// The message the QR code fills in for the customer.
+    #[arg(value_name = "MESSAGE")]
+    text: String,
 }
 
 impl MessageArgs {
     fn value(&self) -> &str {
-        self.message
-            .as_deref()
-            .or(self.text.as_deref())
-            .expect("clap requires a message")
+        &self.text
     }
 }
 

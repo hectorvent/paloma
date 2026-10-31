@@ -6,21 +6,21 @@ ice breakers (prompts), and slash-command suggestions. Uses the same API as the
 
 ```bash
 paloma automation get
-paloma automation set --welcome true --prompt 'Book a visit' --prompt 'Get support'
+paloma automation set --welcome --prompt 'Book a visit' --prompt 'Get support'
 paloma automation set --command 'help:Talk to support' --command 'status:Track an order'
 paloma automation set --clear-prompts --clear-commands --dry-run
 ```
 
 | Flag on `set` | Meaning |
 |---|---|
-| `--welcome true\|false` | Set `enable_welcome_message` |
+| `--welcome` / `--no-welcome` | Set `enable_welcome_message` to true or false |
 | `--prompt <text>` | Replace the prompt list; repeat for up to 4 ice breakers of 80 characters each |
 | `--command NAME:DESCRIPTION` | Replace the command list; repeat for up to 30 commands. Names omit `/`, with at most 32 characters; descriptions allow 256. The first colon or equals sign separates the name and description |
 | `--clear-prompts` | Set prompts to an empty list; exclusive with `--prompt` |
 | `--clear-commands` | Set commands to an empty list; exclusive with `--command` |
 | `--file <path>` | Full conversational-automation JSON object; exclusive with typed settings |
 
-`--welcome-message` and `--ice-breaker` are aliases for `--welcome` and `--prompt`.
+`--ice-breaker` is an alias for `--prompt`.
 Names must be unique within the update, and names and descriptions must be nonblank.
 
 Omitted components are left out of the update; explicit clear flags send empty lists.
@@ -42,10 +42,10 @@ commands; the API remains the authority on supported text.
 `set -q` produces no output. All data goes through the selected output format; diagnostics
 go to stderr. All three verbs support `--dry-run` without reading a token or sending requests.
 
-## `paloma automation bot`
+## `paloma automation bot get`
 
 ```bash
-paloma automation bot 123 -o json
+paloma automation bot get 123 -o json
 ```
 
 Reads a bot by its WABA bot ID, which is distinct from the phone-number ID. The ID is

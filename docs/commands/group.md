@@ -36,11 +36,11 @@ paloma group get "$GROUP_ID" --fields subject,total_participant_count
 suspension state, creation time, participants and join approval mode by default, because Graph
 returns only the id without `fields`.
 
-## `paloma group set`
+## `paloma group update`
 
 ```bash
-paloma group set "$GROUP_ID" --subject 'Watch Enthusiasts'
-paloma group set "$GROUP_ID" --photo square.jpg
+paloma group update "$GROUP_ID" --subject 'Watch Enthusiasts'
+paloma group update "$GROUP_ID" --photo square.jpg
 ```
 
 Pass any of `--subject`, `--description` and `--photo`. A photo must be a JPEG of at most 5 MB.
@@ -80,10 +80,11 @@ exits `1`.
 ```bash
 paloma group requests list "$GROUP_ID" --all
 paloma group requests approve "$GROUP_ID" "$REQUEST_ID"
-paloma group requests reject "$GROUP_ID" "$REQUEST_ID"
+paloma group requests reject "$GROUP_ID" "$REQUEST_ID" --yes
 ```
 
-For groups created with `--join-approval approval-required`. Someone rejected can ask again. As
+For groups created with `--join-approval approval-required`. `reject` confirms first; someone
+rejected can ask again. As
 with `members remove`, if Meta can't process every request, the command exits `1`.
 
 ## `paloma group pin` and `unpin`

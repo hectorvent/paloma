@@ -287,16 +287,16 @@ error: text body is 5000 chars; max is 4096        # exit 5
 | `template` | list · get · create · watch · update · delete · namespace · archive · unarchive · unpause · library · compare · migrate · preview · upsert · group · analytics |
 | `media` | upload · get · download · delete |
 | `message` | read · typing · history |
-| `calling` | status · enable · disable · set · sip · codecs · hours · permission · analytics |
+| `calling` | get · enable · disable · set · sip · codecs · voicemail · hours · permission · analytics |
 | `flow` | list · get · create · update · publish · deprecate · delete · assets · migrate · key |
 | `webhook` | get · subscribe · unsubscribe · fields · version · listen · verify-url · simulate |
 | `number` | list · get · quality · health · add · register · deregister · verification · name · visibility · pin · username · contacts · settings · oba · compliance |
 | `profile` | get · set · photo |
 | `account` | get · set · limits · health · activity · apps · users · billing-currency · analytics · reach · welcome-sequence |
 | `block` | add · remove · list |
-| `group` | create · list · get · set · delete · invite · members · requests · pin · unpin |
+| `group` | create · list · get · update · delete · invite · members · requests · pin · unpin |
 | `qr` | create · list · get · update · delete |
-| `automation` | get · set · bot |
+| `automation` | get · set · bot get |
 | `commerce` | get · set |
 | `export` · `apply` · `diff` | your setup as code: declarative YAML for the ten kinds above |
 | `auth` | login · status · whoami · logout |

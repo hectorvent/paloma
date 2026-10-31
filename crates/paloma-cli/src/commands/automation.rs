@@ -1,7 +1,7 @@
 //! Conversational settings share the manifest endpoint, with explicit empty lists for
 //! clearing prompts and commands rather than treating omitted flags as deletion.
 
-use super::util::read_json;
+use super::util::{read_json, toggle};
 use crate::app::{App, field_id, no_id};
 use clap::{Args, Subcommand};
 use paloma_core::{Error, Result, limits, validate};
@@ -11,31 +11,47 @@ use std::path::PathBuf;
 
 #[derive(Debug, Subcommand)]
 pub enum AutomationCommand {
-    /// Read a WABA bot by its bot ID.
-    Bot { bot_id: String },
+    /// Read the WABA's bots.
+    #[command(subcommand)]
+    Bot(BotCommand),
     /// Show welcome-message, ice-breaker and command settings.
     Get,
     /// Update conversational components on the active phone number.
     Set(SetArgs),
 }
 
+#[derive(Debug, Subcommand)]
+pub enum BotCommand {
+    /// Show a WABA bot by its id.
+    Get {
+        /// Bot id.
+        bot_id: String,
+    },
+}
+
+#[allow(clippy::struct_excessive_bools)] // --x/--no-x flag pairs, as the CLI grammar asks
 #[derive(Debug, Args)]
 pub struct SetArgs {
-    /// Enable or disable the welcome message.
-    #[arg(long, visible_alias = "welcome-message", action = clap::ArgAction::Set)]
-    welcome: Option<bool>,
+    /// Send the welcome message when a user opens a chat for the first time.
+    #[arg(long, overrides_with = "no_welcome")]
+    welcome: bool,
+    /// Stop sending the welcome message.
+    #[arg(long, overrides_with = "welcome")]
+    no_welcome: bool,
     /// Ice breaker; repeat for up to four prompts.
     #[arg(long, visible_alias = "ice-breaker")]
     prompt: Vec<String>,
     /// Command without leading slash, followed by its hint; repeatable.
     #[arg(long, value_name = "NAME:DESCRIPTION")]
     command: Vec<String>,
+    /// Remove every ice breaker.
     #[arg(long, conflicts_with = "prompt")]
     clear_prompts: bool,
+    /// Remove every bot command.
     #[arg(long, conflicts_with = "command")]
     clear_commands: bool,
     /// Full conversational-automation JSON object.
-    #[arg(long, conflicts_with_all = ["welcome", "prompt", "command", "clear_prompts", "clear_commands"])]
+    #[arg(short = 'f', long, conflicts_with_all = ["welcome", "no_welcome", "prompt", "command", "clear_prompts", "clear_commands"])]
     file: Option<PathBuf>,
 }
 
@@ -58,7 +74,7 @@ impl SetArgs {
                 })
                 .collect::<Result<_>>()?;
             Settings {
-                enable_welcome_message: self.welcome,
+                enable_welcome_message: toggle(self.welcome, self.no_welcome),
                 prompts: (self.clear_prompts || !self.prompt.is_empty()).then_some(self.prompt),
                 commands: (self.clear_commands || !commands.is_empty()).then_some(commands),
             }
@@ -147,7 +163,7 @@ fn validate_body(body: &Value) -> Result<()> {
 impl AutomationCommand {
     pub async fn run(self, app: &App) -> Result<()> {
         match self {
-            Self::Bot { bot_id } => {
+            Self::Bot(BotCommand::Get { bot_id }) => {
                 validate::numeric_id(&bot_id, "bot id")?;
                 app.send_and_emit(&automation::bot(&bot_id), field_id).await
             }

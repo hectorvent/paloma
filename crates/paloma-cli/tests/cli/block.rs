@@ -239,7 +239,7 @@ async fn block_add_and_remove_write_user_id_for_a_bsuid() {
     let home = TempDir::new().unwrap();
     for (verb, listed) in [("add", "added_users"), ("remove", "removed_users")] {
         let out = paloma(Some(&graph), &home)
-            .args(["block", verb, "15551234567", BSUID, "-o", "json"])
+            .args(["block", verb, "15551234567", BSUID, "--yes", "-o", "json"])
             .output()
             .unwrap();
         assert!(

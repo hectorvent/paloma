@@ -369,7 +369,7 @@ async fn calling_voicemail_set_and_disable() {
         .success()
         .stderr(predicate::str::contains("call hours"));
     paloma(Some(&graph), &home)
-        .args(["calling", "voicemail", "disable"])
+        .args(["calling", "voicemail", "disable", "--yes"])
         .assert()
         .success();
 }

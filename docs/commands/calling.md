@@ -10,15 +10,15 @@ paloma calling <verb> [flags]
 This covers the calling **configuration**. Real-time call control (placing and
 answering calls) is a separate, larger surface and is not implemented.
 
-## `paloma calling status`
+## `paloma calling get`
 
 Show the current calling config (status, call-icon visibility, callback
 permission, call hours, SIP, audio codecs, voicemail).
 
 ```bash
-paloma calling status
-paloma calling status -o json | jq '.calling'
-paloma calling status --sip-credentials   # include SIP passwords in the output
+paloma calling get
+paloma calling get -o json | jq '.calling'
+paloma calling get --sip-credentials   # include SIP passwords in the output
 ```
 
 ## `paloma calling enable` / `disable`
@@ -27,7 +27,7 @@ Turn calling on or off for the active number.
 
 ```bash
 paloma calling enable
-paloma calling disable
+paloma calling disable              # confirms; --yes to skip
 ```
 
 ## `paloma calling set`
@@ -57,7 +57,7 @@ paloma calling set --file calling.json
 
 `--icon-countries` takes two-letter codes, repeated or comma-separated, and a bad code exits `5`
 before any request. It goes by the country of the person's phone number, not where they are.
-Meta doesn't return `srtp_key_exchange_protocol` in `calling status` until it's been set.
+Meta doesn't return `srtp_key_exchange_protocol` in `calling get` until it's been set.
 
 All writes support `--dry-run`, which prints the exact POST body without sending.
 Partial updates are merged server-side, so you only send the fields you change.
@@ -71,12 +71,12 @@ repeats. `--enable-calling` flips `calling.status` to ENABLED in the same reques
 ```bash
 paloma calling sip set --server pbx.acme.com:5061 --enable-calling
 paloma calling sip set --server pbx.acme.com --tgrp sales --context support
-paloma calling sip disable
+paloma calling sip disable          # confirms
 ```
 
 > Enabling SIP routes inbound calls as SIP INVITEs to your server, and the `calls`
 > webhook stops being delivered (it is one or the other). The Meta-generated SIP
-> password is read with `paloma calling status --sip-credentials`; `app_id` and the
+> password is read with `paloma calling get --sip-credentials`; `app_id` and the
 > password are managed by Meta and are never sent on a write.
 
 ## `paloma calling codecs`
@@ -86,7 +86,7 @@ Set the additional audio codecs (a full replace). Valid values are `PCMA` and
 
 ```bash
 paloma calling codecs set PCMA PCMU
-paloma calling codecs clear          # additional_codecs -> []
+paloma calling codecs clear          # additional_codecs -> [], confirms
 ```
 
 ## `paloma calling voicemail`
@@ -94,7 +94,7 @@ paloma calling codecs clear          # additional_codecs -> []
 ```bash
 GREETING=$(paloma media upload ./greeting.ogg --voicemail-announcement -q)
 paloma calling voicemail set --trigger reject,timeout --ring-seconds 20 --announcement "$GREETING"
-paloma calling voicemail disable
+paloma calling voicemail disable    # confirms
 ```
 
 When voicemail is on, Meta answers missed or rejected calls, plays the greeting, records a

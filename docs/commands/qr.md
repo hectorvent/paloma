@@ -5,14 +5,14 @@ phone number. Unlike an offline `link create` URL, a QR code's prefilled message
 be changed later and the link can be retired.
 
 ```bash
-paloma qr create --message 'Tell me more' -q
+paloma qr create 'Tell me more' -q
 paloma qr list --all
 paloma qr get 4O4YGZEG3RIVE1
-paloma qr update 4O4YGZEG3RIVE1 --message 'Book an appointment'
+paloma qr update 4O4YGZEG3RIVE1 'Book an appointment'
 paloma qr delete 4O4YGZEG3RIVE1 --yes
 ```
 
-`create` and `update` take a positional message or `--message`, limited to 140
+`create` and `update` take the message as a positional argument, limited to 140
 characters; blank messages are refused. Codes are opaque
 14-character alphanumeric identifiers. Invalid codes, oversized messages and invalid
 page sizes exit `5` before context resolution or an API call.
@@ -25,7 +25,7 @@ returns one page and notes on stderr if more results exist.
 Create a new code with a generated image, or save an existing code's image:
 
 ```bash
-paloma qr create --message 'Support' --image svg --out support.svg
+paloma qr create 'Support' --image svg --out support.svg
 paloma qr get 4O4YGZEG3RIVE1 --image png --out support.png
 ```
 

@@ -24,7 +24,7 @@ async fn group_writes_send_exact_bodies() {
             json!({"messaging_product":"whatsapp","subject":"Inquiries","description":"About cars","join_approval_mode":"approval_required"}),
         ),
         (
-            vec!["group", "set", GROUP, "--subject", "Watches"],
+            vec!["group", "update", GROUP, "--subject", "Watches"],
             "POST",
             group_path.clone(),
             json!({"messaging_product":"whatsapp","subject":"Watches"}),
@@ -48,7 +48,7 @@ async fn group_writes_send_exact_bodies() {
             json!({"messaging_product":"whatsapp","join_requests":["req1","req2"]}),
         ),
         (
-            vec!["group", "requests", "reject", GROUP, "req1"],
+            vec!["group", "requests", "reject", GROUP, "req1", "--yes"],
             "DELETE",
             requests.clone(),
             json!({"messaging_product":"whatsapp","join_requests":["req1"]}),
@@ -236,8 +236,8 @@ async fn group_rejects_bad_input_before_context_or_network() {
         vec!["group", "create", " "],
         vec!["group", "create", long_subject.as_str()],
         vec!["group", "get", "../x"],
-        vec!["group", "set", GROUP],
-        vec!["group", "set", GROUP, "--photo", not_a_jpeg.as_str()],
+        vec!["group", "update", GROUP],
+        vec!["group", "update", GROUP, "--photo", not_a_jpeg.as_str()],
         vec!["group", "list", "--limit", "1025"],
         vec!["group", "pin", GROUP, "wamid.1", "--days", "31"],
         vec!["group", "pin", GROUP, "wamid.1", "--days", "0"],
@@ -272,7 +272,7 @@ async fn group_set_uploads_a_photo_as_multipart() {
         .mount(&graph)
         .await;
     paloma(Some(&graph), &home)
-        .args(["group", "set", GROUP, "--photo"])
+        .args(["group", "update", GROUP, "--photo"])
         .arg(&photo)
         .assert()
         .success();

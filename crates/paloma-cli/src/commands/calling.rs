@@ -17,7 +17,7 @@ use crate::app::{App, no_id};
 #[derive(Debug, Subcommand)]
 pub enum CallingCommand {
     /// Show the calling settings.
-    Status {
+    Get {
         /// Include SIP credentials in the response.
         #[arg(long)]
         sip_credentials: bool,
@@ -184,7 +184,7 @@ impl CallingCommand {
             Self::Hours(command) => return command.run(app).await,
             Self::Permission { user } => return insights::permission(app, &user).await,
             Self::Analytics(args) => return args.run(app).await,
-            Self::Status { sip_credentials } => {
+            Self::Get { sip_credentials } => {
                 let phone = app.ctx()?.require_phone_number_id()?.to_owned();
                 return app
                     .send_and_emit(&calling::get(&phone, sip_credentials), no_id)
@@ -194,8 +194,18 @@ impl CallingCommand {
         };
         let phone =
             |app: &App| -> Result<String> { Ok(app.ctx()?.require_phone_number_id()?.to_owned()) };
+        // Turning a feature off, or emptying a list, changes what callers get.
+        let confirm = match &command {
+            Self::Disable => Some("turn calling off, so people can't call the number"),
+            Self::Sip(Sip::Disable) => {
+                Some("turn SIP off, so calls stop reaching your SIP servers")
+            }
+            Self::Voicemail(Voicemail::Disable) => Some("turn voicemail off"),
+            Self::Codecs(Codecs::Clear) => Some("remove every additional audio codec"),
+            _ => None,
+        };
         let req = match command {
-            Self::Hours(_) | Self::Permission { .. } | Self::Analytics(_) | Self::Status { .. } => {
+            Self::Hours(_) | Self::Permission { .. } | Self::Analytics(_) | Self::Get { .. } => {
                 unreachable!("handled above")
             }
             Self::Enable => calling::set_status(&phone(app)?, true),
@@ -234,6 +244,11 @@ impl CallingCommand {
             }
             Self::Voicemail(Voicemail::Disable) => calling::disable_voicemail(&phone(app)?),
         };
+        if let Some(what) = confirm
+            && !app.confirm_or_abort(what)?
+        {
+            return Ok(());
+        }
         app.send_and_emit(&req, no_id).await
     }
 }

@@ -23,8 +23,11 @@ pub struct Template {
     #[arg(long, value_enum)]
     pub(super) product_policy: Option<ProductPolicy>,
     /// With --via marketing: share this message's activity with Meta, overriding the account.
-    #[arg(long, action = clap::ArgAction::Set, value_name = "BOOL")]
-    pub(super) message_activity_sharing: Option<bool>,
+    #[arg(long, overrides_with = "no_message_activity_sharing")]
+    pub(super) message_activity_sharing: bool,
+    /// With --via marketing: don't share this message's activity with Meta.
+    #[arg(long, overrides_with = "message_activity_sharing")]
+    pub(super) no_message_activity_sharing: bool,
     /// Body variable values, in order ({{1}}, {{2}}, …); repeatable.
     #[arg(long = "body-var", value_name = "VALUE", allow_hyphen_values = true)]
     pub(super) body_vars: Vec<String>,
@@ -80,10 +83,11 @@ impl ProductPolicy {
 }
 
 pub(super) async fn send(app: &App, a: Template) -> Result<()> {
+    let sharing =
+        crate::commands::util::toggle(a.message_activity_sharing, a.no_message_activity_sharing);
     check_to(&a.to, a.group)?;
     // Auto might route to /messages, which doesn't take these, so ask for the route.
-    if (a.product_policy.is_some() || a.message_activity_sharing.is_some())
-        && !matches!(a.via, TemplateVia::Marketing)
+    if (a.product_policy.is_some() || sharing.is_some()) && !matches!(a.via, TemplateVia::Marketing)
     {
         return Err(Error::validation(
             "--product-policy and --message-activity-sharing need --via marketing",
@@ -147,7 +151,7 @@ pub(super) async fn send(app: &App, a: Template) -> Result<()> {
                 a.group,
             ),
             a.product_policy.map(ProductPolicy::api),
-            a.message_activity_sharing,
+            sharing,
         ),
         &a.name,
         &a.language,

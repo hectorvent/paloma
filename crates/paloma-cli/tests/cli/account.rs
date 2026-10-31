@@ -1191,7 +1191,7 @@ async fn account_users_and_automation_bot_use_the_documented_nodes() {
         .await;
     paloma(Some(&graph), &home)
         .env_remove("PALOMA_PHONE_NUMBER_ID")
-        .args(["automation", "bot", "444", "-q"])
+        .args(["automation", "bot", "get", "444", "-q"])
         .assert()
         .success()
         .stdout("444\n");

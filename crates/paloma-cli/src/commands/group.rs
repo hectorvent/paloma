@@ -31,7 +31,7 @@ pub enum GroupCommand {
         fields: Option<String>,
     },
     /// Change a group's subject, description or photo.
-    Set(Set),
+    Update(Update),
     /// Delete a group and remove everyone from it, including the business.
     Delete { group_id: String },
     /// Read or reset a group's invite link.
@@ -93,7 +93,7 @@ pub struct List {
 }
 
 #[derive(Debug, Args)]
-pub struct Set {
+pub struct Update {
     group_id: String,
     #[arg(long)]
     subject: Option<String>,
@@ -297,7 +297,7 @@ impl GroupCommand {
                 app.send_and_emit(&groups::get(&group_id, fields), field_id)
                     .await
             }
-            Self::Set(a) => {
+            Self::Update(a) => {
                 validate::group_id(&a.group_id)?;
                 if a.subject.is_none() && a.description.is_none() && a.photo.is_none() {
                     return Err(Error::validation(
@@ -417,6 +417,12 @@ impl GroupCommand {
                 } => {
                     validate::group_id(&group_id)?;
                     check_request_ids(&request_ids)?;
+                    if !app.confirm_or_abort(&format!(
+                        "reject {} join request(s) to group {group_id}",
+                        request_ids.len()
+                    ))? {
+                        return Ok(());
+                    }
                     send_partial(
                         app,
                         &groups::reject_join_requests(&group_id, &request_ids),
