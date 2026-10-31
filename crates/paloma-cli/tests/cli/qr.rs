@@ -105,14 +105,7 @@ async fn qr_image_download_omits_authorization_and_preserves_graph_output() {
         .await;
     let dest = home.path().join("qr.svg");
     let out = paloma(Some(&graph), &home)
-        .args([
-            "qr",
-            "create",
-            "Hello",
-            "--image",
-            "svg",
-            "--out",
-        ])
+        .args(["qr", "create", "Hello", "--image", "svg", "--out"])
         .arg(&dest)
         .args(["-o", "json"])
         .output()

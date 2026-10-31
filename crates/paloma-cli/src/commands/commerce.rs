@@ -8,7 +8,7 @@ use paloma_graph::api::commerce;
 
 #[derive(Debug, Subcommand)]
 pub enum CommerceCommand {
-    /// Read the current shopping cart and catalog visibility settings.
+    /// Show the shopping cart and catalog visibility settings.
     Get,
     /// Update cart or catalog visibility; disabling confirms before writing.
     Set(SetArgs),

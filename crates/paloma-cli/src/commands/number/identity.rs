@@ -82,9 +82,15 @@ impl UsernameCommand {
 #[derive(Debug, Subcommand)]
 pub enum ContactsCommand {
     /// Check one BSUID in Meta's portfolio-scoped contact book.
-    Get { bsuid: String },
+    Get {
+        /// Business-scoped user ID (not a parent BSUID).
+        bsuid: String,
+    },
     /// Delete one BSUID from the portfolio-scoped contact book.
-    Delete { bsuid: String },
+    Delete {
+        /// Business-scoped user ID (not a parent BSUID).
+        bsuid: String,
+    },
 }
 
 impl ContactsCommand {

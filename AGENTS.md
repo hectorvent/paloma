@@ -104,7 +104,7 @@ A new command that can't follow one says why in its doc comment.
 - **Booleans** are `--x`/`--no-x` pairs, never `--x <true|false>`.
 - **Lists** are a singular flag that repeats and also takes commas (`--id 1 --id 2`, or
   `--id 1,2`), shown as `<NAME,...>`.
-- **Files.** `-f, --file <PATH>` reads one; `-O, --out <PATH>` writes one.
+- **Files.** `-f, --file <FILE>` reads one; `-O, --out <OUT>` writes one.
 - **Time.** `--start`/`--end <TIME>` take UNIX seconds or `YYYY-MM-DD`; durations are
   humantime (`--ttl 10m`).
 - **Paging.** Every paged read flattens `listing::Pagination` (`--limit`, `--all`,

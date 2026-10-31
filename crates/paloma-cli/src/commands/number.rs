@@ -27,12 +27,21 @@ const LIST_COLUMNS: &[&str] = &[
 pub enum NumberCommand {
     /// List the WABA's phone numbers.
     List(ListArgs),
-    /// Show a phone number's details [default: the active number].
-    Get { phone_number_id: Option<String> },
+    /// Show a phone number's details.
+    Get {
+        /// Phone number id; the active number when left out.
+        phone_number_id: Option<String>,
+    },
     /// Show quality rating, messaging limit and throughput.
-    Quality { phone_number_id: Option<String> },
+    Quality {
+        /// Phone number id; the active number when left out.
+        phone_number_id: Option<String>,
+    },
     /// Show messaging and calling health for a number.
-    Health { phone_number_id: Option<String> },
+    Health {
+        /// Phone number id; the active number when left out.
+        phone_number_id: Option<String>,
+    },
     /// Register the number for Cloud API use.
     Register(RegisterArgs),
     /// Deregister the number.

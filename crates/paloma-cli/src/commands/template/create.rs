@@ -67,7 +67,7 @@ pub(super) async fn update(app: &App, a: Update) -> Result<()> {
 #[command(group(ArgGroup::new("source").required(true).args(["file", "name"])))]
 pub struct Create {
     /// Full template definition (JSON).
-    #[arg(long, conflicts_with_all = [
+    #[arg(short = 'f', long, conflicts_with_all = [
         "name", "category", "language", "body", "example", "header_text", "header_example",
         "header_media", "header_handle", "footer", "buttons", "url_examples",
         "parameter_format", "allow_category_change", "ttl",
@@ -112,7 +112,7 @@ pub struct Create {
     #[arg(long = "button", value_name = "TYPE:VALUE")]
     pub(super) buttons: Vec<String>,
     /// Example value for a URL button's variable; repeat in the order of those buttons.
-    #[arg(long = "url-example", requires = "buttons")]
+    #[arg(long = "url-example", requires = "buttons", value_name = "URL")]
     pub(super) url_examples: Vec<String>,
     /// Let Meta reassign the template's category. Meta has done this by default since
     /// April 2025.

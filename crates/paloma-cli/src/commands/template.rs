@@ -112,7 +112,7 @@ pub enum TemplateCommand {
     /// Create or update an authentication template in several languages from a JSON file.
     Upsert {
         /// The template definition, with `languages` instead of `language`.
-        #[arg(long)]
+        #[arg(short = 'f', long)]
         file: PathBuf,
     },
     /// Manage template groups, which track a set of templates' metrics together.

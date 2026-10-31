@@ -121,7 +121,8 @@ impl Policy {
 pub struct Text {
     /// Recipient (E.164 number or business-scoped user ID).
     to: String,
-    /// Treat the recipient as a group ID (see `paloma group`).
+    /// Treat the recipient as a group ID (see `paloma group`). Meta takes group sends for
+    /// text, media and templates only.
     #[arg(long)]
     group: bool,
     /// Message body.
@@ -175,7 +176,7 @@ pub struct Reaction {
 #[command(group(ArgGroup::new("input").required(true).args(["file", "stdin"])))]
 pub struct Raw {
     /// JSON file with a complete message object.
-    #[arg(long)]
+    #[arg(short = 'f', long)]
     file: Option<PathBuf>,
     /// Read the message object from stdin.
     #[arg(long)]

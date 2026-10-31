@@ -9,11 +9,12 @@ use super::*;
 pub struct Media {
     /// Recipient (E.164 number or business-scoped user ID).
     pub(super) to: String,
-    /// Treat the recipient as a group ID (see `paloma group`).
+    /// Treat the recipient as a group ID (see `paloma group`). Meta takes group sends for
+    /// text, media and templates only.
     #[arg(long)]
     pub(super) group: bool,
     /// Upload this local file first, then send it.
-    #[arg(long)]
+    #[arg(short = 'f', long)]
     pub(super) file: Option<PathBuf>,
     /// An already-uploaded media id.
     #[arg(long)]

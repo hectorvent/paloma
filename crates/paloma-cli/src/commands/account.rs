@@ -37,7 +37,7 @@ pub enum AccountCommand {
     /// Show the active WABA's details.
     Get {
         /// Comma-separated Graph fields (replaces the default selection).
-        #[arg(long)]
+        #[arg(long, value_name = "FIELD,...")]
         fields: Option<String>,
     },
     /// Update account settings.
@@ -50,7 +50,7 @@ pub enum AccountCommand {
     /// Manage click-to-WhatsApp welcome message sequences.
     #[command(subcommand)]
     WelcomeSequence(administration::WelcomeSequence),
-    /// Read the account's activity history.
+    /// Show the account's activity history.
     #[command(subcommand)]
     Activity(ActivityCommand),
     /// Clone an account and explicitly switch billing currency.
@@ -62,7 +62,7 @@ pub enum AccountCommand {
     Health,
     /// Report messaging counts or pricing analytics.
     Analytics(Analytics),
-    /// Read the apps subscribed to the WABA's webhooks.
+    /// Show the apps subscribed to the WABA's webhooks.
     #[command(subcommand)]
     Apps(AppsCommand),
 }

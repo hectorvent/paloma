@@ -9,7 +9,7 @@ pub struct Contact {
     /// Recipient (E.164 number or business-scoped user ID).
     pub(super) to: String,
     /// JSON file holding the Cloud API `contacts` array (or `{"contacts": [...]}`).
-    #[arg(long, conflicts_with_all = ["first_name", "last_name", "phones", "wa_id", "emails"])]
+    #[arg(short = 'f', long, conflicts_with_all = ["first_name", "last_name", "phones", "wa_id", "emails"])]
     pub(super) file: Option<PathBuf>,
     /// The contact's full name, shown on the message.
     #[arg(long)]

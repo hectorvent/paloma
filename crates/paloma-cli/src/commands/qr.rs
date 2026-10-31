@@ -26,18 +26,23 @@ pub enum QrCommand {
     },
     /// Show a message QR code and optionally save its image.
     Get {
+        /// QR code id, as `qr list` shows it.
         code: String,
         #[command(flatten)]
         image: ImageArgs,
     },
     /// Change a QR code's prefilled message.
     Update {
+        /// QR code id, as `qr list` shows it.
         code: String,
         #[command(flatten)]
         message: MessageArgs,
     },
     /// Delete a message QR code and expire its short link.
-    Delete { code: String },
+    Delete {
+        /// QR code id, as `qr list` shows it.
+        code: String,
+    },
 }
 
 #[derive(Debug, Args)]

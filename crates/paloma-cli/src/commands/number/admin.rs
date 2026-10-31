@@ -12,21 +12,23 @@ use std::path::PathBuf;
 
 #[derive(Debug, Subcommand)]
 pub enum ObaCommand {
-    /// Read Official Business Account application status.
+    /// Show the Official Business Account application status.
     Get,
     /// Submit an application document containing website, country and evidence links.
     Apply {
-        #[arg(long)]
+        /// The application (JSON): website, country and evidence links.
+        #[arg(short = 'f', long)]
         file: PathBuf,
     },
 }
 #[derive(Debug, Subcommand)]
 pub enum ComplianceCommand {
-    /// Read business compliance information (India).
+    /// Show business compliance information (India).
     Get,
     /// Submit legal entity and grievance/customer-care details from a JSON document.
     Set {
-        #[arg(long)]
+        /// The compliance details (JSON): legal entity, grievance officer and customer care.
+        #[arg(short = 'f', long)]
         file: PathBuf,
     },
 }

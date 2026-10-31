@@ -4,8 +4,8 @@
 use std::io::IsTerminal;
 
 use clap::{Args, Subcommand};
-use paloma_config::secrets::keyring_account;
 use paloma_config::ProfileKey;
+use paloma_config::secrets::keyring_account;
 use paloma_core::{Error, Result};
 use secrecy::{ExposeSecret, SecretString};
 use serde_json::{Map, Value, json};
@@ -29,12 +29,19 @@ pub enum ConfigCommand {
         /// token_ref, waba_id, phone_number_id, api_version, app_secret_ref or
         /// messaging_account_id.
         key: ProfileKey,
+        /// The new value.
         value: String,
     },
     /// Remove one key from the selected profile.
-    Unset { key: ProfileKey },
+    Unset {
+        /// The key to remove, as for `config get`.
+        key: ProfileKey,
+    },
     /// Make a profile the default.
-    Use { profile: String },
+    Use {
+        /// The profile to make the default.
+        profile: String,
+    },
     /// Print the config file path.
     Path,
 }

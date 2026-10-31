@@ -11,7 +11,7 @@ use std::path::PathBuf;
 
 #[derive(Debug, Subcommand)]
 pub enum AutomationCommand {
-    /// Read the WABA's bots.
+    /// Show the WABA's bots.
     #[command(subcommand)]
     Bot(BotCommand),
     /// Show welcome-message, ice-breaker and command settings.

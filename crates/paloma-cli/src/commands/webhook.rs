@@ -68,7 +68,7 @@ pub struct SimulateArgs {
     )]
     event: String,
     /// Send this JSON file instead of a sample, byte for byte.
-    #[arg(long, value_name = "PATH")]
+    #[arg(short = 'f', long, value_name = "PATH")]
     file: Option<PathBuf>,
     /// valid: sign with the app secret. wrong and missing test that the endpoint rejects it,
     /// so they pass when it doesn't answer 200, and don't need the app secret.

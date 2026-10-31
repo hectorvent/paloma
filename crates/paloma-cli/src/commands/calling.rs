@@ -109,7 +109,7 @@ pub struct Set {
     #[arg(long, value_enum, ignore_case = true)]
     srtp: Option<Srtp>,
     /// A full `calling` object (JSON) for settings without a flag (video, ...).
-    #[arg(long, conflicts_with_all = [
+    #[arg(short = 'f', long, conflicts_with_all = [
         "status", "call_icon", "callback_permission", "icon_countries", "icon_everywhere", "srtp",
     ])]
     file: Option<PathBuf>,
@@ -131,6 +131,7 @@ pub struct VoicemailSet {
         value_enum,
         ignore_case = true,
         value_delimiter = ',',
+        value_name = "TRIGGER,...",
         required = true
     )]
     triggers: Vec<VoicemailTrigger>,
@@ -146,7 +147,7 @@ pub struct VoicemailSet {
 pub enum Sip {
     /// Enable SIP and set its servers.
     Set(SipSet),
-    /// Disable SIP.
+    /// Turn SIP off.
     Disable,
 }
 

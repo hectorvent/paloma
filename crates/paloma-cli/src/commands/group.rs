@@ -25,16 +25,20 @@ pub enum GroupCommand {
     List(List),
     /// Show a group's settings and participants.
     Get {
+        /// Group id.
         group_id: String,
         /// Comma-separated fields, instead of the default set.
-        #[arg(long)]
+        #[arg(long, value_name = "FIELD,...")]
         fields: Option<String>,
     },
     /// Change a group's subject, description or photo.
     Update(Update),
     /// Delete a group and remove everyone from it, including the business.
-    Delete { group_id: String },
-    /// Read or reset a group's invite link.
+    Delete {
+        /// Group id.
+        group_id: String,
+    },
+    /// Show or reset a group's invite link.
     #[command(subcommand)]
     Invite(Invite),
     /// Remove participants. Joining only happens through the invite link.
@@ -45,7 +49,9 @@ pub enum GroupCommand {
     Requests(Requests),
     /// Pin a message in a group. Meta unpins the oldest beyond three.
     Pin {
+        /// Group id.
         group_id: String,
+        /// The message to pin or unpin (wamid…).
         message_id: String,
         /// How long to keep it pinned, from 1 to 30 days.
         #[arg(long)]
@@ -53,7 +59,9 @@ pub enum GroupCommand {
     },
     /// Unpin a message in a group.
     Unpin {
+        /// Group id.
         group_id: String,
+        /// The message to pin or unpin (wamid…).
         message_id: String,
     },
 }
@@ -94,6 +102,7 @@ pub struct List {
 
 #[derive(Debug, Args)]
 pub struct Update {
+    /// Group id.
     group_id: String,
     #[arg(long)]
     subject: Option<String>,
@@ -107,15 +116,22 @@ pub struct Update {
 #[derive(Debug, Subcommand)]
 pub enum Invite {
     /// Show the current invite link.
-    Get { group_id: String },
+    Get {
+        /// Group id.
+        group_id: String,
+    },
     /// Replace the invite link. Every earlier link stops working.
-    Reset { group_id: String },
+    Reset {
+        /// Group id.
+        group_id: String,
+    },
 }
 
 #[derive(Debug, Subcommand)]
 pub enum Members {
     /// Remove participants, who can no longer rejoin through an invite link.
     Remove {
+        /// Group id.
         group_id: String,
         /// E.164 number or WhatsApp user ID, up to 8.
         #[arg(required = true, value_name = "USER")]
@@ -127,19 +143,24 @@ pub enum Members {
 pub enum Requests {
     /// List pending join requests.
     List {
+        /// Group id.
         group_id: String,
         #[command(flatten)]
         page: Pagination,
     },
     /// Approve join requests.
     Approve {
+        /// Group id.
         group_id: String,
+        /// Join request id; repeat it for several.
         #[arg(required = true, value_name = "REQUEST_ID")]
         request_ids: Vec<String>,
     },
     /// Reject join requests. The person can ask again.
     Reject {
+        /// Group id.
         group_id: String,
+        /// Join request id; repeat it for several.
         #[arg(required = true, value_name = "REQUEST_ID")]
         request_ids: Vec<String>,
     },

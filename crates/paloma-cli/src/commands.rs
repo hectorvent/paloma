@@ -50,10 +50,10 @@ pub enum Command {
     /// Manage business phone numbers.
     #[command(subcommand)]
     Number(number::NumberCommand),
-    /// Read and update the business profile.
+    /// Show and change the business profile.
     #[command(subcommand)]
     Profile(profile::ProfileCommand),
-    /// Read and update shopping cart and catalog settings.
+    /// Show and change shopping cart and catalog settings.
     #[command(subcommand)]
     Commerce(commerce::CommerceCommand),
     /// Configure welcome messages, ice breakers and bot commands.
@@ -86,7 +86,7 @@ pub enum Command {
     /// Log in, inspect and log out of a profile.
     #[command(subcommand)]
     Auth(auth::AuthCommand),
-    /// Read and edit the config file.
+    /// Show and edit the config file.
     #[command(subcommand)]
     Config(config::ConfigCommand),
     /// Interactive first-run setup.

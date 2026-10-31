@@ -46,11 +46,20 @@ pub enum FlowCommand {
     /// Update a flow's metadata and/or Flow JSON.
     Update(Update),
     /// Publish a flow (irreversible).
-    Publish { flow_id: String },
+    Publish {
+        /// Flow id.
+        flow_id: String,
+    },
     /// Deprecate a published flow.
-    Deprecate { flow_id: String },
+    Deprecate {
+        /// Flow id.
+        flow_id: String,
+    },
     /// Delete a draft flow.
-    Delete { flow_id: String },
+    Delete {
+        /// Flow id.
+        flow_id: String,
+    },
     /// Copy Flows from another WABA owned by the same business.
     Migrate(tools::Migrate),
     /// Manage the Flow endpoint public encryption key.
@@ -65,18 +74,19 @@ pub struct ListArgs {
     #[command(flatten)]
     page: Pagination,
     /// Comma-separated fields to return.
-    #[arg(long)]
+    #[arg(long, value_name = "FIELD,...")]
     fields: Option<String>,
 }
 
 #[derive(Debug, Args)]
 pub struct Get {
+    /// Flow id.
     flow_id: String,
     /// Include a preview URL.
     #[arg(long)]
     preview: bool,
     /// Comma-separated fields (replaces the defaults).
-    #[arg(long)]
+    #[arg(long, value_name = "FIELD,...")]
     fields: Option<String>,
 }
 
@@ -89,6 +99,7 @@ pub struct Create {
         long = "category",
         value_enum,
         value_delimiter = ',',
+        value_name = "CATEGORY,...",
         required = true,
         ignore_case = true
     )]
@@ -109,6 +120,7 @@ pub struct Create {
 
 #[derive(Debug, Args)]
 pub struct Update {
+    /// Flow id.
     flow_id: String,
     #[arg(long)]
     name: Option<String>,
@@ -116,6 +128,7 @@ pub struct Update {
         long = "category",
         value_enum,
         value_delimiter = ',',
+        value_name = "CATEGORY,...",
         ignore_case = true
     )]
     categories: Vec<Category>,
@@ -128,6 +141,7 @@ pub struct Update {
 
 #[derive(Debug, Args)]
 pub struct Assets {
+    /// Flow id.
     flow_id: String,
     /// Download the Flow JSON to this file (or directory, as flow.json).
     #[arg(short = 'O', long)]

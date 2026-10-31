@@ -13,7 +13,8 @@ pub struct Template {
     /// Template language code, e.g. en_US.
     #[arg(long)]
     pub(super) language: String,
-    /// Treat the recipient as a group ID (see `paloma group`).
+    /// Treat the recipient as a group ID (see `paloma group`). Meta takes group sends for
+    /// text, media and templates only.
     #[arg(long)]
     pub(super) group: bool,
     /// Select the endpoint: auto looks up the latest category; explicit routes skip lookup.

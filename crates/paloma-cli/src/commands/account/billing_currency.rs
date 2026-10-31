@@ -18,9 +18,15 @@ pub enum BillingCurrency {
         extended_credit_id: Option<String>,
     },
     /// Show migration progress and the destination account.
-    Status { migration_id: String },
+    Status {
+        /// Migration id, from `billing-currency start`.
+        migration_id: String,
+    },
     /// Switch billing to the destination account; the old account stops sending.
-    Complete { migration_id: String },
+    Complete {
+        /// Migration id, from `billing-currency start`.
+        migration_id: String,
+    },
 }
 
 impl BillingCurrency {

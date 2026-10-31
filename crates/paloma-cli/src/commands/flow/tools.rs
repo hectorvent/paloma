@@ -12,8 +12,9 @@ use std::path::PathBuf;
 pub struct Migrate {
     #[arg(long)]
     source_waba_id: String,
-    /// Names to copy; omit to copy all, up to Meta's per-request limit.
-    #[arg(long = "name")]
+    /// Flow name to copy; repeat it for several. Omit it to copy all, up to Meta's
+    /// per-request limit.
+    #[arg(long = "name", value_name = "NAME")]
     names: Vec<String>,
 }
 impl Migrate {
@@ -72,7 +73,7 @@ impl Migrate {
 }
 #[derive(Debug, Subcommand)]
 pub enum KeyCommand {
-    /// Read the installed public key and signature status for this phone number.
+    /// Show the installed public key and its signature status for this phone number.
     Get,
     /// Install a 2048-bit RSA public key; never pass the private key.
     Set {

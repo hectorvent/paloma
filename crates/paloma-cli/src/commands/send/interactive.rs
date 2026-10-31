@@ -6,21 +6,21 @@ use super::*;
 
 #[derive(Debug, Subcommand)]
 pub enum Interactive {
-    /// Up to three reply buttons.
+    /// Send up to three reply buttons.
     Button(InteractiveButton),
-    /// A tappable list of sectioned rows.
+    /// Send a tappable list of sectioned rows.
     List(InteractiveList),
-    /// A button that opens a URL.
+    /// Send a button that opens a URL.
     CtaUrl(InteractiveCta),
-    /// A button that asks the user to share their location.
+    /// Send a button that asks the user to share their location.
     LocationRequest(InteractiveBody),
-    /// A form that asks for a shipping address (India only).
+    /// Send a form that asks for a shipping address (India only).
     Address(InteractiveAddress),
-    /// 2 to 10 scrollable cards: media from a file, or products from a catalog.
+    /// Send 2 to 10 scrollable cards: media from a file, or products from a catalog.
     Carousel(InteractiveCarousel),
-    /// A button that calls your business. Needs calling enabled on the number.
+    /// Send a button that calls your business; needs calling enabled on the number.
     Call(InteractiveCall),
-    /// A button that asks the user to share their phone number.
+    /// Send a button that asks the user to share their phone number.
     RequestContact(InteractiveBody),
 }
 
@@ -92,7 +92,7 @@ pub struct InteractiveCarousel {
     /// Product retailer ids (SKUs), one card each, separated by commas.
     #[arg(
         long,
-        value_name = "SKU,SKU",
+        value_name = "SKU,...",
         value_delimiter = ',',
         requires = "catalog_id"
     )]

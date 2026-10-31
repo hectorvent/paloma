@@ -24,7 +24,7 @@ const PRICING_COLUMNS: &[&str] = &[
 
 #[derive(Debug, Args)]
 pub struct Analytics {
-    /// Start boundary: nonnegative UNIX seconds or YYYY-MM-DD (midnight UTC).
+    /// Start boundary: UNIX seconds or YYYY-MM-DD (midnight UTC).
     #[arg(long, value_name = "TIME", allow_hyphen_values = true)]
     start: String,
     /// End boundary: UNIX seconds or YYYY-MM-DD; must be later than --start.
