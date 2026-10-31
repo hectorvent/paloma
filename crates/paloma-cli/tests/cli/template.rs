@@ -153,7 +153,7 @@ async fn template_status_follows_paging_only_until_the_exact_match() {
     mock_template_pages(&graph).await;
     let home = TempDir::new().unwrap();
     let out = paloma(Some(&graph), &home)
-        .args(["template", "status", "promo", "-o", "json"])
+        .args(["template", "get", "promo", "--status", "-o", "json"])
         .output()
         .unwrap();
     assert!(out.status.success());
@@ -213,9 +213,10 @@ async fn template_get_and_status_exit_1_when_no_page_has_the_name() {
         .mount(&graph)
         .await;
     let home = TempDir::new().unwrap();
-    for verb in ["get", "status"] {
+    for extra in [None, Some("--status")] {
         paloma(Some(&graph), &home)
-            .args(["template", verb, "promo"])
+            .args(["template", "get", "promo"])
+            .args(extra)
             .assert()
             .code(1)
             .stdout(predicate::str::is_empty())
@@ -237,7 +238,7 @@ async fn template_lookup_refuses_a_repeated_cursor() {
         .await;
     let home = TempDir::new().unwrap();
     paloma(Some(&graph), &home)
-        .args(["template", "status", "promo"])
+        .args(["template", "get", "promo", "--status"])
         .assert()
         .code(1)
         .stderr(predicate::str::contains("cursor SAME twice"));
@@ -287,10 +288,10 @@ async fn template_delete_ids_sends_only_the_json_array() {
     mock_template_delete(&graph).await;
     let home = TempDir::new().unwrap();
     paloma(Some(&graph), &home)
-        .args(["template", "delete", "--ids", "1387,1304", "--yes", "-q"])
+        .args(["template", "delete", "--id", "1387,1304", "--yes", "-q"])
         .assert()
         .success()
-        .stdout(predicate::str::is_empty());
+        .stdout("1387\n1304\n");
     let requests = graph.received_requests().await.unwrap();
     let pairs: Vec<(String, String)> = requests[0]
         .url
@@ -306,15 +307,13 @@ async fn template_delete_refuses_bad_targets_without_a_request() {
     let home = TempDir::new().unwrap();
     let too_many = vec!["1"; 101].join(",");
     for (args, code) in [
-        // Meta's rule: an id needs its name, and hsm_ids can't be combined with either.
-        (vec!["--id", "1"], 2),
-        (vec!["promo", "--ids", "1"], 2),
-        (vec!["--ids", "1", "--id", "2"], 2),
-        (vec!["--ids", "1", "--language", "es"], 2),
+        // Meta's rule: hsm_ids can't be combined with a name, so a name takes one id.
+        (vec!["promo", "--id", "1", "--id", "2"], 5),
+        (vec!["--id", "1", "--language", "es"], 2),
         (vec!["promo", "--id", "1", "--language", "es"], 2),
         (vec![], 2),
-        (vec!["--ids", too_many.as_str()], 5),
-        (vec!["--ids", "1,abc"], 5),
+        (vec!["--id", too_many.as_str()], 5),
+        (vec!["--id", "1,abc"], 5),
         (vec!["promo", "--id", "abc"], 5),
         (vec!["  "], 5),
     ] {
@@ -334,7 +333,7 @@ async fn template_delete_prompt_names_the_target_and_refuses_without_a_tty() {
     let home = TempDir::new().unwrap();
     for (args, named) in [
         (
-            vec!["--ids", "1387,1304"],
+            vec!["--id", "1387,1304"],
             "2 template(s) by id (1387, 1304)",
         ),
         (vec!["promo", "--id", "1407"], "template 'promo' (id 1407)"),
@@ -357,7 +356,7 @@ fn template_delete_ids_dry_run_prints_the_request() {
         .args([
             "template",
             "delete",
-            "--ids",
+            "--id",
             "1,2",
             "--dry-run",
             "-o",
@@ -759,7 +758,7 @@ async fn template_edit_without_language_sees_a_translation_on_the_last_page() {
         .await;
     let home = TempDir::new().unwrap();
     paloma(Some(&graph), &home)
-        .args(["template", "edit", "promo", "--file"])
+        .args(["template", "update", "promo", "--yes", "--file"])
         .arg(template_edit_file(&home))
         .assert()
         .code(5)
@@ -786,7 +785,7 @@ async fn template_edit_without_language_reads_every_page_then_edits_the_only_mat
         .await;
     let home = TempDir::new().unwrap();
     paloma(Some(&graph), &home)
-        .args(["template", "edit", "promo", "-q", "--file"])
+        .args(["template", "update", "promo", "-q", "--yes", "--file"])
         .arg(template_edit_file(&home))
         .assert()
         .success()
@@ -808,7 +807,7 @@ async fn template_edit_without_language_exits_1_when_no_page_has_the_name() {
     mock_three_template_pages(&graph, json!([]), json!([])).await;
     let home = TempDir::new().unwrap();
     paloma(Some(&graph), &home)
-        .args(["template", "edit", "promo", "--file"])
+        .args(["template", "update", "promo", "--yes", "--file"])
         .arg(template_edit_file(&home))
         .assert()
         .code(1)
@@ -831,11 +830,12 @@ async fn template_edit_with_language_stops_at_the_match() {
     paloma(Some(&graph), &home)
         .args([
             "template",
-            "edit",
+            "update",
             "promo",
             "--language",
             "es",
             "-q",
+            "--yes",
             "--file",
         ])
         .arg(template_edit_file(&home))
@@ -902,7 +902,7 @@ fn review_validation_fails_before_any_call() {
         [&list[..], &["--section", ":a:A"]].concat(),
         [&list[..], &["--section", long_title.as_str()]].concat(),
         [&list[..], &["--section", "S:a::Desc"]].concat(),
-        vec!["template", "delete", "--ids", "5,5", "--yes"],
+        vec!["template", "delete", "--id", "5,5", "--yes"],
         vec!["template", "list", "--limit", "0"],
         vec![
             "template",
@@ -1030,17 +1030,17 @@ async fn template_archive_confirms_and_posts_the_ids() {
         .await;
     let home = TempDir::new().unwrap();
     paloma(Some(&graph), &home)
-        .args(["template", "archive", "--ids", "1,2"])
+        .args(["template", "archive", "--id", "1,2"])
         .assert()
         .code(5)
         .stdout("")
         .stderr(predicate::str::contains("--yes"));
     paloma(Some(&graph), &home)
-        .args(["template", "archive", "--ids", "1,2", "--yes", "-o", "json"])
+        .args(["template", "archive", "--id", "1,2", "--yes", "-o", "json"])
         .assert()
         .success()
         .stdout(predicate::str::contains("archived_templates"));
-    let dry = dry_run_request(&home, &["template", "archive", "--ids", "1"]);
+    let dry = dry_run_request(&home, &["template", "archive", "--id", "1"]);
     assert_eq!(
         dry["url"],
         format!("{GRAPH}/{WABA}/message_templates/archive")
@@ -1063,7 +1063,7 @@ async fn template_unarchive_needs_no_confirmation_and_a_partial_failure_exits_1(
         .await;
     let home = TempDir::new().unwrap();
     paloma(Some(&graph), &home)
-        .args(["template", "unarchive", "--ids", "1,2", "-o", "json"])
+        .args(["template", "unarchive", "--id", "1,2", "-o", "json"])
         .assert()
         .code(1)
         .stdout(predicate::str::contains("Template is not archived"))
@@ -1077,7 +1077,7 @@ fn template_archive_validates_ids_before_any_request() {
     for ids in [too_many.join(","), "abc".to_owned(), "1,1".to_owned()] {
         for verb in ["archive", "unarchive"] {
             paloma(None, &home)
-                .args(["template", verb, "--ids", &ids, "--yes"])
+                .args(["template", verb, "--id", &ids, "--yes"])
                 .assert()
                 .code(5);
         }
@@ -1273,7 +1273,16 @@ async fn template_migrate_confirms_then_posts_to_the_destination() {
         .await;
     let home = TempDir::new().unwrap();
     let args = [
-        "template", "migrate", "--from", "333", "--ids", "1,2", "--page", "0", "--count", "200",
+        "template",
+        "migrate",
+        "--source-waba-id",
+        "333",
+        "--id",
+        "1,2",
+        "--page",
+        "0",
+        "--count",
+        "200",
     ];
     paloma(Some(&graph), &home)
         .args(args)
@@ -1287,7 +1296,7 @@ async fn template_migrate_confirms_then_posts_to_the_destination() {
         .code(1)
         .stdout(predicate::str::contains("Incorrect category"))
         .stderr(predicate::str::contains("1 template(s) failed"));
-    let dry = dry_run_request(&home, &["template", "migrate", "--from", "333"]);
+    let dry = dry_run_request(&home, &["template", "migrate", "--source-waba-id", "333"]);
     assert_eq!(
         dry["url"],
         format!("{GRAPH}/{WABA}/migrate_message_templates")
@@ -1300,9 +1309,9 @@ fn template_migrate_validates_before_a_request() {
     let home = TempDir::new().unwrap();
     let too_many: Vec<String> = (0..501).map(|i| i.to_string()).collect();
     for args in [
-        vec!["--from", "abc"],
-        vec!["--from", "333", "--count", "501"],
-        vec!["--from", "333", "--ids", &too_many.join(",")],
+        vec!["--source-waba-id", "abc"],
+        vec!["--source-waba-id", "333", "--count", "501"],
+        vec!["--source-waba-id", "333", "--id", &too_many.join(",")],
     ] {
         paloma(None, &home)
             .args(["template", "migrate", "--yes"])
@@ -1392,7 +1401,7 @@ async fn template_upsert_posts_the_file_and_rejects_a_single_language() {
     std::fs::write(&file, body.to_string()).unwrap();
     let upsert = |extra: &[&str]| {
         let mut cmd = paloma(Some(&graph), &home);
-        cmd.args(["template", "upsert", "--file"])
+        cmd.args(["template", "upsert", "--yes", "--file"])
             .arg(&file)
             .args(extra);
         cmd
@@ -1435,7 +1444,7 @@ async fn template_group_create_sends_integer_ids() {
         "Black Friday",
         "--description",
         "US sale",
-        "--templates",
+        "--template",
         "278077987957091,2",
         "-q",
     ];
@@ -1447,16 +1456,16 @@ async fn template_group_create_sends_integer_ids() {
     let long_name = "x".repeat(257);
     let long_description = "x".repeat(513);
     for bad in [
-        vec!["--name", &long_name, "--templates", "1"],
+        vec!["--name", &long_name, "--template", "1"],
         vec![
             "--name",
             "n",
             "--description",
             &long_description,
-            "--templates",
+            "--template",
             "1",
         ],
-        vec!["--name", "n", "--templates", "abc"],
+        vec!["--name", "n", "--template", "abc"],
     ] {
         paloma(None, &home)
             .args(["template", "group", "create"])
@@ -1504,7 +1513,7 @@ async fn template_group_get_set_and_delete_use_the_group_node() {
         .assert()
         .success()
         .stdout("90\n");
-    group(&["set", "90", "--add", "1,2", "--remove", "3", "-q"])
+    group(&["update", "90", "--add", "1,2", "--remove", "3", "-q"])
         .assert()
         .success()
         .stdout("90\n");
@@ -1544,13 +1553,13 @@ async fn template_analytics_queries_templates_and_lists_the_data_points() {
         .args([
             "template",
             "analytics",
-            "--ids",
+            "--id",
             "14,26",
             "--start",
             "1718064000",
             "--end",
             "1718122745",
-            "--metrics",
+            "--metric",
             "sent,read",
             "--product-type",
             "MARKETING_MESSAGES_LITE_API",
@@ -1585,7 +1594,7 @@ async fn template_analytics_queries_groups_in_the_accounts_timezone() {
         .args([
             "template",
             "analytics",
-            "--groups",
+            "--group",
             "104",
             "--start",
             "2026-10-01",
@@ -1604,10 +1613,10 @@ fn template_analytics_validates_before_a_request() {
     let window = ["--start", "1718064000", "--end", "1718122745"];
     let eleven = (0..11).map(|i| i.to_string()).collect::<Vec<_>>().join(",");
     for bad in [
-        vec!["--ids", &eleven],
-        vec!["--groups", &eleven],
-        vec!["--groups", "abc"],
-        vec!["--ids", "abc"],
+        vec!["--id", &eleven],
+        vec!["--group", &eleven],
+        vec!["--group", "abc"],
+        vec!["--id", "abc"],
     ] {
         paloma(None, &home)
             .args(["template", "analytics"])
@@ -1618,7 +1627,7 @@ fn template_analytics_validates_before_a_request() {
     }
     // --waba-timezone takes dates only.
     paloma(None, &home)
-        .args(["template", "analytics", "--ids", "1", "--waba-timezone"])
+        .args(["template", "analytics", "--id", "1", "--waba-timezone"])
         .args(window)
         .assert()
         .code(5);
@@ -1626,7 +1635,7 @@ fn template_analytics_validates_before_a_request() {
         .args([
             "template",
             "analytics",
-            "--ids",
+            "--id",
             "1",
             "--start",
             "soon",
@@ -1645,7 +1654,7 @@ fn template_analytics_validates_before_a_request() {
         .args([
             "template",
             "analytics",
-            "--groups",
+            "--group",
             "1",
             "--product-type",
             "CLOUD_API",
@@ -1739,7 +1748,7 @@ fn template_analytics_refuses_impossible_dates_and_a_backwards_range() {
         vec![
             "template",
             "analytics",
-            "--ids",
+            "--id",
             "1",
             "--start",
             start,

@@ -35,7 +35,7 @@ emulator, and it doesn't use the WhatsApp Web protocol.
 ```bash
 # Send anything: text, templates, media, locations, contacts, buttons, lists, reactions
 paloma send text 15551234567 "On it!" --reply-to wamid.HBgL...
-paloma send template 15551234567 order_ready --lang en_US --body-var Hector --body-var "#4821"
+paloma send template 15551234567 order_ready --language en_US --body-var Hector --body-var "#4821"
 paloma send image 15551234567 --file ./flyer.jpg --caption "This week's specials"   # uploads it for you
 
 # Templates, end to end: create it, wait for Meta's approval, then send it
@@ -284,15 +284,15 @@ error: text body is 5000 chars; max is 4096        # exit 5
 | Group | Commands |
 |-------|----------|
 | `send` | text · template (category routing) · image · document · audio · video · sticker · location · contact · interactive (button, list, cta-url, location-request, address, carousel, call, request-contact) · flow · call-permission · product · product-list · catalog · reaction · raw |
-| `template` | list · status · get · create · submit · watch · edit · delete · namespace · archive · unarchive · unpause · library · compare · migrate · preview · upsert · group · analytics |
+| `template` | list · get · create · watch · update · delete · namespace · archive · unarchive · unpause · library · compare · migrate · preview · upsert · group · analytics |
 | `media` | upload · get · download · delete |
 | `message` | read · typing · history |
 | `calling` | status · enable · disable · set · sip · codecs · hours · permission · analytics |
 | `flow` | list · get · create · update · publish · deprecate · delete · assets · migrate · key |
 | `webhook` | get · subscribe · unsubscribe · fields · version · listen · verify-url · simulate |
-| `number` | list · get · register · deregister · set-pin · quality · health · request-code · verify-code · add · set-name · search-visibility · username · contacts · settings · oba · compliance |
+| `number` | list · get · quality · health · add · register · deregister · verification · name · visibility · pin · username · contacts · settings · oba · compliance |
 | `profile` | get · set · photo |
-| `account` | get · set · limits · health · activities · subscribed-apps · billing-currency · analytics · reach · users · welcome-sequence |
+| `account` | get · set · limits · health · activity · apps · users · billing-currency · analytics · reach · welcome-sequence |
 | `block` | add · remove · list |
 | `group` | create · list · get · set · delete · invite · members · requests · pin · unpin |
 | `qr` | create · list · get · update · delete |

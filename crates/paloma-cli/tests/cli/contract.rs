@@ -216,24 +216,27 @@ async fn new_disruptive_commands_refuse_without_confirmation_and_preview_offline
     let graph = MockServer::start().await;
     let home = TempDir::new().unwrap();
     for args in [
-        vec!["number", "request-code", "--method", "VOICE"],
-        vec!["number", "set-name", "Acme"],
+        vec!["number", "verification", "request", "--method", "VOICE"],
+        vec!["number", "name", "set", "Acme"],
         vec!["number", "username", "set", "acme_shop"],
         vec!["number", "username", "delete"],
         vec!["number", "contacts", "delete", "US.123"],
-        vec!["number", "settings", "storage", "--disable"],
-        vec!["number", "settings", "identity-check", "--enabled", "true"],
-        vec!["number", "search-visibility", "VISIBLE"],
+        vec!["number", "settings", "set", "--no-storage"],
+        vec!["number", "settings", "set", "--identity-check"],
+        vec!["number", "visibility", "set", "VISIBLE"],
+        vec!["number", "pin", "set"],
         vec!["commerce", "set", "--cart-enabled", "false"],
         vec!["flow", "migrate", "--source-waba-id", "333"],
     ] {
         paloma(Some(&graph), &home)
+            .env("PALOMA_PIN", "825194")
             .args(&args)
             .assert()
             .failure()
             .stdout("")
             .stderr(predicate::str::contains("--yes"));
         paloma(Some(&graph), &home)
+            .env("PALOMA_PIN", "825194")
             .env_remove("PALOMA_TOKEN")
             .args(&args)
             .args(["--dry-run", "-o", "json"])

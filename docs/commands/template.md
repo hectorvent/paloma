@@ -1,7 +1,7 @@
 # `paloma template`
 
-Manage the full message-template lifecycle on the WABA: `list`, `status`, `get`,
-`create`, `submit`, `watch`, `edit`, `delete`, `namespace`, `archive`, `unarchive`, `unpause`,
+Manage the full message-template lifecycle on the WABA: `list`, `get`,
+`create`, `watch`, `update`, `delete`, `namespace`, `archive`, `unarchive`, `unpause`,
 `library`, `compare`, `migrate`, `preview`, `upsert`, `group`, `analytics`.
 
 ```
@@ -45,17 +45,18 @@ for it with `--fields` and filter the result yourself.
 
 ---
 
-## `paloma template status`
+## `paloma template get --status`
 
 Compact approval view for a single template by name.
 
 ```
-paloma template status <name>
+paloma template get <name> --status
 ```
 
 ```bash
-paloma template status order_ready
-paloma template status order_ready -o json
+paloma template get order_ready --status
+paloma template get order_ready --status -o json
+STATUS=$(paloma template get order_ready --status -q)
 ```
 
 Output includes `name`, `language`, `category`, `status`, and `rejected_reason` (null if
@@ -172,16 +173,18 @@ APPROVED, non-zero on REJECTED or timeout.
 paloma template watch <name> [--interval 10s] [--max-wait 10m]
 ```
 
-## `paloma template edit`
+## `paloma template update`
 
-Edit an existing template's components/category. The template is resolved by name
-(and `--language` when it exists in more than one).
+Change an existing template's components or category. The template is resolved by name
+(and `--language` when it exists in more than one), then the change confirms, because an
+approved template goes back to review.
 
 Without `--language`, Paloma reads every page of the lookup first, and exits 5 if any page
 shows the name in more than one language. With `--language`, it stops at the first match.
 
 ```bash
-paloma template edit order_ready --file template.json
+paloma template update order_ready -f template.json
+paloma template update order_ready --language es -f template.json --yes
 ```
 
 ## `paloma template delete`
@@ -191,24 +194,25 @@ naming what it will delete, unless `--yes` (or `--dry-run`).
 
 ```
 paloma template delete <name> [--language <code> | --id <id>]
-paloma template delete --ids <id,id,...>
+paloma template delete --id <id,...>
 ```
 
 | Form | Deletes |
 |------|---------|
 | `<name>` | Every language of the name |
 | `<name> --language <code>` | That language, after looking up its id |
-| `<name> --id <id>` | The template with that id. Meta requires the name as well |
-| `--ids <id,id,...>` | Up to 100 templates. It can't be combined with a name, and if any id is invalid Meta deletes none |
+| `<name> --id <id>` | The template with that id. With a name, Meta takes one id |
+| `--id <id,...>` | Up to 100 templates by id. If any id is invalid, Meta deletes none |
 
 ```bash
 paloma template delete order_ready
 paloma template delete order_ready --language es --yes
 paloma template delete order_ready --id 1407680676729941 --yes
-paloma template delete --ids 1387372356726668,1304694804498707 --yes
+paloma template delete --id 1387372356726668 --id 1304694804498707 --yes
 ```
 
-`-q` prints the id with `--id`, the name otherwise, and nothing with `--ids`.
+`-q` prints the id with a name and `--id`, the name with a name alone, and every id it
+deleted with `--id` alone.
 
 After you delete an approved template, its name can't be reused for 30 days. Templates in a
 disabled status can't be deleted.
@@ -224,8 +228,8 @@ Print the WABA's `message_template_namespace`. `-q` prints only the namespace.
 [Archive](https://developers.facebook.com/documentation/business-messaging/whatsapp/templates/template-archival) up to 100 templates by id, or restore them.
 
 ```bash
-paloma template archive --ids 1387372356726668,1304694804498707 --yes
-paloma template unarchive --ids 1387372356726668
+paloma template archive --id 1387372356726668,1304694804498707 --yes
+paloma template unarchive --id 1387372356726668
 ```
 
 An archived template can't be sent, and Meta deletes it after 28 days unless it's unarchived,
@@ -291,15 +295,15 @@ the active WABA, after confirming. The source keeps its templates. Only `APPROVE
 a `quality_score` of `GREEN` or `UNKNOWN` qualify, and Meta wants a system or business token.
 
 ```bash
-paloma template migrate --from 102290129340398 --yes
-paloma template migrate --from 102290129340398 --page 1 --yes
-paloma template migrate --from 102290129340398 --ids 35002248699842,351234565148 --yes
+paloma template migrate --source-waba-id 102290129340398 --yes
+paloma template migrate --source-waba-id 102290129340398 --page 1 --yes
+paloma template migrate --source-waba-id 102290129340398 --id 35002248699842,351234565148 --yes
 ```
 
 | Flag | Description |
 |------|-------------|
-| `--from <waba-id>` | **Required.** The WABA to copy from |
-| `--ids <id,id,...>` | Only these templates, up to 500. Use it to retry the failed ones |
+| `--source-waba-id <id>` | **Required.** The WABA to copy from |
+| `--id <id,...>` | Only these templates, up to 500. Use it to retry the failed ones |
 | `--page <n>` | Which set of 500 templates to migrate, from 0 |
 | `--count <n>` | Batch size, up to 500. Lower it if the request times out |
 
@@ -324,11 +328,11 @@ paloma template preview --auth --language en_US,es_ES \
 ## `paloma template upsert`
 
 [Create or update an authentication template](https://developers.facebook.com/documentation/business-messaging/whatsapp/templates/authentication-templates/bulk-management)
-in several languages. A template with a matching name and language is updated, and any other
-language is created, with no confirmation.
+in several languages. A template with a matching name and language is replaced, and any other
+language is created, so it confirms first unless `--yes`.
 
 ```bash
-paloma template upsert --file auth_code.json
+paloma template upsert -f auth_code.json --yes
 ```
 
 The file is the template definition with `languages`, a nonempty array of nonblank language-code
@@ -344,15 +348,15 @@ A template can be in one group at a time.
 
 ```bash
 paloma template group create --name "Black Friday" --description "US sale" \
-      --templates 278077987957091,1945418102598215
+      --template 278077987957091,1945418102598215
 paloma template group get 9020555671393375
-paloma template group set 9020555671393375 --add 844006344365270 --remove 1035843174854974
+paloma template group update 9020555671393375 --add 844006344365270 --remove 1035843174854974
 paloma template group delete 9020555671393375 --yes
 ```
 
 | Verb | Notes |
 |------|-------|
-| `create` | `--name` up to 256 characters and unique, `--description` up to 512, `--templates` required. `-q` prints the group's id |
+| `create` | `--name` up to 256 characters and unique, `--description` up to 512, `--template` required. `-q` prints the group's id |
 | `get` | The group and the templates in it |
 | `set` | Any of `--name`, `--description`, `--add`, `--remove`. Metrics a removed template contributed stay with the group |
 | `delete` | Confirms first. The templates stay |
@@ -364,23 +368,23 @@ There's no `list`, because Meta's docs don't describe a way to list groups.
 Daily [template and template group metrics](https://developers.facebook.com/documentation/business-messaging/whatsapp/analytics#template-analytics).
 
 **This needs template analytics enabled on the WABA**, either in WhatsApp Manager or with
-`paloma account set --insights true` (see [Turning on insights](account.md#paloma-account-set)).
+`paloma account set --insights` (see [Turning on insights](account.md#paloma-account-set)).
 Once enabled, it can't be disabled. It isn't available to accounts in the European Union or Japan.
 
 ```bash
-paloma template analytics --ids 1421988012088524,2632273056924580 \
-      --start 2026-10-01 --end 2026-10-08 --metrics sent,delivered,read
-paloma template analytics --ids 1421988012088524 --start 2026-10-01 --end 2026-10-08 \
+paloma template analytics --id 1421988012088524,2632273056924580 \
+      --start 2026-10-01 --end 2026-10-08 --metric sent,delivered,read
+paloma template analytics --id 1421988012088524 --start 2026-10-01 --end 2026-10-08 \
       --product-type MARKETING_MESSAGES_LITE_API
-paloma template analytics --groups 1044106240855852 --start 1738465116 --end 1739559516
+paloma template analytics --group 1044106240855852 --start 1738465116 --end 1739559516
 ```
 
 | Flag | Description |
 |------|-------------|
-| `--ids <id,id,...>` | Template ids, up to 10 (`template_analytics`) |
-| `--groups <id,id,...>` | Template group ids instead, up to 10 (`template_group_analytics`) |
+| `--id <id,...>` | Template ids, up to 10 (`template_analytics`) |
+| `--group <id,id,...>` | Template group ids instead, up to 10 (`template_group_analytics`) |
 | `--start <t>`, `--end <t>` | **Required.** A UNIX timestamp or `YYYY-MM-DD`. The lookback window is 90 days. An impossible date, or a start after the end, exits `5`; the same day for both is fine |
-| `--metrics <a,b>` | Metrics to return, e.g. `cost`, `clicked`, `delivered`, `read`, `sent`. All of them by default |
+| `--metric <name,...>` | Metric to return; repeat it or use commas, e.g. `cost`, `clicked`, `delivered`, `read`, `sent`. All of them by default |
 | `--product-type <t>` | `CLOUD_API` or `MARKETING_MESSAGES_LITE_API`. Meta counts only Cloud API sends by default, so **sends made with [`--via marketing`](send.md#category-aware-routing) need this**. Templates only |
 | `--waba-timezone` | Use the WABA's timezone instead of UTC. `--start` and `--end` must then be `YYYY-MM-DD` |
 | `--after <cursor>` | Return the page following this cursor |

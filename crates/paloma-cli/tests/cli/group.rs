@@ -291,7 +291,13 @@ async fn sends_to_a_group_address_the_group() {
         ),
         (
             vec![
-                "send", "template", GROUP, "order", "--lang", "en_US", "--group",
+                "send",
+                "template",
+                GROUP,
+                "order",
+                "--language",
+                "en_US",
+                "--group",
             ],
             json!({"type":"template","template":{"name":"order","language":{"code":"en_US"}}}),
         ),
@@ -334,7 +340,7 @@ async fn group_sends_reject_bad_ids_and_the_marketing_route() {
             "template",
             GROUP,
             "order",
-            "--lang",
+            "--language",
             "en_US",
             "--group",
             "--via",

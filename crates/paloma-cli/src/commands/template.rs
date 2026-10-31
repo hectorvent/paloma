@@ -3,7 +3,7 @@
 use std::path::PathBuf;
 
 use super::util::{enum_name, read_json};
-use crate::app::{App, field_id, no_id};
+use crate::app::{App, field_id};
 use crate::cli::Format;
 use crate::output::Output;
 use clap::{ArgGroup, Args, Subcommand, ValueEnum};
@@ -21,7 +21,7 @@ mod group;
 mod library;
 use super::listing::{Pagination, Rows, list};
 use analytics::{Analytics, Compare, analytics, compare};
-use create::{Create, Edit, Preview, preview, upsert};
+use create::{Create, Preview, Update, preview, upsert};
 use group::{GroupCommand, group};
 use library::{LibraryCommand, library};
 
@@ -64,30 +64,28 @@ enum ParameterFormat {
 pub enum TemplateCommand {
     /// List templates.
     List(List),
-    /// Show a template's review status.
-    Status {
-        /// Template name.
-        name: String,
-    },
-    /// Show a template's full definition.
+    /// Show a template's full definition, or only its review status or quality.
     Get {
         /// Template name.
         name: String,
         /// Language code, when the template exists in several.
-        #[arg(long)]
+        #[arg(long, conflicts_with = "status")]
         language: Option<String>,
         /// Show only the status, quality score and health status.
-        #[arg(long)]
+        #[arg(long, conflicts_with = "status")]
         quality: bool,
+        /// Show only the review status of the first template with this name; `-q` prints it.
+        #[arg(long)]
+        status: bool,
     },
     /// Create a template from a JSON file or inline flags.
     #[command(visible_alias = "submit")]
     Create(Create),
     /// Wait until a template is approved (exit 0) or rejected (exit 1).
     Watch(Watch),
-    /// Edit an existing template from a JSON file.
-    Edit(Edit),
-    /// Delete a template (all languages, one with --language or --id), or several with --ids.
+    /// Change an existing template from a JSON file.
+    Update(Update),
+    /// Delete a template by name (every language, or one with --language), or by id.
     Delete(Delete),
     /// Show the WABA's template namespace.
     Namespace,
@@ -123,24 +121,29 @@ pub enum TemplateCommand {
         command: GroupCommand,
     },
     /// Show daily metrics for templates or template groups. Needs template analytics
-    /// enabled on the WABA: `paloma account set --insights true`.
+    /// enabled on the WABA: `paloma account set --insights`.
     Analytics(Analytics),
 }
 
 #[derive(Debug, Args)]
 pub struct Ids {
-    /// Template ids, comma-separated (up to 100).
-    #[arg(long, required = true, value_delimiter = ',', value_name = "ID,...")]
+    /// Template id; repeat it or separate ids with commas (up to 100).
+    #[arg(
+        long = "id",
+        required = true,
+        value_delimiter = ',',
+        value_name = "ID,..."
+    )]
     ids: Vec<String>,
 }
 
 #[derive(Debug, Args)]
 pub struct Migrate {
     /// The WABA to copy templates from. The active WABA receives them.
-    #[arg(long, value_name = "WABA_ID")]
-    from: String,
-    /// Migrate only these template ids, comma-separated (up to 500).
-    #[arg(long, value_delimiter = ',', value_name = "ID,...")]
+    #[arg(long)]
+    source_waba_id: String,
+    /// Migrate only this template id; repeat it or separate ids with commas (up to 500).
+    #[arg(long = "id", value_delimiter = ',', value_name = "ID,...")]
     ids: Vec<String>,
     /// Which set of 500 templates to migrate, from 0.
     #[arg(long)]
@@ -173,19 +176,16 @@ pub struct List {
 }
 
 #[derive(Debug, Args)]
-#[command(group(ArgGroup::new("target").required(true).args(["name", "ids"])))]
+#[command(group(ArgGroup::new("target").required(true).multiple(true).args(["name", "ids"])))]
 pub struct Delete {
     /// Template name. On its own, deletes every language of it.
     name: Option<String>,
-    /// Delete only this language.
-    #[arg(long, requires = "name", conflicts_with = "id")]
+    /// Delete only this language of the name.
+    #[arg(long, requires = "name", conflicts_with = "ids")]
     language: Option<String>,
-    /// Delete only the template with this id. Meta requires the name as well.
-    #[arg(long, requires = "name")]
-    id: Option<String>,
-    /// Delete these templates by id, comma-separated (up to 100), instead of by name. If any
-    /// id is invalid, Meta deletes none of them.
-    #[arg(long, value_delimiter = ',', value_name = "ID,...", conflicts_with_all = ["id", "language"])]
+    /// Delete by template id; repeat it or separate ids with commas (up to 100). With a
+    /// name, one id deletes only that template. If any id is invalid, Meta deletes none.
+    #[arg(long = "id", value_delimiter = ',', value_name = "ID,...")]
     ids: Vec<String>,
 }
 
@@ -231,7 +231,9 @@ impl TemplateCommand {
                 )
                 .await
             }
-            Self::Status { name } => {
+            Self::Get {
+                name, status: true, ..
+            } => {
                 validate::not_blank(&name, "template name")?;
                 let view = status(app, &name).await?;
                 let st = view
@@ -245,13 +247,14 @@ impl TemplateCommand {
                 name,
                 language,
                 quality,
+                status: false,
             } => {
                 validate::not_blank(&name, "template name")?;
                 get(app, &name, language.as_deref(), quality).await
             }
             Self::Create(a) => create::create(app, a).await,
             Self::Watch(a) => watch(app, &a).await,
-            Self::Edit(a) => create::edit(app, a).await,
+            Self::Update(a) => create::update(app, a).await,
             Self::Delete(a) => delete(app, a).await,
             Self::Namespace => {
                 let waba = app.ctx()?.require_waba_id()?.to_owned();
@@ -266,7 +269,7 @@ impl TemplateCommand {
             Self::Unarchive(a) => {
                 validate::template_ids_within(&a.ids, limits::MAX_TEMPLATE_ARCHIVE_IDS)?;
                 let waba = app.ctx()?.require_waba_id()?.to_owned();
-                send_bulk(app, &templates::unarchive(&waba, &a.ids)).await
+                send_bulk(app, &templates::unarchive(&waba, &a.ids), &a.ids).await
             }
             Self::Unpause { id } => {
                 validate::template_id(&id)?;
@@ -295,16 +298,16 @@ async fn archive(app: &App, a: &Ids) -> Result<()> {
     if !app.confirm_or_abort(&what)? {
         return Ok(());
     }
-    send_bulk(app, &templates::archive(&waba, &a.ids)).await
+    send_bulk(app, &templates::archive(&waba, &a.ids), &a.ids).await
 }
 
 /// Send a bulk write that answers 200 even when some templates fail. Those are still a
 /// failure for a script, so the response is printed and the exit code says so.
-async fn send_bulk(app: &App, req: &paloma_graph::Request) -> Result<()> {
+async fn send_bulk(app: &App, req: &paloma_graph::Request, ids: &[String]) -> Result<()> {
     let Some(resp) = app.send(req).await? else {
         return Ok(());
     };
-    let out = Output::response(&resp)?;
+    let out = Output::response(&resp)?.id((!ids.is_empty()).then(|| ids.join("\n")));
     let failed = templates::failed_count(&out.data);
     app.out.emit(&out);
     if failed > 0 {
@@ -316,7 +319,7 @@ async fn send_bulk(app: &App, req: &paloma_graph::Request) -> Result<()> {
 }
 
 async fn migrate(app: &App, a: &Migrate) -> Result<()> {
-    validate::numeric_id(&a.from, "--from")?;
+    validate::numeric_id(&a.source_waba_id, "--source-waba-id")?;
     validate::template_ids_within(&a.ids, limits::MAX_TEMPLATE_MIGRATE_IDS)?;
     if a.count
         .is_some_and(|c| c > limits::MAX_TEMPLATE_MIGRATE_COUNT)
@@ -327,17 +330,20 @@ async fn migrate(app: &App, a: &Migrate) -> Result<()> {
         )));
     }
     let waba = app.ctx()?.require_waba_id()?.to_owned();
-    let what = format!("migrate templates from WABA {} to WABA {waba}", a.from);
+    let what = format!(
+        "migrate templates from WABA {} to WABA {waba}",
+        a.source_waba_id
+    );
     if !app.confirm_or_abort(&what)? {
         return Ok(());
     }
     let migration = Migration {
-        source_waba_id: &a.from,
+        source_waba_id: &a.source_waba_id,
         page_number: a.page,
         count: a.count,
         template_ids: &a.ids,
     };
-    send_bulk(app, &templates::migrate(&waba, &migration)).await
+    send_bulk(app, &templates::migrate(&waba, &migration), &a.ids).await
 }
 
 /// Template ids where Meta types them as integers.
@@ -425,10 +431,16 @@ async fn delete(app: &App, a: Delete) -> Result<()> {
     if let Some(name) = &a.name {
         validate::not_blank(name, "template name")?;
     }
-    if let Some(id) = &a.id {
-        validate::template_id(id)?;
-    }
     validate::template_ids(&a.ids)?;
+    let id = match (&a.name, a.ids.as_slice()) {
+        (Some(_), [_, _, ..]) => {
+            return Err(Error::validation(
+                "with a name, pass one --id; without one, --id deletes every id given",
+            ));
+        }
+        (Some(_), [id]) => Some(id.clone()),
+        _ => None,
+    };
     let waba = app.ctx()?.require_waba_id()?.to_owned();
 
     let Some(name) = a.name else {
@@ -440,12 +452,15 @@ async fn delete(app: &App, a: Delete) -> Result<()> {
         if !app.confirm_or_abort(&what)? {
             return Ok(());
         }
+        let ids = a.ids.join("\n");
         return app
-            .send_and_emit(&templates::delete_many(&waba, &a.ids), no_id)
+            .send_and_emit(&templates::delete_many(&waba, &a.ids), |_| {
+                Some(ids.clone())
+            })
             .await;
     };
 
-    let scope = match (&a.id, &a.language) {
+    let scope = match (&id, &a.language) {
         (Some(id), _) => format!("id {id}"),
         (None, Some(language)) => language.clone(),
         (None, None) => "all languages".to_owned(),
@@ -453,7 +468,7 @@ async fn delete(app: &App, a: Delete) -> Result<()> {
     if !app.confirm_or_abort(&format!("delete template '{name}' ({scope})"))? {
         return Ok(());
     }
-    let hsm_id = match (&a.id, &a.language, app.dry_run()) {
+    let hsm_id = match (&id, &a.language, app.dry_run()) {
         (Some(id), _, _) => Some(id.clone()),
         (None, None, _) => None,
         (None, Some(_), true) => Some("<template-id>".to_owned()),
@@ -464,7 +479,7 @@ async fn delete(app: &App, a: Delete) -> Result<()> {
             Some(field_id(&found).ok_or_else(|| Error::other("the template has no id"))?)
         }
     };
-    let primary = a.id.unwrap_or_else(|| name.clone());
+    let primary = id.unwrap_or_else(|| name.clone());
     app.send_and_emit(&templates::delete(&waba, &name, hsm_id.as_deref()), |_| {
         Some(primary.clone())
     })

@@ -66,7 +66,7 @@ paloma send text 15551234567 "preview me" --dry-run -o json
 
 ```bash
 # Templates: fill {{1}} {{2}} variables, and poll until approved
-paloma send template 15551234567 order_ready --lang en_US --body-var Hector --body-var "#4821"
+paloma send template 15551234567 order_ready --language en_US --body-var Hector --body-var "#4821"
 paloma template list
 paloma template watch order_ready          # exits 0 on APPROVED, non-zero on REJECTED
 

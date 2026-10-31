@@ -114,30 +114,42 @@ impl Users {
 }
 #[derive(Debug, Subcommand)]
 pub enum WelcomeSequence {
-    /// List sequences, optionally selecting one ID.
+    /// List the WABA's welcome sequences.
     List {
-        #[arg(long)]
-        id: Option<String>,
-        #[arg(long)]
+        /// Sequences to return. Meta documents no paging for this edge.
+        #[arg(long, value_name = "N")]
         limit: Option<u32>,
+    },
+    /// Show one welcome sequence.
+    Get {
+        /// Sequence id.
+        id: String,
     },
     /// Create a sequence from its JSON content.
     Create {
+        /// Sequence name.
         #[arg(long)]
         name: String,
-        #[arg(long)]
+        /// The sequence content: text, autofill_message and ice_breakers (JSON).
+        #[arg(short = 'f', long)]
         file: PathBuf,
     },
-    /// Update a sequence's name and/or JSON content.
-    Set {
+    /// Change a sequence's name, content or both.
+    Update {
+        /// Sequence id.
         id: String,
+        /// New name.
         #[arg(long)]
         name: Option<String>,
-        #[arg(long)]
+        /// New content (JSON), as for `create`.
+        #[arg(short = 'f', long)]
         file: Option<PathBuf>,
     },
     /// Delete a sequence (Meta refuses sequences used in active ads).
-    Delete { id: String },
+    Delete {
+        /// Sequence id.
+        id: String,
+    },
 }
 fn content(path: &Path) -> Result<Value> {
     let body = read_json(path)?;
@@ -209,13 +221,16 @@ const IN_ADS: &str = "change or delete a welcome sequence used by click-to-Whats
 impl WelcomeSequence {
     pub async fn run(self, app: &App) -> Result<()> {
         let req = match self {
-            Self::List { id, limit } => {
-                if let Some(id) = &id {
-                    validate::numeric_id(id, "sequence id")?;
-                }
+            Self::List { limit } => {
                 validate::page_size(limit, None)?;
                 let waba = app.ctx()?.require_waba_id()?.to_owned();
-                let req = account::welcome_sequences(&waba, id.as_deref(), limit);
+                let req = account::welcome_sequences(&waba, None, limit);
+                return list_sequences(app, &req).await;
+            }
+            Self::Get { id } => {
+                validate::numeric_id(&id, "sequence id")?;
+                let waba = app.ctx()?.require_waba_id()?.to_owned();
+                let req = account::welcome_sequences(&waba, Some(&id), None);
                 return list_sequences(app, &req).await;
             }
             Self::Delete { id } => {
@@ -232,7 +247,7 @@ impl WelcomeSequence {
                 let waba = app.ctx()?.require_waba_id()?.to_owned();
                 account::create_welcome_sequence(&waba, &name, &sequence)
             }
-            Self::Set { id, name, file } => {
+            Self::Update { id, name, file } => {
                 validate::numeric_id(&id, "sequence id")?;
                 if name.is_none() && file.is_none() {
                     return Err(Error::validation("pass --name or --file"));

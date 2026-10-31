@@ -82,15 +82,16 @@ in uppercase. Any other value exits `5` before the PIN is read or a request is s
 The flag applies only when first registering a number. To enable, change or disable local
 storage on a registered number, deregister it, use the
 [Settings API](https://developers.facebook.com/documentation/business-messaging/whatsapp/reference/whatsapp-business-phone-number/settings-api),
-then register again without this flag. Use `number settings storage` for that settings change.
+then register again without this flag. Use `number settings set --storage-region` for that change.
 Deregistering doesn't turn local storage off.
 
-## `paloma number set-pin`
+## `paloma number pin set`
 
-Set or update the two-step verification PIN.
+Replace the two-step verification PIN. The old PIN stops working, so it confirms first.
 
 ```bash
-paloma number set-pin               # prompts for the PIN
+paloma number pin set               # prompts for the PIN and the confirmation
+PALOMA_PIN="$PIN" paloma number pin set --yes
 ```
 
 ### Passing the PIN in scripts
@@ -114,20 +115,20 @@ Add a number to the WABA, verify ownership, then register it for Cloud API use:
 
 ```bash
 paloma number add 15551234567 --cc 1 --name 'Acme Support'
-paloma number request-code --method SMS --language en_US --yes
+paloma number verification request --method SMS --language en_US --yes
 # Put the returned number ID in the selected profile before verifying/registering.
-paloma number verify-code --code-stdin
+paloma number verification confirm --code-stdin
 paloma number register --pin-stdin
 ```
 
 `add <phone_number> --cc <code> --name <name>` takes digits without `+`, with or without
 the country calling code, plus the calling code Meta requires, and prints the new number
-ID under `-q`. Adding a number does not register it. `request-code`
+ID under `-q`. Adding a number does not register it. `verification request`
 uses the active phone-number ID, accepts `--method SMS|VOICE`, and defaults
 `--language` to `en_US`. It confirms before triggering a text or phone call; an
 already verified number can be refused by Meta.
 
-`verify-code` reads the numeric code from `PALOMA_VERIFICATION_CODE`, `--code-stdin`
+`verification confirm` reads the numeric code from `PALOMA_VERIFICATION_CODE`, `--code-stdin`
 or a hidden prompt. Codes never belong in argv. Dry-run and verbose request output
 mask the code. The separate `register --pin-stdin` input is the two-step PIN.
 
@@ -138,25 +139,25 @@ so `-q` produces no stdout.
 ## Display names and search visibility
 
 ```bash
-paloma number set-name 'Acme Support' --dry-run
-paloma number search-visibility HIDDEN --yes
+paloma number name set 'Acme Support' --dry-run
+paloma number visibility set HIDDEN --yes
 ```
 
-`set-name <name>` submits `new_display_name` for Meta's review. It does not promise
-approval or immediate activation. `search-visibility <VISIBLE|HIDDEN>` changes search
+`name set <name>` submits `new_display_name` for Meta's review. It does not promise
+approval or immediate activation. `visibility set <VISIBLE|HIDDEN>` changes search
 visibility without changing the username. Both confirm before writing.
 
 ## `paloma number username`
 
 ```text
 paloma number username get
-paloma number username reserved
+paloma number username list
 paloma number username set <username> [--force-transfer]
 paloma number username delete
 ```
 
 `get -q` prints the current username; JSON/raw preserve approval status.
-`reserved` reads the suggestions reserved for the portfolio. Adoption, transfer and
+`list` reads the usernames reserved for the portfolio. Adoption, transfer and
 deletion confirm and honor `--yes` and `--dry-run`.
 
 Usernames must contain 3–35 ASCII letters, digits, periods or underscores, with at
@@ -187,17 +188,18 @@ Both preserve Meta's response, and deletion confirms before writing. If Meta rep
 
 ```bash
 paloma number settings get -o json
-paloma number settings identity-check --enabled true --dry-run
-paloma number settings storage --region IN --dry-run
-paloma number settings storage --disable --dry-run
+paloma number settings set --identity-check --dry-run
+paloma number settings set --storage-region IN --dry-run
+paloma number settings set --no-storage --dry-run
 ```
 
-`get` reads settings without requesting SIP credentials. Writes confirm; one feature
-is sent per request. `identity-check` requires an explicit `--enabled <true|false>` value and controls Meta's
+`get` reads settings without requesting SIP credentials. `set` changes exactly one
+setting per call and confirms, because a storage change needs a deregistered number and
+must not hold back an identity change. `--identity-check`/`--no-identity-check` controls Meta's
 `user_identity_change.enable_identity_key_check`. Delivery with an identity hash is
 still subject to Meta's identity comparison.
 
-`storage` accepts exactly one of `--region <CC>` or `--disable`. Supported countries
+Storage takes `--storage-region <CC>` to turn it on, or `--no-storage` to turn it off. Supported countries
 are the same as registration's `--data-localization-region`. **The number must already
 be deregistered.** After changing storage, register it again without the localization
 flag. Paloma does not automatically deregister or re-register it. The focused

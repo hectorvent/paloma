@@ -79,8 +79,8 @@ These override the config file (and are themselves overridden by flags):
 | `PALOMA_PHONE_NUMBER_ID` | sender phone number ID |
 | `PALOMA_WABA_ID` | WABA ID |
 | `PALOMA_MESSAGING_ACCOUNT_ID` | Messaging account to bill for `send` commands |
-| `PALOMA_VERIFICATION_CODE` | ownership code for `number verify-code`; alternatively use `--code-stdin` |
-| `PALOMA_PIN` | two-step verification PIN for `number register` and `number set-pin` |
+| `PALOMA_VERIFICATION_CODE` | ownership code for `number verification confirm`; alternatively use `--code-stdin` |
+| `PALOMA_PIN` | two-step verification PIN for `number register` and `number pin set` |
 | `PALOMA_VERIFY_TOKEN` | verify token for `webhook subscribe`, `webhook fields set --callback-url`, `webhook verify-url` and `webhook listen` |
 | `PALOMA_API_VERSION` | Graph API version |
 | `PALOMA_APP_ID` | Meta App ID (app-level webhook field subscriptions and upload handles; also `--app-id`) |
@@ -91,7 +91,7 @@ These override the config file (and are themselves overridden by flags):
 | `NO_COLOR` | disables ANSI color |
 
 > `PALOMA_APP_ID` has no config-file key yet; set it via the env var or `--app-id`
-> (or let `paloma webhook fields` auto-discover it from the subscribed app). See
+> (or let `paloma webhook fields get` auto-discover it from the subscribed app). See
 > [webhook fields](commands/webhook.md#paloma-webhook-fields).
 
 ## Security notes

@@ -13,7 +13,7 @@ pub enum GroupCommand {
         id: String,
     },
     /// Change a template group's name or description, or add and remove templates.
-    Set(GroupSet),
+    Update(GroupUpdateArgs),
     /// Delete a template group. Its templates stay.
     Delete {
         /// Template group id.
@@ -29,8 +29,14 @@ pub struct GroupCreate {
     /// Group description (up to 512 characters).
     #[arg(long)]
     pub(super) description: Option<String>,
-    /// Template ids, comma-separated. A template can be in one group at a time.
-    #[arg(long, required = true, value_delimiter = ',', value_name = "ID,...")]
+    /// Template id; repeat it or separate ids with commas. A template can be in one group at
+    /// a time.
+    #[arg(
+        long = "template",
+        required = true,
+        value_delimiter = ',',
+        value_name = "ID,..."
+    )]
     pub(super) templates: Vec<String>,
 }
 
@@ -41,7 +47,7 @@ pub struct GroupCreate {
         .multiple(true)
         .args(["name", "description", "add", "remove"])
 ))]
-pub struct GroupSet {
+pub struct GroupUpdateArgs {
     /// Template group id.
     pub(super) id: String,
     /// New name (up to 256 characters).
@@ -50,10 +56,11 @@ pub struct GroupSet {
     /// New description (up to 512 characters).
     #[arg(long)]
     pub(super) description: Option<String>,
-    /// Template ids to add, comma-separated.
+    /// Template id to add; repeat it or separate ids with commas.
     #[arg(long, value_delimiter = ',', value_name = "ID,...")]
     pub(super) add: Vec<String>,
-    /// Template ids to remove, comma-separated. Metrics they contributed stay with the group.
+    /// Template id to remove; repeat it or separate ids with commas. Metrics it contributed
+    /// stay with the group.
     #[arg(long, value_delimiter = ',', value_name = "ID,...")]
     pub(super) remove: Vec<String>,
 }
@@ -82,7 +89,7 @@ pub(super) async fn group(app: &App, command: GroupCommand) -> Result<()> {
             app.send_and_emit(&templates::group_get(&id), field_id)
                 .await
         }
-        GroupCommand::Set(a) => {
+        GroupCommand::Update(a) => {
             validate::numeric_id(&a.id, "template group id")?;
             a.name.as_deref().map_or(Ok(()), name_ok)?;
             a.description.as_deref().map_or(Ok(()), description_ok)?;

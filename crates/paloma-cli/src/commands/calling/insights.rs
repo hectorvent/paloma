@@ -49,8 +49,8 @@ pub struct Analytics {
     end: String,
     #[arg(long, value_enum, default_value = "day")]
     granularity: Granularity,
-    /// E.164 phone number; repeat or comma-separate.
-    #[arg(long, value_delimiter = ',')]
+    /// Only this business phone number, in E.164 (not its id); repeat it or use commas.
+    #[arg(long = "phone", value_delimiter = ',', value_name = "E164,...")]
     phone_number: Vec<String>,
     /// Uppercase two-letter country code; repeat or comma-separate.
     #[arg(long, value_delimiter = ',')]

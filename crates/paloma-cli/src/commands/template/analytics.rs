@@ -32,20 +32,21 @@ pub(super) enum ProductType {
 #[derive(Debug, Args)]
 #[command(group(ArgGroup::new("subject").required(true).args(["ids", "groups"])))]
 pub struct Analytics {
-    /// Template ids, comma-separated (up to 10).
-    #[arg(long, value_delimiter = ',', value_name = "ID,...")]
+    /// Template id; repeat it or separate ids with commas (up to 10).
+    #[arg(long = "id", value_delimiter = ',', value_name = "ID,...")]
     pub(super) ids: Vec<String>,
-    /// Template group ids instead, comma-separated (up to 10).
-    #[arg(long, value_delimiter = ',', value_name = "ID,...")]
+    /// Template group id instead; repeat it or separate ids with commas (up to 10).
+    #[arg(long = "group", value_delimiter = ',', value_name = "ID,...")]
     pub(super) groups: Vec<String>,
-    /// Start of the range: a UNIX timestamp or YYYY-MM-DD, within the last 90 days.
-    #[arg(long)]
+    /// Start of the range: UNIX seconds or YYYY-MM-DD, within the last 90 days.
+    #[arg(long, value_name = "TIME")]
     pub(super) start: String,
-    /// End of the range: a UNIX timestamp or YYYY-MM-DD.
-    #[arg(long)]
+    /// End of the range: UNIX seconds or YYYY-MM-DD.
+    #[arg(long, value_name = "TIME")]
     pub(super) end: String,
-    /// Metrics to return, comma-separated, e.g. sent,delivered,read. All of them by default.
-    #[arg(long, value_delimiter = ',', value_name = "METRIC,...")]
+    /// Metric to return, e.g. sent; repeat it or separate metrics with commas. All of them
+    /// by default.
+    #[arg(long = "metric", value_delimiter = ',', value_name = "METRIC,...")]
     pub(super) metrics: Vec<String>,
     /// Which API's sends to count. Meta counts only the Cloud API's by default.
     #[arg(long, value_enum, conflicts_with = "groups")]

@@ -7,7 +7,7 @@ use clap::{Args, Subcommand};
 use paloma_core::{Error, Result, limits, validate};
 use paloma_graph::api::{account, webhook};
 
-use super::util::read_json;
+use super::util::{read_json, toggle};
 use crate::{cli::Format, output::Output};
 use paloma_graph::Request;
 use serde_json::json;
@@ -44,13 +44,15 @@ pub enum AccountCommand {
     Set(SetArgs),
     /// Estimate marketing deliveries and costs at several max prices.
     Reach(administration::Reach),
-    /// List assigned users or WABA system users.
-    Users(administration::Users),
+    /// List the people and system users with access to the WABA.
+    #[command(subcommand)]
+    Users(UsersCommand),
     /// Manage click-to-WhatsApp welcome message sequences.
     #[command(subcommand)]
     WelcomeSequence(administration::WelcomeSequence),
-    /// List account activity history.
-    Activities(ActivitiesArgs),
+    /// Read the account's activity history.
+    #[command(subcommand)]
+    Activity(ActivityCommand),
     /// Clone an account and explicitly switch billing currency.
     #[command(subcommand)]
     BillingCurrency(BillingCurrency),
@@ -60,8 +62,27 @@ pub enum AccountCommand {
     Health,
     /// Report messaging counts or pricing analytics.
     Analytics(Analytics),
-    /// List apps subscribed to the WABA.
-    SubscribedApps(Pagination),
+    /// Read the apps subscribed to the WABA's webhooks.
+    #[command(subcommand)]
+    Apps(AppsCommand),
+}
+
+#[derive(Debug, Subcommand)]
+pub enum UsersCommand {
+    /// List assigned users, or the WABA's system users with --system.
+    List(administration::Users),
+}
+
+#[derive(Debug, Subcommand)]
+pub enum ActivityCommand {
+    /// List account activity, newest first.
+    List(ActivitiesArgs),
+}
+
+#[derive(Debug, Subcommand)]
+pub enum AppsCommand {
+    /// List the apps subscribed to the WABA.
+    List(Pagination),
 }
 
 #[derive(Debug, Args)]
@@ -81,22 +102,23 @@ pub struct LimitsArgs {
 
 #[derive(Debug, Args)]
 pub struct SetArgs {
+    /// The WABA's name.
     #[arg(long)]
     name: Option<String>,
     /// Graph timezone identifier (not an IANA timezone name).
     #[arg(long)]
     timezone_id: Option<String>,
-    /// Enroll in template insights (irreversible); false is refused.
-    #[arg(long, action = clap::ArgAction::Set)]
-    insights: Option<bool>,
-    /// Enroll in template insights (irreversible), exclusive with other settings.
-    #[arg(long, conflicts_with_all = ["name", "timezone_id", "insights", "disable_cloud_marketing", "file"])]
-    enable_insights: bool,
-    /// Reject marketing templates on Cloud API; onboard to MM API first.
-    #[arg(long, visible_alias = "disable-marketing-messages-on-cloud-api", action = clap::ArgAction::Set)]
-    disable_cloud_marketing: Option<bool>,
+    /// Enroll in template insights. Meta can't undo it, so it goes alone and confirms.
+    #[arg(long, conflicts_with_all = ["name", "timezone_id", "cloud_marketing", "no_cloud_marketing"])]
+    insights: bool,
+    /// Let marketing templates go out through Cloud API again.
+    #[arg(long, overrides_with = "no_cloud_marketing")]
+    cloud_marketing: bool,
+    /// Refuse marketing templates on Cloud API, so they go through MM API; onboard there first.
+    #[arg(long, overrides_with = "cloud_marketing")]
+    no_cloud_marketing: bool,
     /// Full writable account object (JSON), exclusive with typed settings.
-    #[arg(long, conflicts_with_all = ["name", "timezone_id", "insights", "disable_cloud_marketing", "enable_insights"])]
+    #[arg(short = 'f', long, conflicts_with_all = ["name", "timezone_id", "insights", "cloud_marketing", "no_cloud_marketing"])]
     file: Option<PathBuf>,
 }
 
@@ -114,12 +136,9 @@ impl SetArgs {
             account::Settings {
                 name: self.name,
                 timezone_id: self.timezone_id,
-                insights: if self.enable_insights {
-                    Some(true)
-                } else {
-                    self.insights
-                },
-                disable_cloud_marketing: self.disable_cloud_marketing,
+                insights: self.insights.then_some(true),
+                disable_cloud_marketing: toggle(self.cloud_marketing, self.no_cloud_marketing)
+                    .map(|allowed| !allowed),
             }
             .body()
         };
@@ -170,7 +189,7 @@ impl AccountCommand {
         if let Self::Reach(command) = self {
             return command.run(app).await;
         }
-        if let Self::Users(command) = self {
+        if let Self::Users(UsersCommand::List(command)) = self {
             return command.run(app).await;
         }
         if let Self::WelcomeSequence(command) = self {
@@ -221,12 +240,12 @@ impl AccountCommand {
                 .send_and_emit(&account::portfolio_limit(id), no_id)
                 .await;
         }
-        if let Self::Activities(args) = &self {
+        if let Self::Activity(ActivityCommand::List(args)) = &self {
             validate::page_size(args.page.limit, Some(limits::MAX_ACTIVITIES_PAGE))?;
         }
         let waba = app.ctx()?.require_waba_id()?.to_owned();
         match self {
-            Self::Activities(a) => {
+            Self::Activity(ActivityCommand::List(a)) => {
                 super::listing::list(
                     app,
                     &a.page,
@@ -273,7 +292,7 @@ impl AccountCommand {
                 )
                 .await
             }
-            Self::SubscribedApps(a) => {
+            Self::Apps(AppsCommand::List(a)) => {
                 super::listing::list(
                     app,
                     &a,

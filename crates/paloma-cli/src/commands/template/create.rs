@@ -41,7 +41,7 @@ pub(super) async fn create(app: &App, a: Create) -> Result<()> {
         .await
 }
 
-pub(super) async fn edit(app: &App, a: Edit) -> Result<()> {
+pub(super) async fn update(app: &App, a: Update) -> Result<()> {
     let body = read_json(&a.file)?;
     let waba = app.ctx()?.require_waba_id()?.to_owned();
     let id = if app.dry_run() {
@@ -52,6 +52,13 @@ pub(super) async fn edit(app: &App, a: Edit) -> Result<()> {
                 .await?;
         field_id(&t).ok_or_else(|| Error::other("template has no id"))?
     };
+    if !app.confirm_or_abort(&format!(
+        "change template '{}' with {}; an approved template goes back to review",
+        a.name,
+        a.file.display()
+    ))? {
+        return Ok(());
+    }
     app.send_and_emit(&templates::edit(&id, body), |_| Some(id.clone()))
         .await
 }
@@ -118,14 +125,14 @@ pub struct Create {
 }
 
 #[derive(Debug, Args)]
-pub struct Edit {
+pub struct Update {
     /// Template name.
     pub(super) name: String,
     /// Language code (required when the template exists in several).
     #[arg(long)]
     pub(super) language: Option<String>,
     /// JSON body with the fields to change (e.g. components, category).
-    #[arg(long)]
+    #[arg(short = 'f', long)]
     pub(super) file: PathBuf,
 }
 
@@ -211,6 +218,12 @@ pub(super) async fn upsert(app: &App, file: &std::path::Path) -> Result<()> {
         )));
     }
     let waba = app.ctx()?.require_waba_id()?.to_owned();
+    let count = languages.len();
+    if !app.confirm_or_abort(&format!(
+        "create or replace authentication template '{name}' in {count} language(s)"
+    ))? {
+        return Ok(());
+    }
     if let Some(resp) = app.send(&templates::upsert(&waba, body)).await? {
         let out = Output::response(&resp)?.table("/data", UPSERT_COLUMNS);
         let id = out.data.pointer("/data/0").and_then(field_id);

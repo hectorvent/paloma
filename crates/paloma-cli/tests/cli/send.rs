@@ -168,7 +168,15 @@ fn reply_to_quotes_the_message_on_every_send_type_that_allows_it() {
     let to = "15551234567";
     let cases: Vec<Vec<&str>> = vec![
         vec!["text", to, "hi"],
-        vec!["template", "--via", "cloud", to, "order", "--lang", "en_US"],
+        vec![
+            "template",
+            "--via",
+            "cloud",
+            to,
+            "order",
+            "--language",
+            "en_US",
+        ],
         vec!["image", to, "--id", "9"],
         vec!["document", to, "--id", "9"],
         vec!["audio", to, "--id", "9"],
@@ -244,7 +252,15 @@ fn reply_to_is_refused_where_it_cannot_apply_or_is_blank() {
     std::fs::write(&contacts, r#"[{"name":{"formatted_name":"A"}}]"#).unwrap();
     let blank: [&[&str]; 6] = [
         &["text", to, "hi"],
-        &["template", "--via", "cloud", to, "order", "--lang", "en_US"],
+        &[
+            "template",
+            "--via",
+            "cloud",
+            to,
+            "order",
+            "--language",
+            "en_US",
+        ],
         &["image", to, "--id", "9"],
         &["location", to, "--lat", "1", "--long", "2"],
         &["contact", to, "--file", contacts.to_str().unwrap()],
@@ -339,7 +355,7 @@ async fn reply_to_on_a_template_warns_on_stderr_and_still_sends() {
             "cloud",
             "15551234567",
             "order",
-            "--lang",
+            "--language",
             "en_US",
         ])
         .args(["--reply-to", "wamid.X", "-q"])
@@ -622,7 +638,7 @@ fn every_send_verb_addresses_a_bsuid_with_recipient() {
         ("text", vec!["text", BSUID, "hi"]),
         (
             "template",
-            vec!["template", "--via", "cloud", BSUID, "t", "--lang", "en"],
+            vec!["template", "--via", "cloud", BSUID, "t", "--language", "en"],
         ),
         ("image", vec!["image", BSUID, "--id", "9"]),
         ("document", vec!["document", BSUID, "--id", "9"]),

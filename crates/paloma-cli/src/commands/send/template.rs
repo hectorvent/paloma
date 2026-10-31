@@ -12,7 +12,7 @@ pub struct Template {
     pub(super) name: String,
     /// Template language code, e.g. en_US.
     #[arg(long)]
-    pub(super) lang: String,
+    pub(super) language: String,
     /// Treat the recipient as a group ID (see `paloma group`).
     #[arg(long)]
     pub(super) group: bool,
@@ -100,7 +100,7 @@ pub(super) async fn send(app: &App, a: Template) -> Result<()> {
         (true, _) => TemplateVia::Cloud,
     };
     validate::not_blank(&a.name, "template name")?;
-    validate::not_blank(&a.lang, "--lang")?;
+    validate::not_blank(&a.language, "--language")?;
     let reply_to = a.reply.id()?;
     let components = if let Some(path) = &a.components_file {
         template_components_file(path)?
@@ -137,14 +137,20 @@ pub(super) async fn send(app: &App, a: Template) -> Result<()> {
         app,
         messages::with_marketing_options(
             addressed(
-                messages::template_with_components(&a.to, &a.name, &a.lang, components, reply_to),
+                messages::template_with_components(
+                    &a.to,
+                    &a.name,
+                    &a.language,
+                    components,
+                    reply_to,
+                ),
                 a.group,
             ),
             a.product_policy.map(ProductPolicy::api),
             a.message_activity_sharing,
         ),
         &a.name,
-        &a.lang,
+        &a.language,
         via,
     )
     .await

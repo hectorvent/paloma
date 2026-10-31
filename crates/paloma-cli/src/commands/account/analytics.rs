@@ -36,8 +36,8 @@ pub struct Analytics {
     /// Query pricing/cost and delivered volume instead of sent/delivered counts.
     #[arg(long)]
     pricing: bool,
-    /// E.164 phone number (not an id); repeat or comma-separate.
-    #[arg(long, value_delimiter = ',')]
+    /// Only this business phone number, in E.164 (not its id); repeat it or use commas.
+    #[arg(long = "phone", value_delimiter = ',', value_name = "E164,...")]
     phone_number: Vec<String>,
     /// Uppercase two-letter country code; repeat or comma-separate.
     #[arg(long, value_delimiter = ',')]

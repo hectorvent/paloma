@@ -37,34 +37,26 @@ pub enum NumberCommand {
     Register(RegisterArgs),
     /// Deregister the number.
     Deregister,
-    /// Request an ownership verification code by SMS or voice.
-    RequestCode {
-        #[arg(long, value_enum)]
-        method: CodeMethod,
-        #[arg(long, default_value = "en_US")]
-        language: String,
-    },
-    /// Verify ownership using PALOMA_VERIFICATION_CODE or stdin.
-    VerifyCode {
-        #[arg(long)]
-        code_stdin: bool,
-    },
-    /// Add a phone number to the selected WABA; verification and registration follow.
+    /// Prove you own the number with a code sent by SMS or voice call.
+    #[command(subcommand)]
+    Verification(Verification),
+    /// Add a phone number to the active WABA; verification and registration follow.
     Add {
+        /// The number in international digits, without the calling code or a plus sign.
         phone_number: String,
-        /// Country calling code, such as 1 or 52.
+        /// Country calling code (not a country), such as 1 or 52.
         #[arg(long)]
         cc: String,
+        /// Display name, which Meta reviews.
         #[arg(long)]
         name: String,
     },
-    /// Submit a new display name for review.
-    SetName { name: String },
-    /// Set whether this business number is visible in search.
-    SearchVisibility {
-        #[arg(value_enum)]
-        visibility: SearchVisibility,
-    },
+    /// Change the display name.
+    #[command(subcommand)]
+    Name(NameCommand),
+    /// Change whether people can find the number in WhatsApp search.
+    #[command(subcommand)]
+    Visibility(VisibilityCommand),
     /// Inspect or apply for Official Business Account status.
     #[command(subcommand)]
     Oba(admin::ObaCommand),
@@ -80,8 +72,52 @@ pub enum NumberCommand {
     /// Configure local storage and identity checks.
     #[command(subcommand)]
     Settings(settings::SettingsCommand),
-    /// Set the two-step verification PIN.
-    SetPin(PinInput),
+    /// Change the two-step verification PIN.
+    #[command(subcommand)]
+    Pin(PinCommand),
+}
+
+#[derive(Debug, Subcommand)]
+pub enum Verification {
+    /// Send an ownership verification code by SMS or voice call.
+    Request {
+        /// How Meta delivers the code.
+        #[arg(long, value_enum)]
+        method: CodeMethod,
+        /// Language of the message or call.
+        #[arg(long, default_value = "en_US")]
+        language: String,
+    },
+    /// Confirm ownership with the code from PALOMA_VERIFICATION_CODE, stdin or a prompt.
+    Confirm {
+        /// Read the code from stdin.
+        #[arg(long)]
+        code_stdin: bool,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+pub enum NameCommand {
+    /// Submit a new display name for review.
+    Set {
+        /// The new display name.
+        name: String,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+pub enum VisibilityCommand {
+    /// Set whether the number shows up in WhatsApp search.
+    Set {
+        #[arg(value_enum)]
+        visibility: SearchVisibility,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+pub enum PinCommand {
+    /// Replace the two-step verification PIN.
+    Set(PinInput),
 }
 
 #[derive(Debug, Args)]
@@ -126,7 +162,7 @@ pub struct RegisterArgs {
     pin: PinInput,
     /// Store message data at rest in this country (AE, AU, BH, BR, CA, CH, DE, GB, ID, IN,
     /// JP, KR, SG, ZA). First registration only: a registered number changes this through
-    /// number settings storage after deregistering.
+    /// `number settings set --storage-region` after deregistering.
     #[arg(long, value_name = "CC")]
     data_localization_region: Option<String>,
 }
@@ -239,7 +275,7 @@ impl NumberCommand {
             Self::Username(command) => command.run(app).await,
             Self::Contacts(command) => command.run(app).await,
             Self::Settings(command) => command.run(app).await,
-            Self::RequestCode { method, language } => {
+            Self::Verification(Verification::Request { method, language }) => {
                 validate::not_blank(&language, "language")?;
                 let phone = app.ctx()?.require_phone_number_id()?.to_owned();
                 if !app.confirm_or_abort(&format!(
@@ -257,7 +293,7 @@ impl NumberCommand {
                 )
                 .await
             }
-            Self::VerifyCode { code_stdin } => {
+            Self::Verification(Verification::Confirm { code_stdin }) => {
                 let code = read_secret(
                     app,
                     &SecretSource {
@@ -298,7 +334,7 @@ impl NumberCommand {
                 )
                 .await
             }
-            Self::SetName { name } => {
+            Self::Name(NameCommand::Set { name }) => {
                 validate::not_blank(&name, "display name")?;
                 let phone = app.ctx()?.require_phone_number_id()?.to_owned();
                 if !app
@@ -309,7 +345,7 @@ impl NumberCommand {
                 app.send_and_emit(&phone_numbers::set_name(&phone, &name), no_id)
                     .await
             }
-            Self::SearchVisibility { visibility } => {
+            Self::Visibility(VisibilityCommand::Set { visibility }) => {
                 let phone = app.ctx()?.require_phone_number_id()?.to_owned();
                 if !app.confirm_or_abort(&format!("change search visibility for number {phone}"))? {
                     return Ok(());
@@ -321,9 +357,14 @@ impl NumberCommand {
                 app.send_and_emit(&phone_numbers::search_visibility(&phone, value), no_id)
                     .await
             }
-            Self::SetPin(input) => {
+            Self::Pin(PinCommand::Set(input)) => {
                 let pin = input.read(app)?;
                 let phone = app.ctx()?.require_phone_number_id()?.to_owned();
+                if !app.confirm_or_abort(&format!(
+                    "replace the two-step verification PIN of number {phone}; the old PIN stops working"
+                ))? {
+                    return Ok(());
+                }
                 app.send_and_emit(&phone_numbers::set_pin(&phone, pin.expose_secret()), no_id)
                     .await
             }

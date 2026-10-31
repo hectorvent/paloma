@@ -39,7 +39,7 @@ async fn template_components_file_preserves_payload_and_redacts_dry_runs() {
                     "cloud",
                     "15551234567",
                     "order_ready",
-                    "--lang",
+                    "--language",
                     "en_US",
                     "--components-file",
                 ])
@@ -73,7 +73,7 @@ async fn template_components_file_preserves_payload_and_redacts_dry_runs() {
                 "cloud",
                 "15551234567",
                 "order_ready",
-                "--lang",
+                "--language",
                 "en_US",
                 "--components-file",
             ])
@@ -120,7 +120,7 @@ async fn template_text_flags_accept_values_starting_with_a_hyphen() {
             "cloud",
             "15551234567",
             "sale",
-            "--lang",
+            "--language",
             "en_US",
             "--header-text",
             "-50% today",
@@ -185,7 +185,7 @@ async fn template_typed_flags_send_the_exact_components_in_order() {
             "15551234567",
             "order_ready",
         ])
-        .args(["--lang", "en_US", "--header-image", "MEDIA1"])
+        .args(["--language", "en_US", "--header-image", "MEDIA1"])
         .args(["--var", "first_name=Ana"])
         .args(["--button", "0:url=a=b:c"])
         .args(["--button", "1:quick_reply=STOP"])
@@ -214,7 +214,7 @@ fn template_media_header_is_an_id_or_a_link_and_a_dry_run_masks_secrets() {
                 "cloud",
                 "15551234567",
                 "t",
-                "--lang",
+                "--language",
                 "en",
             ])
             .args(args)
@@ -265,7 +265,7 @@ fn template_header_flags_and_the_components_file_conflict() {
                 "cloud",
                 "15551234567",
                 "t",
-                "--lang",
+                "--language",
                 "en",
             ])
             .args(args)
@@ -311,7 +311,7 @@ fn template_bad_typed_flags_exit_5_without_echoing_the_value() {
                 "cloud",
                 "15551234567",
                 "t",
-                "--lang",
+                "--language",
                 "en",
             ])
             .args(args)
@@ -332,7 +332,7 @@ fn template_uppercase_link_is_a_link_and_stays_masked_everywhere() {
         "cloud",
         "15551234567",
         "t",
-        "--lang",
+        "--language",
         "en",
         "--header-image",
         "HTTPS://x.test/a.png?access_token=SECRET",
@@ -378,7 +378,7 @@ fn template_documented_flag_combinations_work() {
                 "cloud",
                 "15551234567",
                 "t",
-                "--lang",
+                "--language",
                 "en",
             ])
             .args(args)
@@ -399,7 +399,7 @@ fn template_blank_body_var_exits_5_without_a_request() {
             "cloud",
             "15551234567",
             "sale",
-            "--lang",
+            "--language",
             "en_US",
             "--body-var",
             "   ",
@@ -452,7 +452,7 @@ async fn template_text_flags_send_named_or_positional_body_with_header() {
             "cloud",
             "15551234567",
             "order_ready",
-            "--lang",
+            "--language",
             "en_US",
         ]);
         if positional {
@@ -490,7 +490,7 @@ fn template_parameter_errors_fail_before_context_resolution() {
                 "cloud",
                 "15551234567",
                 "order_ready",
-                "--lang",
+                "--language",
                 "en_US",
             ])
             .args(args)
@@ -518,7 +518,7 @@ fn template_parameter_errors_fail_before_context_resolution() {
                 "cloud",
                 "15551234567",
                 "order_ready",
-                "--lang",
+                "--language",
                 "en_US",
                 "--components-file",
             ])
@@ -535,7 +535,7 @@ fn template_parameter_errors_fail_before_context_resolution() {
             "cloud",
             "15551234567",
             "order_ready",
-            "--lang",
+            "--language",
             "en_US",
             "--components-file",
         ])
@@ -563,7 +563,7 @@ fn template_parameter_sources_conflict_as_usage_errors() {
                 "cloud",
                 "15551234567",
                 "order_ready",
-                "--lang",
+                "--language",
                 "en_US",
             ])
             .args(args)
@@ -592,7 +592,15 @@ async fn an_authentication_template_to_a_bsuid_surfaces_metas_refusal() {
     let home = TempDir::new().unwrap();
     paloma(Some(&graph), &home)
         .args([
-            "send", "template", "--via", "cloud", BSUID, "otp", "--lang", "en", "-q",
+            "send",
+            "template",
+            "--via",
+            "cloud",
+            BSUID,
+            "otp",
+            "--language",
+            "en",
+            "-q",
         ])
         .assert()
         .code(1)
@@ -656,7 +664,7 @@ async fn template_auto_routes_each_current_category_and_preserves_response_outpu
                     "template",
                     "15551234567",
                     "order",
-                    "--lang",
+                    "--language",
                     "en_US",
                     "-o",
                     format,
@@ -677,7 +685,7 @@ async fn template_auto_routes_each_current_category_and_preserves_response_outpu
                 "template",
                 "15551234567",
                 "order",
-                "--lang",
+                "--language",
                 "en_US",
                 "-q",
             ])
@@ -711,7 +719,7 @@ async fn marketing_route_keeps_bsuid_components_reply_and_the_billed_account() {
             "template",
             BSUID,
             "order",
-            "--lang",
+            "--language",
             "en_US",
             "--messaging-account-id",
             "777",
@@ -756,7 +764,7 @@ async fn explicit_template_routes_skip_metadata_and_need_no_account_context() {
                 "template",
                 "15551234567",
                 "order",
-                "--lang",
+                "--language",
                 "en_US",
                 "--via",
                 via,
@@ -789,7 +797,7 @@ async fn template_routing_dry_runs_are_offline_and_show_dynamic_or_fixed_endpoin
                 "template",
                 "15551234567",
                 "order",
-                "--lang",
+                "--language",
                 "en_US",
                 "--via",
                 via,
@@ -872,7 +880,7 @@ async fn automatic_template_routing_matches_exact_name_and_language_across_pages
             "template",
             "15551234567",
             "order",
-            "--lang",
+            "--language",
             "en_US",
             "-q",
         ])
@@ -904,7 +912,7 @@ async fn template_routing_rejects_missing_unknown_or_ambiguous_metadata_without_
                 "template",
                 "15551234567",
                 "order",
-                "--lang",
+                "--language",
                 "en_US",
             ])
             .assert()
@@ -918,9 +926,16 @@ async fn template_routing_rejects_missing_unknown_or_ambiguous_metadata_without_
 fn template_routing_validates_locally_before_account_resolution() {
     let home = TempDir::new().unwrap();
     for args in [
-        vec!["bad", "order", "--lang", "en_US"],
-        vec!["15551234567", "order", "--lang", "en_US", "--var", "bad"],
-        vec!["15551234567", "order", "--lang", " "],
+        vec!["bad", "order", "--language", "en_US"],
+        vec![
+            "15551234567",
+            "order",
+            "--language",
+            "en_US",
+            "--var",
+            "bad",
+        ],
+        vec!["15551234567", "order", "--language", " "],
     ] {
         paloma(None, &home)
             .env_remove("PALOMA_WABA_ID")
@@ -939,7 +954,7 @@ fn template_routing_validates_locally_before_account_resolution() {
             "template",
             "15551234567",
             "order",
-            "--lang",
+            "--language",
             "en_US",
             "--dry-run",
         ])
@@ -953,7 +968,7 @@ fn template_routing_validates_locally_before_account_resolution() {
             "template",
             "15551234567",
             "order",
-            "--lang",
+            "--language",
             "en_US",
             "--via",
             "unknown",
@@ -1010,7 +1025,7 @@ async fn automatic_template_routing_reroutes_once_after_confirmed_category_chang
                 "template",
                 "15551234567",
                 "order",
-                "--lang",
+                "--language",
                 "en_US",
                 "-q",
             ])
@@ -1046,7 +1061,7 @@ async fn automatic_template_routing_stops_if_refresh_does_not_change_the_endpoin
             "template",
             "15551234567",
             "order",
-            "--lang",
+            "--language",
             "en_US",
             "-q",
         ])
@@ -1079,7 +1094,7 @@ async fn automatic_template_routing_never_loops_on_a_second_rejection() {
             "template",
             "15551234567",
             "order",
-            "--lang",
+            "--language",
             "en_US",
         ])
         .assert()
@@ -1142,7 +1157,7 @@ async fn automatic_template_routing_never_reroutes_ambiguous_or_noncategory_fail
                 "template",
                 "15551234567",
                 "order",
-                "--lang",
+                "--language",
                 "en_US",
                 "--timeout",
                 "200ms",
@@ -1169,7 +1184,7 @@ async fn explicit_template_routing_does_not_refresh_or_override_a_rejected_route
             "template",
             "15551234567",
             "order",
-            "--lang",
+            "--language",
             "en_US",
             "--via",
             "cloud",
@@ -1198,7 +1213,7 @@ async fn automatic_template_routing_surfaces_lookup_auth_errors_without_a_send()
             "template",
             "15551234567",
             "order",
-            "--lang",
+            "--language",
             "en_US",
         ])
         .assert()
@@ -1244,7 +1259,7 @@ async fn template_routing_never_refreshes_http_400_auth_policy_or_unknown_reject
                     "template",
                     "15551234567",
                     "order",
-                    "--lang",
+                    "--language",
                     "en_US",
                     "-q",
                 ])
@@ -1274,7 +1289,14 @@ async fn marketing_options_go_on_the_marketing_route_only() {
         .expect(1)
         .mount(&graph)
         .await;
-    let base = ["send", "template", "15551234567", "sale", "--lang", "en_US"];
+    let base = [
+        "send",
+        "template",
+        "15551234567",
+        "sale",
+        "--language",
+        "en_US",
+    ];
     paloma(Some(&graph), &home)
         .env("PALOMA_PHONE_NUMBER_ID", "111")
         .args(base)

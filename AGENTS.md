@@ -97,8 +97,8 @@ A new command that can't follow one says why in its doc comment.
   A singleton setting takes `get` and `set`. `enable`/`disable` turn a whole feature on
   or off; `clear` empties a list setting.
 - **Groups aren't commands.** `paloma webhook fields` lists its verbs; reading is
-  `webhook fields get`. A sub-resource is a nested group (`number pin set`), never a
-  hyphenated verb (`number set-pin`).
+  `webhook fields get`. A sub-resource is a nested group: `number pin set`, never a
+  hyphenated verb like `number set-pin`.
 - **Arguments.** The resource's own id is positional; every other reference is a flag.
   The recipient of a send is `<TO>`; any other person is `<USER>`.
 - **Booleans** are `--x`/`--no-x` pairs, never `--x <true|false>`.

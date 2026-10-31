@@ -35,7 +35,7 @@ pub enum WebhookCommand {
     },
     /// Remove this app's subscription (and override) from the WABA.
     Unsubscribe,
-    /// Show or change the app-level webhook field subscriptions.
+    /// Show, list or change the app-level webhook field subscriptions.
     Fields(Fields),
     /// Show or change the Graph version of the app's WhatsApp webhooks.
     Version(version::Version),
@@ -85,10 +85,9 @@ enum SignatureMode {
 }
 
 #[derive(Debug, Args)]
-#[command(args_conflicts_with_subcommands = true)]
 pub struct Fields {
     #[command(subcommand)]
-    command: Option<FieldsCommand>,
+    command: FieldsCommand,
 }
 
 /// The token echoed back during Meta's verification handshake: from
@@ -123,6 +122,10 @@ impl VerifyTokenInput {
 
 #[derive(Debug, Subcommand)]
 enum FieldsCommand {
+    /// Show the fields the app is subscribed to.
+    Get,
+    /// List every field that can be subscribed (offline).
+    List,
     /// Replace the subscribed fields.
     Set {
         #[arg(required = true, value_name = "FIELD", value_parser = clap::builder::PossibleValuesParser::new(AVAILABLE_FIELDS))]
@@ -133,8 +136,6 @@ enum FieldsCommand {
         #[command(flatten)]
         verify_token: VerifyTokenInput,
     },
-    /// List every field that can be subscribed (offline).
-    Available,
 }
 
 impl WebhookCommand {
@@ -414,7 +415,7 @@ fn read_payload(path: &std::path::Path) -> Result<Vec<u8>> {
 impl Fields {
     async fn run(self, app: &App) -> Result<()> {
         match self.command {
-            Some(FieldsCommand::Available) => {
+            FieldsCommand::List => {
                 if app.out.quiet() {
                     app.out
                         .stdout(&format!("{}\n", AVAILABLE_FIELDS.join("\n")));
@@ -424,16 +425,16 @@ impl Fields {
                 }
                 Ok(())
             }
-            None => {
+            FieldsCommand::Get => {
                 let app_id = super::upload::app_id(app).await?;
                 app.send_and_emit(&webhook::app_subscriptions(&app_id), no_id)
                     .await
             }
-            Some(FieldsCommand::Set {
+            FieldsCommand::Set {
                 fields,
                 callback_url,
                 verify_token,
-            }) => {
+            } => {
                 if let Some(url) = &callback_url {
                     check_callback_url(url)?;
                 }

@@ -9,7 +9,7 @@ profile. No active phone-number id is required.
 paloma account get
 paloma account health
 paloma account limits --all
-paloma account subscribed-apps
+paloma account apps list
 ```
 
 ## `paloma account get`
@@ -56,29 +56,23 @@ paloma account limits --business-id 123456789
 `--business-id` reads the shared limit directly from a business portfolio without WABA
 context. It is exclusive with paging flags; the id must contain only digits.
 
-## `paloma account subscribed-apps`
+## `paloma account apps list`
 
 Lists apps subscribed to the WABA, showing each app's id, name, link and any override
 callback URL. Uses the same `subscribed_apps` endpoint as `webhook get`; `webhook get` also
-resolves the effective callback. Use `webhook fields` to read the app's field
+resolves the effective callback. Use `webhook fields get` to read the app's field
 subscriptions.
 
 ```bash
-paloma account subscribed-apps -o json
+paloma account apps list -o json
 ```
 
-`limits` and `subscribed-apps` accept:
+`limits` and `apps list` take the [paging flags](../global-flags.md#paging) every list
+takes. Without `--all`, a single page is returned and a note on stderr says if more results
+exist. `-q` prints one id per line: the number for `limits`, the app for `apps list`.
+JSON/raw preserve the Graph body for a single page; `--all` renders the merged response.
 
-| Flag | Meaning |
-|------|---------|
-| `--all` | Follow all pages and merge the results |
-| `--after <cursor>` | Start after this cursor |
-
-Without `--all`, a single page is returned and a note on stderr says if more results
-exist. Lists have no primary id, so `-q` produces no output. JSON/raw preserve the
-Graph body for a single page; `--all` renders the merged response.
-
-`get`, `health`, `limits` and `subscribed-apps` support `--dry-run`: print the GET request without sending it or reading
+`get`, `health`, `limits` and `apps list` support `--dry-run`: print the GET request without sending it or reading
 a token. Data goes to stdout; diagnostics go to stderr. Missing WABA context or rejected
 credentials exit `3`; rate limits exit `4`. Reads require a token with access to the
 WABA and appropriate WhatsApp business management permissions.
@@ -91,37 +85,37 @@ empty/non-object JSON and blank names/timezone ids exit `5` before an API call.
 
 ```bash
 paloma account set --name 'Acme Support' --timezone-id 1 --dry-run
-paloma account set --enable-insights --yes
+paloma account set --insights --yes
 paloma account set --file account-settings.json --dry-run
 ```
 
-`--enable-insights` (also `--insights true`) permanently enrolls the account in template
-insights. It requires confirmation or `--yes` and must be sent separately from other
-settings. Meta does not support disabling enrollment, so `--insights false` exits `5`.
+`--insights` permanently enrolls the account in template insights. It requires
+confirmation or `--yes` and goes alone, without other settings. Meta can't turn enrollment
+off, so there is no `--no-insights`, and a file with `is_enabled_for_insights: false` exits `5`.
 The same checks apply to JSON files. Dry-run previews the enrollment query parameter.
 `--timezone-id` takes Meta's numeric Graph timezone identifier, not an IANA timezone
 name. Supported settings and permissions are account-dependent.
 
-`--disable-cloud-marketing true|false` (alias `--disable-marketing-messages-on-cloud-api`) controls
-`disable_marketing_messages_on_cloud_api`. Enabling it requires confirmation (or `--yes`)
+`--no-cloud-marketing` and `--cloud-marketing` set
+`disable_marketing_messages_on_cloud_api` to true and false. `--no-cloud-marketing` requires confirmation (or `--yes`)
 because `/messages` then refuses marketing templates, including Cloud API fallback from
 the Marketing Messages API. Complete MM API onboarding first. To inspect eligibility:
 
 ```bash
 paloma account get --fields id,marketing_messages_onboarding_status
-paloma account set --disable-cloud-marketing true --dry-run
+paloma account set --no-cloud-marketing --dry-run
 ```
 
 A successful settings write has no primary id, so `-q` produces no output.
 
-## `paloma account activities`
+## `paloma account activity list`
 
 Read the WABA activity log, including event type, timestamp, actor ids and category.
 Supports `--all`, `--after` and `--limit <1..100>`, with the same paging and
 quiet-output behavior as the other account lists.
 
 ```bash
-paloma account activities --all -o json
+paloma account activity list --all -o json
 ```
 
 ## `paloma account billing-currency`
@@ -179,7 +173,7 @@ paloma account analytics --pricing --start 2026-11-01 --end 2026-11-02 \
 | `--start <time>` | Required. Nonnegative UNIX **seconds**, or `YYYY-MM-DD` at midnight UTC |
 | `--end <time>` | Required, in the same formats; must be later than `--start` |
 | `--granularity half-hour\|day\|month` | Reporting interval; defaults to `day` |
-| `--phone-number <number>` | Actual E.164 number, not a Graph id or BSUID; repeat or comma-separate. A leading `+` is accepted and omitted in the Graph filter |
+| `--phone <number>` | Actual E.164 number, not a Graph id or BSUID; repeat or comma-separate. A leading `+` is accepted and omitted in the Graph filter |
 | `--country <code>` | Uppercase two-letter country code; repeat or comma-separate |
 
 Granularity maps to `HALF_HOUR`, `DAY`, `MONTH` for messaging, and `HALF_HOUR`, `DAILY`,
@@ -260,8 +254,8 @@ reported as `waba_currency` in JSON. Meta says these are planning estimates, not
 ## Assigned users and system users
 
 ```bash
-paloma account users --business-id 123 --all -o json
-paloma account users --system -q
+paloma account users list --business-id 123 --all -o json
+paloma account users list --system -q
 ```
 
 Assigned-user reads require `--business-id` to identify the business context.
@@ -276,16 +270,16 @@ request offline. These are read-only commands and do not grant or remove access.
 
 ```bash
 paloma account welcome-sequence list --limit 5
-paloma account welcome-sequence list --id 123 -o json
-paloma account welcome-sequence create --name Support --file sequence.json --dry-run
-paloma account welcome-sequence set 123 --name 'Support updated' --yes
+paloma account welcome-sequence get 123 -o json
+paloma account welcome-sequence create --name Support -f sequence.json --dry-run
+paloma account welcome-sequence update 123 --name 'Support updated' --yes
 paloma account welcome-sequence delete 123 --yes
 ```
 
 These are WABA-scoped assets for click-to-WhatsApp ads. The JSON file is the sequence
 content, with `text`, `autofill_message.content`, and/or `ice_breakers` containing
-`title` fields. `create` requires `--name` and `--file`; `set` accepts either or both.
-`list` accepts optional `--id` and positive `--limit`, and tables show `sequence_id`,
+`title` fields. `create` requires `--name` and `--file`; `update` accepts either or both.
+`list` accepts a positive `--limit`, `get <id>` shows one, and tables show `sequence_id`,
 `name` and `is_used_in_ad`. JSON/raw preserve Meta's array response. `list -q` prints one
 sequence ID per line and `create -q` prints the new one; updates and deletes have no primary ID.
 Updates and deletes confirm, and all writes support dry-run. Meta refuses deletion

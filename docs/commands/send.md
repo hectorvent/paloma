@@ -89,13 +89,13 @@ or complete send components from JSON. Positional values fill `{{1}}, {{2}}, …
 flag order; named values use the names in the approved template.
 
 ```
-paloma send template <to> <name> --lang <code> [flags]
+paloma send template <to> <name> --language <code> [flags]
 ```
 
 | Flag | Description |
 |------|-------------|
 | `<name>` | Template name (positional) |
-| `--lang <code>` | **Required.** Template language, e.g. `en_US`, `es` |
+| `--language <code>` | **Required.** Template language, e.g. `en_US`, `es` |
 | `--via auto\|cloud\|marketing` | Endpoint selection; defaults to `auto`, which reads the template's latest category |
 | `--body-var <value>` | Positional body text variable; repeat in order |
 | `--var <name=value>` | Named body text variable; repeat with unique names; names contain lowercase letters and underscores; conflicts with `--body-var` |
@@ -104,7 +104,7 @@ paloma send template <to> <name> --lang <code> [flags]
 | `--header-video <id\|url>` | Video header: a media ID or an `http(s)` link |
 | `--header-document <id\|url>` | Document header: a media ID or an `http(s)` link |
 | `--button <index:type=value>` | A button's parameter; repeat for each button |
-| `--components-file <path>` | JSON array of send components, or `{"components": [...]}`; exclusive with typed component flags; combines with `--lang` and `--via` |
+| `--components-file <path>` | JSON array of send components, or `{"components": [...]}`; exclusive with typed component flags; combines with `--language` and `--via` |
 | `--reply-to <wamid>` | Send as a reply to this message id; WhatsApp doesn't show the quote on a template |
 
 ### Category-aware routing
@@ -130,9 +130,9 @@ permission, and Paloma never overrides or refreshes an explicit route after reje
 Both endpoints preserve the same recipient, language, reply context and component values.
 
 ```bash
-paloma send template 15551234567 order_ready --lang en_US --waba-id 123456789
-paloma send template 15551234567 sale --lang en_US --via marketing
-paloma send template 15551234567 login_code --lang en_US --via cloud
+paloma send template 15551234567 order_ready --language en_US --waba-id 123456789
+paloma send template 15551234567 sale --language en_US --via marketing
+paloma send template 15551234567 login_code --language en_US --via cloud
 ```
 
 Automatic routing refreshes the category only after a structured Graph HTTP `400`
@@ -157,8 +157,8 @@ initial plan. Use `--via cloud` or `--via marketing` for a single POST with a fi
 For a raw send-body preview, use an explicit route with `--dry-run -o raw`.
 
 ```bash
-paloma send template 15551234567 sale --lang en_US --dry-run -o json
-paloma send template 15551234567 sale --lang en_US --via marketing --dry-run -o raw
+paloma send template 15551234567 sale --language en_US --dry-run -o json
+paloma send template 15551234567 sale --language en_US --via marketing --dry-run -o raw
 ```
 
 `-q` still prints only the final `wamid`; JSON/raw preserve the final Graph response.
@@ -183,15 +183,15 @@ Use one header flag at most. Media headers combine with `--body-var` or `--var`.
 | `catalog` | The retailer ID of the thumbnail product | Catalog buttons |
 
 ```bash
-paloma send template 15551234567 order_ready --lang en_US \
+paloma send template 15551234567 order_ready --language en_US \
     --header-text "Order update" --body-var "Hector" --body-var "#4821"
-paloma send template 15551234567 order_ready --lang en_US \
+paloma send template 15551234567 order_ready --language en_US \
     --var first_name=Hector --var order_number=4821
-paloma send template 15551234567 order_ready --lang en_US \
+paloma send template 15551234567 order_ready --language en_US \
     --header-image 1234567890 --var first_name=Hector --button 0:url=order-4821
-paloma send template 15551234567 login_code --lang en_US \
+paloma send template 15551234567 login_code --language en_US \
     --body-var 123456 --button 0:url=123456
-paloma send template 15551234567 order_ready --lang en_US \
+paloma send template 15551234567 order_ready --language en_US \
     --components-file components.json --dry-run
 ```
 
@@ -681,7 +681,7 @@ accepts. Any other route exits `5`, including the default `--via auto`, which co
 | `--message-activity-sharing <true\|false>` | Whether to share this message's activity with Meta, overriding the account's setting |
 
 ```bash
-paloma send template 15551234567 sale --lang en_US --via marketing \
+paloma send template 15551234567 sale --language en_US --via marketing \
   --product-policy strict --message-activity-sharing false
 ```
 
@@ -694,7 +694,7 @@ paloma send template 15551234567 sale --lang en_US --via marketing \
 ```bash
 paloma send text "$GROUP_ID" 'Hello everyone' --group
 paloma send image "$GROUP_ID" --link https://example.com/a.jpg --group
-paloma send template "$GROUP_ID" order_ready --lang en_US --group
+paloma send template "$GROUP_ID" order_ready --language en_US --group
 ```
 
 The 24-hour check doesn't apply, because that window is per customer. Templates always go through

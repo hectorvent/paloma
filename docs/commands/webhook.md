@@ -95,12 +95,12 @@ from the subscribed app shown in `webhook get`.
 
 ```bash
 # show the currently subscribed events
-paloma webhook fields
+paloma webhook fields get
 
 # list the known field names you can subscribe to (no API call, no app creds)
-paloma webhook fields available
-paloma webhook fields available -q          # just the names, one per line (scriptable)
-paloma webhook fields available -o json
+paloma webhook fields list
+paloma webhook fields list -q          # just the names, one per line (scriptable)
+paloma webhook fields list -o json
 
 # replace the subscribed set (full replace, not additive)
 paloma webhook fields set messages calls account_update
@@ -109,7 +109,7 @@ paloma webhook fields set messages calls account_update
 paloma webhook fields set messages --dry-run -o json
 ```
 
-`paloma webhook fields available` is a static reference (the Graph API has no endpoint
+`paloma webhook fields list` is a static reference (the Graph API has no endpoint
 that enumerates subscribable fields); `set` accepts these known names and rejects
 unknown names locally with exit `2`. Common WhatsApp Business Account fields:
 
@@ -144,8 +144,8 @@ one. It only touches the `whatsapp_business_account` subscription; an app's Inst
 subscriptions keep their version. It needs an app id and the app secret, like `fields`.
 
 ```bash
-paloma webhook version
-paloma webhook version -q                    # just the version, such as v26.0
+paloma webhook version get
+paloma webhook version get -q                    # just the version, such as v26.0
 paloma webhook version set v26.0             # confirms; --yes to skip
 paloma webhook version set v26.0 --dry-run -o json
 ```

@@ -179,7 +179,7 @@ compared whole, since Meta replaces them wholesale). Read-only, Meta-managed fie
   access token: configure `PALOMA_APP_SECRET` (or `app_secret_ref`) and `--app-id` /
   `PALOMA_APP_ID` (or rely on auto-discovery). `export` omits `fields` when no app secret
   is configured. A newly added field must appear in
-  [`webhook fields available`](webhook.md#paloma-webhook-fields), or `diff` and `apply`
+  [`webhook fields list`](webhook.md#paloma-webhook-fields), or `diff` and `apply`
   exit `5`. Already-subscribed fields remain valid even if the local available list
   does not recognize them, so exporting and reapplying does not drop newer fields.
   Phone-number callback overrides are outside this WABA-scoped kind; manage them with

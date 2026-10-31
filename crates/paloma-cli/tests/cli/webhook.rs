@@ -7,7 +7,7 @@ fn webhook_fields_available_is_offline() {
     let home = TempDir::new().unwrap();
     paloma(None, &home)
         .env_remove("PALOMA_TOKEN")
-        .args(["webhook", "fields", "available", "-q"])
+        .args(["webhook", "fields", "list", "-q"])
         .assert()
         .success()
         .stdout(predicate::str::starts_with("messages\ncalls\n"));
@@ -158,7 +158,7 @@ fn webhook_new_fields_are_offline_and_callback_validation_precedes_context() {
     let home = TempDir::new().unwrap();
     paloma(None, &home)
         .env_remove("PALOMA_TOKEN")
-        .args(["webhook", "fields", "available", "-q"])
+        .args(["webhook", "fields", "list", "-q"])
         .assert()
         .success()
         .stdout(
@@ -1112,7 +1112,7 @@ async fn webhook_version_reports_only_the_whatsapp_subscription() {
     let home = TempDir::new().unwrap();
     mock_subscriptions(&graph, "v25.0").await;
     let out = webhook_version_cmd(&graph, &home)
-        .args(["webhook", "version", "-o", "json"])
+        .args(["webhook", "version", "get", "-o", "json"])
         .output()
         .unwrap();
     assert!(out.status.success());
@@ -1123,7 +1123,7 @@ async fn webhook_version_reports_only_the_whatsapp_subscription() {
         ]})
     );
     webhook_version_cmd(&graph, &home)
-        .args(["webhook", "version", "-q"])
+        .args(["webhook", "version", "get", "-q"])
         .assert()
         .success()
         .stdout("v25.0\n");

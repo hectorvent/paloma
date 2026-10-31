@@ -301,7 +301,8 @@ async fn number_onboarding_and_identity_writes_use_exact_payloads() {
         (
             vec![
                 "number",
-                "request-code",
+                "verification",
+                "request",
                 "--method",
                 "SMS",
                 "--language",
@@ -326,13 +327,13 @@ async fn number_onboarding_and_identity_writes_use_exact_payloads() {
             true,
         ),
         (
-            vec!["number", "set-name", "Acme Support"],
+            vec!["number", "name", "set", "Acme Support"],
             "111",
             json!({"new_display_name":"Acme Support"}),
             false,
         ),
         (
-            vec!["number", "search-visibility", "HIDDEN"],
+            vec!["number", "visibility", "set", "HIDDEN"],
             "111",
             json!({"search_visibility":"HIDDEN"}),
             false,
@@ -350,19 +351,19 @@ async fn number_onboarding_and_identity_writes_use_exact_payloads() {
             false,
         ),
         (
-            vec!["number", "settings", "storage", "--region", "IN"],
+            vec!["number", "settings", "set", "--storage-region", "IN"],
             "111/settings",
             json!({"storage_configuration":{"status":"IN_COUNTRY_STORAGE_ENABLED","data_localization_region":"IN"}}),
             false,
         ),
         (
-            vec!["number", "settings", "storage", "--disable"],
+            vec!["number", "settings", "set", "--no-storage"],
             "111/settings",
             json!({"storage_configuration":{"status":"IN_COUNTRY_STORAGE_DISABLED"}}),
             false,
         ),
         (
-            vec!["number", "settings", "identity-check", "--enabled", "false"],
+            vec!["number", "settings", "set", "--no-identity-check"],
             "111/settings",
             json!({"user_identity_change":{"enable_identity_key_check":false}}),
             false,
@@ -421,7 +422,7 @@ async fn usernames_contacts_and_settings_reads_and_deletes_keep_their_contracts(
         .mount(&graph)
         .await;
     paloma(Some(&graph), &home)
-        .args(["number", "username", "reserved", "-o", "json"])
+        .args(["number", "username", "list", "-o", "json"])
         .assert()
         .success()
         .stdout(predicate::str::contains("acme_shop"));
@@ -478,8 +479,8 @@ async fn identity_and_settings_reject_bad_inputs_before_context_or_network() {
         vec!["number", "username", "set", "Acme.COM"],
         vec!["number", "contacts", "get", "US.ENT.123"],
         vec!["number", "contacts", "delete", "15551234567"],
-        vec!["number", "settings", "storage", "--region", "XX"],
-        vec!["number", "set-name", " "],
+        vec!["number", "settings", "set", "--storage-region", "XX"],
+        vec!["number", "name", "set", " "],
         vec![
             "number",
             "add",
@@ -500,7 +501,8 @@ async fn identity_and_settings_reject_bad_inputs_before_context_or_network() {
         ],
         vec![
             "number",
-            "request-code",
+            "verification",
+            "request",
             "--method",
             "SMS",
             "--language",
@@ -509,7 +511,7 @@ async fn identity_and_settings_reject_bad_inputs_before_context_or_network() {
         vec!["commerce", "set"],
         vec!["automation", "bot", "../bad"],
         vec!["flow", "migrate", "--source-waba-id", "../bad"],
-        vec!["account", "users", "--business-id", "../bad"],
+        vec!["account", "users", "list", "--business-id", "../bad"],
     ] {
         paloma(Some(&graph), &home)
             .env_remove("PALOMA_PHONE_NUMBER_ID")
@@ -522,17 +524,30 @@ async fn identity_and_settings_reject_bad_inputs_before_context_or_network() {
     paloma(Some(&graph), &home)
         .env_remove("PALOMA_PHONE_NUMBER_ID")
         .env("PALOMA_VERIFICATION_CODE", "BAD_SECRET")
-        .args(["number", "verify-code"])
+        .args(["number", "verification", "confirm"])
         .assert()
         .code(5)
         .stderr(predicate::str::contains("BAD_SECRET").not());
     paloma(Some(&graph), &home)
         .env_remove("PALOMA_PHONE_NUMBER_ID")
-        .args(["number", "settings", "identity-check", "--yes"])
+        .args(["number", "settings", "set", "--yes"])
         .assert()
         .code(2)
         .stdout("")
-        .stderr(predicate::str::contains("--enabled"));
+        .stderr(predicate::str::contains("--identity-check"));
+    paloma(Some(&graph), &home)
+        .env_remove("PALOMA_PHONE_NUMBER_ID")
+        .args([
+            "number",
+            "settings",
+            "set",
+            "--identity-check",
+            "--no-storage",
+            "--yes",
+        ])
+        .assert()
+        .code(2)
+        .stdout("");
     assert!(graph.received_requests().await.unwrap().is_empty());
 }
 

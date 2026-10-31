@@ -14,11 +14,13 @@ use serde_json::{Value, json};
 #[derive(Debug, Args)]
 pub struct Version {
     #[command(subcommand)]
-    command: Option<VersionCommand>,
+    command: VersionCommand,
 }
 
 #[derive(Debug, Subcommand)]
 enum VersionCommand {
+    /// Show the Graph version each WhatsApp webhook field is delivered in.
+    Get,
     /// Move the app's WhatsApp webhooks to a Graph version, such as v26.0.
     Set {
         /// The Graph version to move to.
@@ -67,11 +69,11 @@ fn emit(app: &App, subscriptions: &Value) {
 
 impl Version {
     pub async fn run(self, app: &App) -> Result<()> {
-        let Some(VersionCommand::Set {
+        let VersionCommand::Set {
             target,
             reverify,
             verify_token,
-        }) = self.command
+        } = self.command
         else {
             let app_id = super::super::upload::app_id(app).await?;
             let Some(response) = app.send(&webhook::app_subscriptions(&app_id)).await? else {

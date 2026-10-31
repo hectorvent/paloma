@@ -149,7 +149,7 @@ paloma calling analytics --start 2026-10-01 --end 2026-11-01 --granularity month
 
 Reads the WABA's call counts, costs and average durations. `--start` and `--end` take UNIX seconds
 or `YYYY-MM-DD`, and `--granularity` is `half-hour`, `day` (default) or `month`. Filter with
-`--phone-number`, `--country` and `--direction` (`user-initiated`, `business-initiated`), break
+`--phone`, `--country` and `--direction` (`user-initiated`, `business-initiated`), break
 results down with `--dimension` (`phone`, `direction`, `country`), and choose `--metric` (`count`,
 `cost`, `average-duration`). Each repeats or takes a comma-separated list. Tables show only the
 time range and metrics, so use `-o json` to see a breakdown.

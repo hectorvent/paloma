@@ -72,7 +72,9 @@ async fn account_get_custom_fields_and_health_use_the_waba_flag() {
             .await;
         let out = paloma(Some(&graph), &home)
             .env_remove("PALOMA_PHONE_NUMBER_ID")
-            .args(["account", verb, "--waba-id", "999", "-o", "json"])
+            .arg("account")
+            .args(verb.split(' '))
+            .args(["--waba-id", "999", "-o", "json"])
             .args(&flags)
             .output()
             .unwrap();
@@ -80,7 +82,9 @@ async fn account_get_custom_fields_and_health_use_the_waba_flag() {
         assert!(out.stderr.is_empty());
         assert_eq!(stdout_json(&out), body);
         paloma(Some(&graph), &home)
-            .args(["account", verb, "--waba-id", "999", "-q"])
+            .arg("account")
+            .args(verb.split(' '))
+            .args(["--waba-id", "999", "-q"])
             .args(&flags)
             .assert()
             .success()
@@ -101,7 +105,7 @@ async fn account_lists_render_nested_apps_and_limits_without_a_phone_context() {
             "TIER_250",
         ),
         (
-            "subscribed-apps",
+            "apps list",
             "subscribed_apps",
             json!({"data":[{"whatsapp_business_api_data":{"id":"333", "name":"Example App"}, "override_callback_uri":"https://example.com/webhook"}]}),
             "Example App",
@@ -122,13 +126,16 @@ async fn account_lists_render_nested_apps_and_limits_without_a_phone_context() {
             .await;
         paloma(Some(&graph), &home)
             .env_remove("PALOMA_PHONE_NUMBER_ID")
-            .args(["account", verb])
+            .arg("account")
+            .args(verb.split(' '))
             .assert()
             .success()
             .stdout(predicate::str::contains(expected))
             .stderr("");
         let out = paloma(Some(&graph), &home)
-            .args(["account", verb, "-o", "json"])
+            .arg("account")
+            .args(verb.split(' '))
+            .args(["-o", "json"])
             .output()
             .unwrap();
         assert!(out.status.success());
@@ -137,7 +144,9 @@ async fn account_lists_render_nested_apps_and_limits_without_a_phone_context() {
         // A list prints one row id per line under -q.
         let id = if verb == "limits" { PHONE } else { "333" };
         paloma(Some(&graph), &home)
-            .args(["account", verb, "-q"])
+            .arg("account")
+            .args(verb.split(' '))
+            .args(["-q"])
             .assert()
             .success()
             .stdout(format!("{id}\n"))
@@ -151,7 +160,7 @@ async fn account_lists_warn_and_follow_cursors_with_all() {
     let home = TempDir::new().unwrap();
     for (verb, edge) in [
         ("limits", "phone_numbers"),
-        ("subscribed-apps", "subscribed_apps"),
+        ("apps list", "subscribed_apps"),
     ] {
         Mock::given(method("GET"))
             .and(path(format!("/v26.0/{WABA}/{edge}")))
@@ -173,13 +182,17 @@ async fn account_lists_warn_and_follow_cursors_with_all() {
             .mount(&graph)
             .await;
         paloma(Some(&graph), &home)
-            .args(["account", verb, "--after", "start", "-o", "json"])
+            .arg("account")
+            .args(verb.split(' '))
+            .args(["--after", "start", "-o", "json"])
             .assert()
             .success()
             .stdout(predicate::str::contains("first"))
             .stderr(predicate::str::contains("more results exist"));
         let out = paloma(Some(&graph), &home)
-            .args(["account", verb, "--after", "start", "--all", "-o", "json"])
+            .arg("account")
+            .args(verb.split(' '))
+            .args(["--after", "start", "--all", "-o", "json"])
             .output()
             .unwrap();
         assert!(out.status.success());
@@ -195,11 +208,13 @@ async fn account_lists_warn_and_follow_cursors_with_all() {
 async fn account_reads_dry_run_without_network_or_token() {
     let graph = MockServer::start().await;
     let home = TempDir::new().unwrap();
-    for verb in ["get", "health", "limits", "subscribed-apps"] {
+    for verb in ["get", "health", "limits", "apps list"] {
         let out = paloma(Some(&graph), &home)
             .env_remove("PALOMA_TOKEN")
             .env_remove("PALOMA_PHONE_NUMBER_ID")
-            .args(["account", verb, "--dry-run", "-o", "json"])
+            .arg("account")
+            .args(verb.split(' '))
+            .args(["--dry-run", "-o", "json"])
             .output()
             .unwrap();
         assert!(
@@ -224,10 +239,12 @@ async fn account_reads_dry_run_without_network_or_token() {
 #[test]
 fn account_reads_require_waba_and_validate_fields_before_context() {
     let home = TempDir::new().unwrap();
-    for verb in ["get", "health", "limits", "subscribed-apps"] {
+    for verb in ["get", "health", "limits", "apps list"] {
         paloma(None, &home)
             .env_remove("PALOMA_WABA_ID")
-            .args(["account", verb, "--dry-run"])
+            .arg("account")
+            .args(verb.split(' '))
+            .args(["--dry-run"])
             .assert()
             .code(3)
             .stdout("")
@@ -415,8 +432,7 @@ async fn account_set_shapes_settings_including_false_and_supports_file() {
             "New name",
             "--timezone-id",
             "1",
-            "--disable-cloud-marketing",
-            "false",
+            "--cloud-marketing",
             "-q",
         ])
         .assert()
@@ -440,7 +456,7 @@ async fn account_set_shapes_settings_including_false_and_supports_file() {
         .stdout(predicate::str::contains("true"))
         .stderr("");
     paloma(Some(&graph), &home)
-        .args(["account", "set", "--disable-cloud-marketing", "true"])
+        .args(["account", "set", "--no-cloud-marketing"])
         .assert()
         .code(5)
         .stdout("")
@@ -449,8 +465,7 @@ async fn account_set_shapes_settings_including_false_and_supports_file() {
         .args([
             "account",
             "set",
-            "--disable-cloud-marketing",
-            "true",
+            "--no-cloud-marketing",
             "--dry-run",
             "-o",
             "json",
@@ -520,7 +535,7 @@ async fn account_activities_and_number_health_request_the_documented_fields() {
         .await;
     paloma(Some(&graph), &home)
         .env_remove("PALOMA_PHONE_NUMBER_ID")
-        .args(["account", "activities", "--after", "cursor"])
+        .args(["account", "activity", "list", "--after", "cursor"])
         .assert()
         .success()
         .stdout(predicate::str::contains("ACCOUNT_UPDATE"))
@@ -576,7 +591,7 @@ async fn account_analytics_sends_the_exact_messaging_field_expansion_and_preserv
                 "2026-11-01",
                 "--end",
                 "2026-11-02",
-                "--phone-number",
+                "--phone",
                 "+15551234567,15557654321",
                 "--product-type",
                 "template,non-template",
@@ -620,7 +635,7 @@ async fn account_analytics_sends_the_exact_messaging_field_expansion_and_preserv
             "2026-11-01",
             "--end",
             "2026-11-02",
-            "--phone-number",
+            "--phone",
             "+15551234567,15557654321",
             "--product-type",
             "template,non-template,incoming",
@@ -660,7 +675,7 @@ async fn account_pricing_analytics_serializes_all_filters_and_flattens_every_tab
         "1793491200",
         "--end",
         "1793577600",
-        "--phone-number",
+        "--phone",
         "15551234567",
         "--country",
         "US,IN",
@@ -785,8 +800,8 @@ async fn analytics_invalid_dates_ranges_and_filters_fail_before_context_or_a_req
         ("1", "2", vec!["--country", "us"]),
         ("1", "2", vec!["--country", "USA"]),
         ("1", "2", vec!["--country", "US\").end(0)"]),
-        ("1", "2", vec!["--phone-number", "111"]),
-        ("1", "2", vec!["--phone-number", BSUID]),
+        ("1", "2", vec!["--phone", "111"]),
+        ("1", "2", vec!["--phone", BSUID]),
     ] {
         paloma(Some(&graph), &home)
             .env_remove("PALOMA_WABA_ID")
@@ -989,36 +1004,28 @@ async fn account_insights_is_confirmed_one_way_and_uses_query() {
         .and(path(format!("/v26.0/{WABA}")))
         .and(query_param("is_enabled_for_insights", "true"))
         .respond_with(ResponseTemplate::new(200).set_body_json(json!({"success":true})))
-        .expect(3)
+        .expect(2)
         .mount(&graph)
         .await;
     paloma(Some(&graph), &home)
-        .args(["account", "set", "--enable-insights"])
+        .args(["account", "set", "--insights"])
         .assert()
         .code(5)
         .stdout("")
         .stderr(predicate::str::contains("--yes"));
-    for args in [
-        vec!["--enable-insights", "--yes"],
-        vec!["--insights", "true", "--yes"],
-    ] {
-        paloma(Some(&graph), &home)
-            .args(["account", "set"])
-            .args(args)
-            .assert()
-            .success()
-            .stderr("");
-    }
-    for args in [
-        vec!["--insights", "false"],
-        vec!["--insights", "true", "--name", "Acme"],
-    ] {
+    paloma(Some(&graph), &home)
+        .args(["account", "set", "--insights", "--yes"])
+        .assert()
+        .success()
+        .stderr("");
+    // There is no way to turn insights off, and enrolling goes alone.
+    for args in [vec!["--no-insights"], vec!["--insights", "--name", "Acme"]] {
         paloma(Some(&graph), &home)
             .env_remove("PALOMA_WABA_ID")
             .args(["account", "set"])
             .args(args)
             .assert()
-            .code(5)
+            .code(2)
             .stdout("");
     }
     let file = home.path().join("insights.json");
@@ -1045,14 +1052,7 @@ async fn account_insights_is_confirmed_one_way_and_uses_query() {
     let requests = graph.received_requests().await.unwrap();
     assert!(requests.iter().all(|request| request.body.is_empty()));
     let out = paloma(Some(&graph), &home)
-        .args([
-            "account",
-            "set",
-            "--enable-insights",
-            "--dry-run",
-            "-o",
-            "json",
-        ])
+        .args(["account", "set", "--insights", "--dry-run", "-o", "json"])
         .output()
         .unwrap();
     assert!(out.status.success());
@@ -1097,18 +1097,13 @@ async fn account_limits_portfolio_and_activities_limit_are_validated() {
         .await;
     paloma(Some(&graph), &home)
         .args([
-            "account",
-            "activities",
-            "--limit",
-            "100",
-            "--after",
-            "cursor",
+            "account", "activity", "list", "--limit", "100", "--after", "cursor",
         ])
         .assert()
         .success();
     for args in [
         vec!["limits", "--business-id", "x/y"],
-        vec!["activities", "--limit", "101"],
+        vec!["activity", "list", "--limit", "101"],
     ] {
         paloma(Some(&graph), &home)
             .env_remove("PALOMA_WABA_ID")
@@ -1150,10 +1145,21 @@ async fn account_users_and_automation_bot_use_the_documented_nodes() {
     let home = TempDir::new().unwrap();
     for (args, node) in [
         (
-            vec!["account", "users", "--business-id", "999", "--limit", "10"],
+            vec![
+                "account",
+                "users",
+                "list",
+                "--business-id",
+                "999",
+                "--limit",
+                "10",
+            ],
             "222/assigned_users",
         ),
-        (vec!["account", "users", "--system"], "222/system_users"),
+        (
+            vec!["account", "users", "list", "--system"],
+            "222/system_users",
+        ),
     ] {
         let mut mock = Mock::given(method("GET")).and(path(format!("/v26.0/{node}")));
         if node.ends_with("assigned_users") {
@@ -1216,7 +1222,7 @@ async fn welcome_sequences_create_update_read_and_delete_waba_ad_assets() {
             vec![
                 "account",
                 "welcome-sequence",
-                "set",
+                "update",
                 "444",
                 "--name",
                 "New",
@@ -1252,7 +1258,6 @@ async fn welcome_sequences_create_update_read_and_delete_waba_ad_assets() {
     Mock::given(method("GET"))
         .and(path("/v26.0/222/welcome_message_sequences"))
         .and(query_param("sequence_id", "444"))
-        .and(query_param("limit", "5"))
         .respond_with(
             ResponseTemplate::new(200)
                 .set_body_json(json!([{"sequence_id":"444","is_used_in_ad":false}])),
@@ -1261,17 +1266,7 @@ async fn welcome_sequences_create_update_read_and_delete_waba_ad_assets() {
         .mount(&graph)
         .await;
     paloma(Some(&graph), &home)
-        .args([
-            "account",
-            "welcome-sequence",
-            "list",
-            "--id",
-            "444",
-            "--limit",
-            "5",
-            "-o",
-            "json",
-        ])
+        .args(["account", "welcome-sequence", "get", "444", "-o", "json"])
         .assert()
         .success()
         .stdout(predicate::str::contains("is_used_in_ad"));
@@ -1333,6 +1328,7 @@ async fn account_users_follow_cursors_and_quiet_prints_every_id() {
         .args([
             "account",
             "users",
+            "list",
             "--business-id",
             "999",
             "--after",

@@ -9,12 +9,13 @@ use paloma_graph::api::phone_numbers;
 
 #[derive(Debug, Subcommand)]
 pub enum UsernameCommand {
-    /// Read the current username and approval status.
+    /// Show the current username and its approval status.
     Get,
-    /// List usernames reserved for the business portfolio.
-    Reserved,
+    /// List the usernames reserved for the business portfolio.
+    List,
     /// Adopt a username; Meta enforces eligibility and rolling change limits.
     Set {
+        /// The username to adopt.
         username: String,
         /// Move the username from another number in the same portfolio.
         #[arg(long)]
@@ -39,7 +40,7 @@ impl UsernameCommand {
                 })
                 .await
             }
-            Self::Reserved => {
+            Self::List => {
                 if let Some(resp) = app.send(&phone_numbers::reserved_usernames(&phone)).await? {
                     app.out
                         .emit(&Output::response(&resp)?.table("/data", &["username_suggestions"]));

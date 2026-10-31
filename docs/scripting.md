@@ -34,7 +34,7 @@ Build and inspect the exact request body without sending — great for debugging
 payloads or generating fixtures:
 
 ```bash
-paloma send template 15551234567 order_ready --lang en_US \
+paloma send template 15551234567 order_ready --language en_US \
     --body-var "Hector" --body-var "#4821" \
     --dry-run -o json > expected-request.json
 ```
@@ -59,7 +59,7 @@ stdout vs. stderr separation makes loops safe to pipe:
 
 ```bash
 while read -r number; do
-  paloma send template "$number" promo --lang es -q
+  paloma send template "$number" promo --language es -q
   sleep 1                      # be gentle with rate limits
 done < recipients.txt > sent-ids.txt
 ```
@@ -73,7 +73,7 @@ done < recipients.txt > sent-ids.txt
   export PALOMA_TOKEN="$WHATSAPP_TOKEN"          # from your CI secret store
   export PALOMA_PHONE_NUMBER_ID="1556677889900"
   export PALOMA_WABA_ID="1029384756"
-  paloma template status order_ready -o json
+  paloma template get order_ready --status -o json
   ```
 
 - On Linux/Windows runners, keyring storage isn't available — `PALOMA_TOKEN` is the

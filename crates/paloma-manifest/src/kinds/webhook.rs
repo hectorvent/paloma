@@ -109,7 +109,7 @@ pub async fn plan(cx: Cx<'_>, spec: &Value) -> Result<KindPlan> {
                 .collect();
             if !unknown.is_empty() {
                 return Err(Error::validation(format!(
-                    "unknown webhook field: {}; `paloma webhook fields available` lists them",
+                    "unknown webhook field: {}; `paloma webhook fields list` lists them",
                     unknown.join(", ")
                 )));
             }

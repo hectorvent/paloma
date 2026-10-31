@@ -8,7 +8,7 @@ fn secret_dry_runs_are_redacted_in_every_output_format() {
     for format in ["table", "json", "yaml", "raw"] {
         for args in [
             vec!["number", "register"],
-            vec!["number", "set-pin"],
+            vec!["number", "pin", "set"],
             vec![
                 "webhook",
                 "subscribe",
@@ -67,7 +67,7 @@ async fn pin_reaches_api_while_verbose_diagnostics_are_redacted() {
     let home = TempDir::new().unwrap();
     let out = paloma(Some(&graph), &home)
         .env("PALOMA_PIN", "825194")
-        .args(["number", "set-pin", "-vv", "-o", "raw"])
+        .args(["number", "pin", "set", "--yes", "-vv", "-o", "raw"])
         .output()
         .unwrap();
     assert!(
@@ -163,7 +163,7 @@ async fn pin_from_env_or_stdin_reaches_the_api_without_a_warning() {
 fn secret_value_flags_are_usage_errors_that_do_not_echo_the_value() {
     let home = TempDir::new().unwrap();
     for (args, value) in [
-        (vec!["number", "set-pin", "--pin", "825194"], "825194"),
+        (vec!["number", "pin", "set", "--pin", "825194"], "825194"),
         (
             vec![
                 "webhook",
@@ -214,7 +214,7 @@ fn bad_or_missing_secrets_exit_5_without_a_request() {
     let hook = "https://example.test/hook";
     for (args, stdin, needle) in [
         (vec!["number", "register"], None, "PALOMA_PIN"),
-        (vec!["number", "set-pin"], None, "--pin-stdin"),
+        (vec!["number", "pin", "set"], None, "--pin-stdin"),
         (
             vec!["number", "register", "--pin-stdin"],
             Some("12"),
@@ -402,21 +402,29 @@ async fn verification_code_uses_secret_sources_and_never_appears_in_diagnostics(
         .await;
     let out = paloma(Some(&graph), &home)
         .env("PALOMA_VERIFICATION_CODE", "817263")
-        .args(["number", "verify-code", "-vv", "-q"])
+        .args(["number", "verification", "confirm", "-vv", "-q"])
         .output()
         .unwrap();
     assert!(out.status.success());
     assert!(out.stdout.is_empty());
     assert!(!String::from_utf8_lossy(&out.stderr).contains("817263"));
     paloma(Some(&graph), &home)
-        .args(["number", "verify-code", "--code-stdin", "-q"])
+        .args(["number", "verification", "confirm", "--code-stdin", "-q"])
         .write_stdin("817263\n")
         .assert()
         .success()
         .stdout("");
     let out = paloma(Some(&graph), &home)
         .env("PALOMA_VERIFICATION_CODE", "817263")
-        .args(["number", "verify-code", "--dry-run", "-o", "json", "-vv"])
+        .args([
+            "number",
+            "verification",
+            "confirm",
+            "--dry-run",
+            "-o",
+            "json",
+            "-vv",
+        ])
         .output()
         .unwrap();
     assert!(out.status.success());
@@ -433,7 +441,7 @@ async fn verification_code_uses_secret_sources_and_never_appears_in_diagnostics(
                 "template",
                 "15551234567",
                 "hello",
-                "--lang",
+                "--language",
                 "en_US",
                 "--via",
                 "cloud"
@@ -450,7 +458,14 @@ async fn verification_code_is_redacted_from_every_dry_run_format() {
     for format in ["json", "yaml", "table", "raw"] {
         paloma(Some(&graph), &home)
             .env("PALOMA_VERIFICATION_CODE", "987654")
-            .args(["number", "verify-code", "--dry-run", "-o", format])
+            .args([
+                "number",
+                "verification",
+                "confirm",
+                "--dry-run",
+                "-o",
+                format,
+            ])
             .assert()
             .success()
             .stdout(predicate::str::contains("987654").not())

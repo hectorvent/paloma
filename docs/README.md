@@ -23,14 +23,14 @@ New here? Start with [Installation](installation.md) → [Getting started](getti
 | Group | Status | Reference |
 |-------|--------|-----------|
 | `paloma send` | text · template (automatic category routing, named variables, text and media headers, buttons, components file) · image · document · audio · video · sticker · location · contact · interactive (button, list, cta-url, location-request, address, carousel, call, request-contact) · flow · call-permission · product · product-list · catalog · reaction · raw | [commands/send.md](commands/send.md) |
-| `paloma template` | list · status · get · create · submit · watch · edit · delete · namespace · archive · unarchive · unpause · library · compare · migrate · preview · upsert · group · analytics | [commands/template.md](commands/template.md) |
+| `paloma template` | list · get · create · watch · update · delete · namespace · archive · unarchive · unpause · library · compare · migrate · preview · upsert · group · analytics | [commands/template.md](commands/template.md) |
 | `paloma media` | upload · get · download · delete | [commands/media.md](commands/media.md) |
 | `paloma message` | read · typing · history | [commands/message.md](commands/message.md) |
-| `paloma number` | list · get · register · deregister · set-pin · quality · health · request-code · verify-code · add · set-name · search-visibility · username · contacts · settings · oba · compliance | [commands/number.md](commands/number.md) |
+| `paloma number` | list · get · quality · health · add · register · deregister · verification · name · visibility · pin · username · contacts · settings · oba · compliance | [commands/number.md](commands/number.md) |
 | `paloma commerce` | get · set | [commands/commerce.md](commands/commerce.md) |
 | `paloma profile` | get · set · photo | [commands/profile.md](commands/profile.md) |
 | `paloma calling` | status · enable · disable · set · sip · codecs · voicemail · hours · permission · analytics | [commands/calling.md](commands/calling.md) |
-| `paloma webhook` | get · subscribe · unsubscribe · fields · fields available · fields set · version · version set · listen · verify-url · simulate | [commands/webhook.md](commands/webhook.md) |
+| `paloma webhook` | get · subscribe · unsubscribe · fields get · fields list · fields set · version get · version set · listen · verify-url · simulate | [commands/webhook.md](commands/webhook.md) |
 | `paloma flow` | list · get · create · update · publish · deprecate · delete · assets · migrate · key | [commands/flow.md](commands/flow.md) |
 | `paloma block` | add · remove · list | [commands/block.md](commands/block.md) |
 | `paloma group` | create · list · get · set · delete · invite · members · requests · pin · unpin | [commands/group.md](commands/group.md) |
@@ -40,7 +40,7 @@ New here? Start with [Installation](installation.md) → [Getting started](getti
 | `paloma link` | create (offline) | [commands/link.md](commands/link.md) |
 | `paloma export` · `apply` · `diff` | your WhatsApp setup as code (declarative YAML: Account, Calling, Profile, Number, PhoneSettings, Commerce, ConversationalAutomation, QrCode, Template, Webhook) | [commands/manifests.md](commands/manifests.md) |
 | `paloma completion` | bash · zsh · fish · powershell · elvish | [commands/completion.md](commands/completion.md) |
-| `paloma account` | get · set · limits · health · activities · subscribed-apps · billing-currency · analytics · reach · users · welcome-sequence | [commands/account.md](commands/account.md) |
+| `paloma account` | get · set · limits · health · activity · apps · users · billing-currency · analytics · reach · welcome-sequence | [commands/account.md](commands/account.md) |
 | `paloma qr` | create · list · get · update · delete | [commands/qr.md](commands/qr.md) |
 | `paloma automation` | get · set · bot | [commands/automation.md](commands/automation.md) |
 

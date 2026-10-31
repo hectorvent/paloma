@@ -19,6 +19,16 @@ pub fn enum_name(value: &impl ValueEnum) -> String {
         .to_owned()
 }
 
+/// The value of a `--x`/`--no-x` pair: `Some(true)`, `Some(false)`, or `None` when neither was
+/// given. clap's `overrides_with` keeps only the last of the two.
+pub fn toggle(on: bool, off: bool) -> Option<bool> {
+    match (on, off) {
+        (true, _) => Some(true),
+        (_, true) => Some(false),
+        _ => None,
+    }
+}
+
 /// All of stdin, for `--*-stdin` flags and piped payloads.
 pub fn read_stdin(what: &str) -> Result<String> {
     let mut buf = String::new();
