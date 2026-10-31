@@ -10,7 +10,7 @@
 The WhatsApp Cloud API from your terminal: send messages and templates, and manage
 your whole WhatsApp Business setup as code.
 
-*One 4 MB binary · tokens in your OS keyring · `apply` it twice, nothing changes*
+*One 5 MB binary · tokens in your OS keyring · `apply` it twice, nothing changes*
 
 </div>
 
@@ -54,7 +54,7 @@ paloma send text 15551234567 "test" --dry-run
 
 ## Why paloma
 
-- **One small binary, nothing to install around it.** No Node, Python, or JVM. A 4 MB
+- **One small binary, nothing to install around it.** No Node, Python, or JVM. A ~5 MB
   executable that starts in ~7 ms and runs as-is in CI or a Docker image, on macOS,
   Linux and Windows (x86_64 and arm64).
 - **Your WhatsApp setup becomes a reviewable file.** Calling, SIP, the business

@@ -43,6 +43,8 @@ jobs:
         with:
           bin: paloma
           target: ${{ matrix.target }}
+          # The size-optimized profile, which keeps the binary at the ~5 MB the README states.
+          profile: dist
           include: README.md,dist-assets
           archive: paloma-$tag-$target
           checksum: sha256
