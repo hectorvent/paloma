@@ -1,8 +1,8 @@
 //! The 24-hour customer-service window guardrail.
 //!
-//! Real window *tracking* (derived from inbound events seen by `paloma webhook listen`)
-//! is a v1.0 feature. Until then nothing can prove the window is open, so the policy is
-//! conservative but unobtrusive: template sends are always allowed, and free-form sends
+//! Paloma doesn't track the window yet (it could, from inbound events seen by
+//! `paloma webhook listen`), so nothing can prove the window is open. The policy is
+//! therefore conservative but unobtrusive: template sends are always allowed, and free-form sends
 //! are allowed unless `--strict` is set without `--force`. The [`WindowTracker`] seam is
 //! where event-derived tracking plugs in later without touching the send commands.
 
@@ -21,7 +21,7 @@ pub trait WindowTracker {
     fn state(&self, recipient: &str) -> WindowState;
 }
 
-/// The v0.x tracker: knows nothing.
+/// The tracker in use today: it knows nothing, so every window is unknown.
 #[derive(Debug, Default, Clone, Copy)]
 pub struct NoTracking;
 

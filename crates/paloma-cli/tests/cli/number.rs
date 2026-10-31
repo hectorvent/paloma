@@ -293,7 +293,7 @@ fn number_explicit_id_validation_precedes_context() {
     }
 }
 
-// ---- v1.5 identity, settings and administration contracts ----
+// ---- identity, settings and administration contracts ----
 #[tokio::test(flavor = "multi_thread")]
 async fn number_onboarding_and_identity_writes_use_exact_payloads() {
     let home = TempDir::new().unwrap();

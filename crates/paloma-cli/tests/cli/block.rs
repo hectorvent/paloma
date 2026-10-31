@@ -172,8 +172,6 @@ async fn block_list_rejects_a_zero_limit_before_resolving_the_phone_number() {
     assert_eq!(graph.received_requests().await.unwrap().len(), 0);
 }
 
-// Review fixes across the v0.5 lists, lookups and validation.
-
 #[tokio::test(flavor = "multi_thread")]
 async fn block_list_all_follows_next_even_past_an_empty_page() {
     let graph = MockServer::start().await;

@@ -89,6 +89,13 @@ Deregistering doesn't turn local storage off.
 
 Replace the two-step verification PIN. The old PIN stops working, so it confirms first.
 
+> Meta is [deprecating the six-digit PIN](https://developers.facebook.com/documentation/business-messaging/whatsapp/business-phone-numbers/two-step-verification)
+> for eligible Cloud API numbers, rolling out by business cohort. An eligible number has no
+> PIN to change: Meta stops using the PIN to validate registration and doesn't create one.
+> `register` still sends a PIN, because Meta asks for a valid six-digit `pin` until it
+> announces a separate API change. Keep using `pin set` for numbers that aren't eligible yet;
+> WhatsApp Manager shows a **Two-step verification** tab only for those.
+
 ```bash
 paloma number pin set               # prompts for the PIN and the confirmation
 PALOMA_PIN="$PIN" paloma number pin set --yes

@@ -144,7 +144,8 @@ compared whole, since Meta replaces them wholesale). Read-only, Meta-managed fie
 - **Number** exports an observational snapshot plus writable search visibility.
   `pin` and `newDisplayName` are write-only submissions and always count as drift.
   A PIN is a secret, so export never includes it; use interpolation instead of
-  committing one. Observational fields are ignored on apply.
+  committing one. Meta is deprecating the PIN for eligible numbers (see
+  [`number pin set`](number.md#paloma-number-pin-set)), so leave `pin` out for those. Observational fields are ignored on apply.
 - **Commerce** maps to `whatsapp_commerce_settings`: `isCartEnabled`, `isCatalogVisible`.
   Disabling either confirms unless `--yes` is set.
 - **ConversationalAutomation** maps to `conversational_automation`: `enableWelcomeMessage`,

@@ -125,7 +125,8 @@ pub enum VisibilityCommand {
 
 #[derive(Debug, Subcommand)]
 pub enum PinCommand {
-    /// Replace the two-step verification PIN.
+    /// Replace the two-step verification PIN. Numbers Meta made eligible for its PIN
+    /// deprecation have none to replace.
     Set(PinInput),
 }
 

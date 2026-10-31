@@ -58,7 +58,10 @@ Every commit needs a `Signed-off-by:` trailer, certifying the
 [Developer Certificate of Origin](https://developercertificate.org): you wrote the change
 or have the right to submit it under the project's license. `git commit -s` adds it.
 Forgot? `git commit --amend --no-edit -s`, or for a whole branch
-`git rebase --signoff main`. GPG or SSH signing (`-S`) is welcome on top.
+`git rebase --signoff main`. The hook and CI check the sign-off on every commit.
+
+Maintainers also sign their commits (`git commit -s -S`, GPG or SSH), so tagged releases
+trace back to a verified key. Signing your own commits is welcome but not checked.
 
 ### No AI attribution
 
