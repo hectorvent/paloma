@@ -144,7 +144,19 @@ pub fn read_file(path: &std::path::Path) -> Result<String> {
 /// Read and parse a JSON file.
 pub fn read_json(path: &std::path::Path) -> Result<serde_json::Value> {
     let text = read_file(path)?;
-    serde_json::from_str(&text)
+    parse_json(path, &text)
+}
+
+/// Read a JSON file and check it parses, keeping the text exactly as written for requests
+/// that send it on as a string (a Flow's JSON).
+pub fn read_json_text(path: &std::path::Path) -> Result<String> {
+    let text = read_file(path)?;
+    parse_json(path, &text)?;
+    Ok(text)
+}
+
+fn parse_json(path: &std::path::Path, text: &str) -> Result<serde_json::Value> {
+    serde_json::from_str(text)
         .map_err(|e| Error::validation(format!("{} is not valid JSON: {e}", path.display())))
 }
 

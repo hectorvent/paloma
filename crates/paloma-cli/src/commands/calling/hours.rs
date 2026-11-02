@@ -42,27 +42,6 @@ pub struct Set {
     holidays: Vec<String>,
 }
 
-/// `HHMM-HHMM`, with the opening before the closing.
-fn range(value: &str, flag: &str) -> Result<(String, String)> {
-    let invalid = || Error::validation(format!("{flag} needs times as HHMM-HHMM, 0000 to 2359"));
-    let (open, close) = value.split_once('-').ok_or_else(invalid)?;
-    for time in [open, close] {
-        let valid = time.len() == 4
-            && time.bytes().all(|b| b.is_ascii_digit())
-            && time[..2] < *"24"
-            && time[2..] < *"60";
-        if !valid {
-            return Err(invalid());
-        }
-    }
-    if open >= close {
-        return Err(Error::validation(format!(
-            "{flag} must open before it closes"
-        )));
-    }
-    Ok((open.to_owned(), close.to_owned()))
-}
-
 fn weekly(specs: &[String]) -> Result<Vec<calling::OpeningHours>> {
     let mut entries: Vec<(usize, String, String)> = Vec::new();
     for spec in specs {
@@ -74,7 +53,7 @@ fn weekly(specs: &[String]) -> Result<Vec<calling::OpeningHours>> {
             .iter()
             .position(|d| *d == day)
             .ok_or_else(|| Error::validation(format!("--open has an unknown day: {day}")))?;
-        let (open, close) = range(times, "--open")?;
+        let (open, close) = validate::opening_period(times, "--open")?;
         entries.push((index, open, close));
     }
     entries.sort();
@@ -116,7 +95,7 @@ fn holiday_schedule(specs: &[String]) -> Result<Vec<calling::Holiday>> {
                 return Err(invalid());
             }
             super::super::util::timestamp(date, "--holiday")?;
-            let (start_time, end_time) = range(times, "--holiday")?;
+            let (start_time, end_time) = validate::opening_period(times, "--holiday")?;
             Ok(calling::Holiday {
                 date: date.to_owned(),
                 start_time,

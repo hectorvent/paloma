@@ -371,6 +371,40 @@ pub fn pin(pin: &str) -> Result<()> {
     }
 }
 
+/// Days a group message stays pinned.
+pub fn group_pin_days(days: u32) -> Result<()> {
+    if (crate::limits::MIN_PIN_DAYS..=crate::limits::MAX_PIN_DAYS).contains(&days) {
+        return Ok(());
+    }
+    Err(Error::validation(format!(
+        "--days must be between {} and {}",
+        crate::limits::MIN_PIN_DAYS,
+        crate::limits::MAX_PIN_DAYS
+    )))
+}
+
+/// An `HHMM-HHMM` opening period, 0000 to 2359, that opens before it closes. Returns the
+/// two times as written.
+pub fn opening_period(value: &str, flag: &str) -> Result<(String, String)> {
+    let invalid = || Error::validation(format!("{flag} needs times as HHMM-HHMM, 0000 to 2359"));
+    let (open, close) = value.split_once('-').ok_or_else(invalid)?;
+    for time in [open, close] {
+        let valid = time.len() == 4
+            && time.bytes().all(|b| b.is_ascii_digit())
+            && time[..2] < *"24"
+            && time[2..] < *"60";
+        if !valid {
+            return Err(invalid());
+        }
+    }
+    if open >= close {
+        return Err(Error::validation(format!(
+            "{flag} must open before it closes"
+        )));
+    }
+    Ok((open.to_owned(), close.to_owned()))
+}
+
 /// A `--limit` page size: at least one, and at most `max` where the edge documents one.
 pub fn page_size(limit: Option<u32>, max: Option<u32>) -> Result<()> {
     match (limit, max) {
@@ -827,6 +861,25 @@ mod tests {
         assert!(pin("123456").is_ok());
         assert!(pin("12345").is_err());
         assert!(pin("12345a").is_err());
+    }
+
+    #[test]
+    fn group_pins_last_one_to_thirty_days() {
+        assert!(group_pin_days(1).is_ok());
+        assert!(group_pin_days(30).is_ok());
+        assert!(group_pin_days(0).is_err());
+        assert!(group_pin_days(31).is_err());
+    }
+
+    #[test]
+    fn opening_periods_are_hhmm_and_open_before_closing() {
+        assert_eq!(
+            opening_period("0900-1700", "--open").unwrap(),
+            ("0900".into(), "1700".into())
+        );
+        for bad in ["9-17", "2400-2410", "0960-1000", "1700-0900", "0900-0900", "0900"] {
+            assert!(opening_period(bad, "--open").is_err(), "{bad}");
+        }
     }
 
     #[test]

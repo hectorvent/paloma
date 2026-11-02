@@ -479,13 +479,7 @@ impl GroupCommand {
             } => {
                 validate::group_id(&group_id)?;
                 validate::not_blank(&message_id, "message id")?;
-                if !(limits::MIN_PIN_DAYS..=limits::MAX_PIN_DAYS).contains(&days) {
-                    return Err(Error::validation(format!(
-                        "--days must be between {} and {}",
-                        limits::MIN_PIN_DAYS,
-                        limits::MAX_PIN_DAYS
-                    )));
-                }
+                validate::group_pin_days(days)?;
                 pin(app, &group_id, &message_id, Some(days)).await
             }
             Self::Unpin {

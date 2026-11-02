@@ -396,9 +396,7 @@ impl SimulateArgs {
 
 /// A custom payload, checked but unchanged: the signature covers these exact bytes.
 fn read_payload(path: &std::path::Path) -> Result<Vec<u8>> {
-    validate::readable_file(path)?;
-    let body = std::fs::read(path)
-        .map_err(|e| Error::validation(format!("could not read {}: {e}", path.display())))?;
+    let body = super::util::read_file(path)?.into_bytes();
     if body.len() > limits::MAX_WEBHOOK_PAYLOAD {
         return Err(Error::validation(format!(
             "{} is {} bytes; webhook payloads are at most {}",

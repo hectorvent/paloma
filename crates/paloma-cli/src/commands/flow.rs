@@ -6,13 +6,13 @@ mod tools;
 use std::path::PathBuf;
 
 use clap::{Args, Subcommand, ValueEnum};
-use paloma_core::{Error, Result, validate};
+use paloma_core::{Error, Result};
 use paloma_graph::Request;
 use paloma_graph::api::flows::{self, DEFAULT_GET_FIELDS, FLOW_JSON_NAME, PREVIEW_FIELD};
 use serde_json::{Map, Value, json};
 
 use super::listing::{Pagination, Rows, list};
-use super::util::{enum_name, read_file};
+use super::util::{enum_name, read_json_text};
 use crate::app::{App, field_id};
 use crate::output::Output;
 
@@ -183,7 +183,7 @@ impl FlowCommand {
                 body.insert("name".into(), a.name.into());
                 body.insert("categories".into(), categories(&a.categories).into());
                 if let Some(path) = &a.flow_json {
-                    body.insert("flow_json".into(), read_flow_json(path)?.into());
+                    body.insert("flow_json".into(), read_json_text(path)?.into());
                 }
                 if let Some(id) = a.clone_from {
                     body.insert("clone_flow_id".into(), id.into());
@@ -218,7 +218,7 @@ impl FlowCommand {
                     reqs.push(flows::update(&a.flow_id, meta));
                 }
                 if let Some(path) = &a.flow_json {
-                    read_flow_json(path)?;
+                    read_json_text(path)?;
                     reqs.push(flows::upload_json(&a.flow_id, path));
                 }
                 write(app, &reqs).await
@@ -319,13 +319,4 @@ async fn write(app: &App, reqs: &[Request]) -> Result<()> {
         "Flow JSON has {n} validation error{}",
         if n == 1 { "" } else { "s" }
     )))
-}
-
-fn read_flow_json(path: &std::path::Path) -> Result<String> {
-    validate::readable_file(path)
-        .map_err(|_| Error::validation(format!("no such Flow JSON file: {}", path.display())))?;
-    let text = read_file(path)?;
-    serde_json::from_str::<Value>(&text)
-        .map_err(|e| Error::validation(format!("{} is not valid JSON: {e}", path.display())))?;
-    Ok(text)
 }
