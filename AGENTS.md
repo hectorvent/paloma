@@ -116,6 +116,21 @@ A new command that can't follow one says why in its doc comment.
 - **Help.** A verb's doc comment is one imperative sentence ("Show the …", not
   "Read …"); clap drops its period. Every argument has a doc comment.
 
+Known exceptions, each for a reason; don't add more without one:
+
+- **Read-only views are noun leaves**: `account limits`, `account health`,
+  `number quality`, `number health`, `template namespace`, `calling permission`. Each
+  shows one computed view, not a resource you could list, create or change.
+- **Not every list pages by cursor.** `template analytics` takes only `--after`, because
+  Meta pages the data points, not resources. `welcome-sequence list` takes only `--limit`,
+  because Meta documents no cursor there. `template migrate --page` is Meta's batch
+  number, not a cursor.
+- **`--fields`** stays plural and comma-separated: it is Graph's own parameter, passed
+  through as written.
+- **Names that keep Meta's word**: `number oba apply` (Meta calls it applying for OBA),
+  and `send call-permission` beside `calling permission`, because one sends a message and
+  the other reads a setting.
+
 ## How to add a command
 
 1. Add a variant (and an `Args` struct if it has several flags) to the group's
