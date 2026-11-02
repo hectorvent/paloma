@@ -369,3 +369,77 @@ async fn bulk_writes_print_only_what_meta_did_and_exit_1_on_a_partial_failure() 
         .code(1)
         .stdout("1\n");
 }
+
+/// Every `--flag` named in a message, a note or help text is a flag the binary has, so a
+/// rename can't leave a message telling users to pass a flag that no longer exists.
+#[test]
+fn every_flag_named_in_source_strings_exists() {
+    use clap::CommandFactory;
+    fn collect(cmd: &clap::Command, names: &mut std::collections::BTreeSet<String>) {
+        for arg in cmd.get_arguments() {
+            if let Some(long) = arg.get_long() {
+                names.insert(long.to_owned());
+            }
+            for alias in arg.get_all_aliases().into_iter().flatten() {
+                names.insert(alias.to_owned());
+            }
+        }
+        for sub in cmd.get_subcommands() {
+            collect(sub, names);
+        }
+    }
+    let mut known = std::collections::BTreeSet::new();
+    collect(&paloma_cli::cli::Cli::command(), &mut known);
+    known.extend(["help", "version"].map(str::to_owned));
+
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("..");
+    let mut unknown = Vec::new();
+    let mut stack = vec![root.clone()];
+    while let Some(dir) = stack.pop() {
+        for entry in std::fs::read_dir(&dir).unwrap() {
+            let path = entry.unwrap().path();
+            if path.is_dir() {
+                // Only shipped code: crate sources, not the tests that feed bad input.
+                if !path.ends_with("tests") && !path.ends_with("target") {
+                    stack.push(path);
+                }
+            } else if path.extension().is_some_and(|e| e == "rs")
+                && path.to_string_lossy().contains("/src/")
+            {
+                let text = std::fs::read_to_string(&path).unwrap();
+                for (number, line) in text.lines().enumerate() {
+                    if line.trim_start().starts_with("//") {
+                        continue;
+                    }
+                    for literal in line.split('"').skip(1).step_by(2) {
+                        let mut rest = literal;
+                        while let Some(at) = rest.find("--") {
+                            let tail = &rest[at + 2..];
+                            let name: String = tail
+                                .chars()
+                                .take_while(|c| {
+                                    c.is_ascii_lowercase() || c.is_ascii_digit() || *c == '-'
+                                })
+                                .collect();
+                            if name.starts_with(|c: char| c.is_ascii_lowercase())
+                                && !known.contains(&name)
+                            {
+                                unknown.push(format!(
+                                    "{}:{}: --{name}",
+                                    path.display(),
+                                    number + 1
+                                ));
+                            }
+                            rest = &tail[name.len()..];
+                        }
+                    }
+                }
+            }
+        }
+    }
+    assert!(
+        unknown.is_empty(),
+        "strings name flags the CLI doesn't have:\n{}",
+        unknown.join("\n")
+    );
+}

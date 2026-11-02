@@ -160,7 +160,7 @@ impl HandleUpload {
 /// A transport failure or a server error, which says nothing about the request itself.
 fn interrupted(error: &Error) -> bool {
     match error {
-        Error::Other(_) => true,
+        Error::Transport { .. } => true,
         Error::Api { status, .. } => retry::is_server_error(*status),
         _ => false,
     }

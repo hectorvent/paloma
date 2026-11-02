@@ -72,6 +72,16 @@ pub enum Error {
         source: std::io::Error,
     },
 
+    /// The request never got an answer: no connection, a timeout, or a broken transfer
+    /// (exit 1). Separate from [`Self::Other`] because a resumable upload retries these and
+    /// nothing else.
+    #[error("{message}")]
+    Transport {
+        message: String,
+        #[source]
+        source: Option<Box<dyn std::error::Error + Send + Sync>>,
+    },
+
     /// Anything else that is expected but has no dedicated exit code (exit 1).
     #[error("{0}")]
     Other(String),
@@ -103,6 +113,16 @@ impl Error {
         Self::Other(msg.to_string())
     }
 
+    pub fn transport(
+        message: impl fmt::Display,
+        source: impl std::error::Error + Send + Sync + 'static,
+    ) -> Self {
+        Self::Transport {
+            message: message.to_string(),
+            source: Some(Box::new(source)),
+        }
+    }
+
     pub fn io(context: impl fmt::Display, source: std::io::Error) -> Self {
         Self::Io {
             context: context.to_string(),
@@ -118,7 +138,9 @@ impl Error {
             Self::RateLimited(_) => ExitCode::RateLimited,
             Self::Policy(_) => ExitCode::Policy,
             Self::Usage(_) => ExitCode::Usage,
-            Self::Api { .. } | Self::Io { .. } | Self::Other(_) => ExitCode::Generic,
+            Self::Api { .. } | Self::Io { .. } | Self::Transport { .. } | Self::Other(_) => {
+                ExitCode::Generic
+            }
         }
     }
 }
@@ -133,6 +155,8 @@ mod tests {
     fn exit_codes_are_the_contract() {
         assert_eq!(Error::validation("x").exit_code().code(), 5);
         assert_eq!(Error::auth("x").exit_code().code(), 3);
+        let io = std::io::Error::other("reset");
+        assert_eq!(Error::transport("x", io).exit_code().code(), 1);
         assert_eq!(Error::RateLimited("x".into()).exit_code().code(), 4);
         assert_eq!(Error::policy("x").exit_code().code(), 6);
         assert_eq!(Error::usage("x").exit_code().code(), 2);

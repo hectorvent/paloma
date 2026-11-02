@@ -89,7 +89,7 @@ pub(super) async fn analytics(app: &App, a: &Analytics) -> Result<()> {
         validate::numeric_id(id, "template group id")?;
     }
     for metric in &a.metrics {
-        validate::not_blank(metric, "--metrics")?;
+        validate::not_blank(metric, "--metric")?;
     }
     let waba = app.ctx()?.require_waba_id()?.to_owned();
     let query = AnalyticsQuery {

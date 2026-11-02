@@ -328,11 +328,11 @@ fn transport(e: reqwest::Error) -> Error {
     let e = e.without_url();
     if e.is_connect() {
         // Checked first: the connect phase has its own limit, which --timeout doesn't raise.
-        Error::other(format!("cannot reach the Graph API: {e}"))
+        Error::transport(format!("cannot reach the Graph API: {e}"), e)
     } else if e.is_timeout() {
-        Error::other("request timed out (raise it with --timeout)")
+        Error::transport("request timed out (raise it with --timeout)", e)
     } else {
-        Error::other(format!("HTTP error: {e}"))
+        Error::transport(format!("HTTP error: {e}"), e)
     }
 }
 

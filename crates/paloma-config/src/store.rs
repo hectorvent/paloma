@@ -93,8 +93,9 @@ impl ConfigFile {
 
     /// Set (or, with `None`, remove) one key of a profile, creating the profile if needed.
     pub fn set_key(&self, profile: &str, key: ProfileKey, val: Option<&str>) -> Result<()> {
+        let path = self.path.clone();
         self.edit(|doc| {
-            let table = profile_table(doc, profile);
+            let table = profile_table(doc, profile, &path)?;
             match val.filter(|v| !v.is_empty()) {
                 Some(v) => {
                     table[key.as_str()] = value(v);
@@ -103,16 +104,18 @@ impl ConfigFile {
                     table.remove(key.as_str());
                 }
             }
+            Ok(())
         })
     }
 
     /// Insert or replace a whole profile, optionally making it the default.
     pub fn upsert_profile(&self, name: &str, profile: &Profile, make_default: bool) -> Result<()> {
+        let path = self.path.clone();
         self.edit(|doc| {
             if make_default {
                 doc["default_profile"] = value(name);
             }
-            let table = profile_table(doc, name);
+            let table = profile_table(doc, name, &path)?;
             for key in ProfileKey::ALL {
                 match profile.get(key).filter(|v| !v.is_empty()) {
                     Some(v) => table[key.as_str()] = value(v),
@@ -121,14 +124,18 @@ impl ConfigFile {
                     }
                 }
             }
+            Ok(())
         })
     }
 
     pub fn set_default_profile(&self, name: &str) -> Result<()> {
-        self.edit(|doc| doc["default_profile"] = value(name))
+        self.edit(|doc| {
+            doc["default_profile"] = value(name);
+            Ok(())
+        })
     }
 
-    fn edit(&self, f: impl FnOnce(&mut DocumentMut)) -> Result<()> {
+    fn edit(&self, f: impl FnOnce(&mut DocumentMut) -> Result<()>) -> Result<()> {
         let mut doc = match self.read_text()? {
             Some(text) => text.parse::<DocumentMut>().map_err(|e| {
                 Error::other(format!(
@@ -142,7 +149,7 @@ impl ConfigFile {
         if doc.get("default_profile").is_none() {
             doc["default_profile"] = value(DEFAULT_PROFILE);
         }
-        f(&mut doc);
+        f(&mut doc)?;
         create_parent(&self.path)?;
         fs::write(&self.path, doc.to_string())
             .map_err(|e| Error::io(format!("cannot write config {}", self.path.display()), e))
@@ -161,8 +168,16 @@ impl ConfigFile {
 }
 
 /// `[profiles.<name>]`, created as needed, with `profiles` itself kept implicit so the
-/// file reads as a flat list of `[profiles.x]` headers.
-fn profile_table<'a>(doc: &'a mut DocumentMut, name: &str) -> &'a mut Table {
+/// file reads as a flat list of `[profiles.x]` headers. A hand-edited file can hold either
+/// key as something other than a table (an inline table, a string); that is refused rather
+/// than rewritten, so the user's file is never reshaped behind their back.
+fn profile_table<'a>(doc: &'a mut DocumentMut, name: &str, path: &Path) -> Result<&'a mut Table> {
+    let not_a_table = |what: String| {
+        Error::other(format!(
+            "{what} in {} must be a [table] header; edit the file so it reads `[{what}]`",
+            path.display()
+        ))
+    };
     let profiles = doc
         .entry("profiles")
         .or_insert_with(|| {
@@ -171,12 +186,12 @@ fn profile_table<'a>(doc: &'a mut DocumentMut, name: &str) -> &'a mut Table {
             Item::Table(t)
         })
         .as_table_mut()
-        .expect("`profiles` is a table");
+        .ok_or_else(|| not_a_table("profiles".to_owned()))?;
     profiles
         .entry(name)
         .or_insert_with(|| Item::Table(Table::new()))
         .as_table_mut()
-        .expect("profile is a table")
+        .ok_or_else(|| not_a_table(format!("profiles.{name}")))
 }
 
 fn create_parent(path: &Path) -> Result<()> {
@@ -199,6 +214,27 @@ pub fn default_path() -> Result<PathBuf> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_profiles_key_that_isnt_a_table_is_refused_not_panicked_on() {
+        let dir = tempfile::TempDir::new().unwrap();
+        for text in ["profiles = 1\n", "[profiles]\ndev = { waba_id = \"1\" }\n"] {
+            let path = dir.path().join("config.toml");
+            fs::write(&path, text).unwrap();
+            let err = ConfigFile::at(&path)
+                .set_key("dev", ProfileKey::WabaId, Some("2"))
+                .unwrap_err();
+            assert!(
+                err.to_string().contains("must be a [table] header"),
+                "{err}"
+            );
+            assert_eq!(
+                fs::read_to_string(&path).unwrap(),
+                text,
+                "the file is left alone"
+            );
+        }
+    }
 
     #[test]
     fn missing_file_is_empty_config() {
