@@ -190,16 +190,11 @@ impl WebhookCommand {
                     )
                 } else {
                     let waba = app.ctx()?.require_waba_id()?;
-                    match &callback_url {
-                        Some(url) => webhook::subscribe(
-                            waba,
-                            url,
-                            token
-                                .as_ref()
-                                .expect("callback token was read")
-                                .expose_secret(),
-                        ),
-                        None => webhook::subscribe_default(waba),
+                    match (&callback_url, &token) {
+                        (Some(url), Some(token)) => {
+                            webhook::subscribe(waba, url, token.expose_secret())
+                        }
+                        _ => webhook::subscribe_default(waba),
                     }
                 };
                 if !app.confirm_or_abort(if number {

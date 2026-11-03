@@ -64,9 +64,17 @@ pub(super) async fn send_media(app: &App, kind: MediaKind, a: Media, voice: bool
         voice,
         reply_to: a.reply.id()?,
     };
-    let file = a.file.as_deref().map(validate::readable_file).transpose()?;
-    let mime = file.as_deref().map(media_api::guess_mime);
-    if let (Some(path), Some(mime)) = (&file, &mime) {
+    // The file and its type travel together, so the upload below always has both.
+    let file = a
+        .file
+        .as_deref()
+        .map(validate::readable_file)
+        .transpose()?
+        .map(|path| {
+            let mime = media_api::guess_mime(&path);
+            (path, mime)
+        });
+    if let Some((path, mime)) = &file {
         let limit = match kind {
             MediaKind::Image => &limits::IMAGE_MEDIA,
             MediaKind::Document => &limits::DOCUMENT_MEDIA,
@@ -84,8 +92,7 @@ pub(super) async fn send_media(app: &App, kind: MediaKind, a: Media, voice: bool
 
     let phone = app.ctx()?.require_phone_number_id()?.to_owned();
     let source = match (&file, a.id, a.link) {
-        (Some(path), _, _) => {
-            let mime = mime.as_deref().expect("set whenever there is a file");
+        (Some((path, mime)), _, _) => {
             let upload = media_api::upload(&phone, path, mime);
             if app.dry_run() {
                 let payload = messages::media(
