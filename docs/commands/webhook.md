@@ -91,7 +91,8 @@ field subscriptions, distinct from the callback URL above: `get`/`subscribe` con
 Because fields live on the app, they use an **app access token** (`{app-id}|{app-secret}`).
 So an app secret must be configured (`PALOMA_APP_SECRET` or an `app_secret_ref` in the
 profile), and the app id comes from `--app-id` / `PALOMA_APP_ID`, or is auto-discovered
-from the subscribed app shown in `webhook get`.
+from the subscribed app shown in `webhook get`. Without one it can find, the command exits
+`5`, because the app id is input you can supply.
 
 ```bash
 # show the currently subscribed events

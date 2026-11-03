@@ -35,6 +35,44 @@ pub fn set(phone_number_id: &str, calling: Value) -> Request {
         .json(json!({ "messaging_product": MESSAGING_PRODUCT, "calling": calling }))
 }
 
+/// What turning calling off confirms, from the CLI or a manifest alike.
+pub const DISABLE_CONFIRM: &str = "turn calling off, so people can't call the number";
+
+/// What turning SIP off confirms.
+pub const SIP_OFF_CONFIRM: &str = "turn SIP off, so calls stop reaching your SIP servers";
+/// What turning voicemail off confirms.
+pub const VOICEMAIL_OFF_CONFIRM: &str = "turn voicemail off";
+/// What emptying the additional codecs confirms.
+pub const CODECS_CLEAR_CONFIRM: &str = "remove every additional audio codec";
+
+/// Whether a `calling` object turns calling off, which [`DISABLE_CONFIRM`] guards.
+pub fn turns_off(calling: &Value) -> bool {
+    calling.get("status").and_then(Value::as_str) == Some(status(false))
+}
+
+/// The confirmation a whole `calling` object needs (a manifest spec or `calling set
+/// --file`): the same ones `calling disable`, `sip disable`, `voicemail disable` and
+/// `codecs clear` ask, the first that applies.
+pub fn confirm_for(calling: &Value) -> Option<&'static str> {
+    let off =
+        |pointer: &str| calling.pointer(pointer).and_then(Value::as_str) == Some(status(false));
+    if turns_off(calling) {
+        Some(DISABLE_CONFIRM)
+    } else if off("/sip/status") {
+        Some(SIP_OFF_CONFIRM)
+    } else if off("/voicemail/status") {
+        Some(VOICEMAIL_OFF_CONFIRM)
+    } else if calling
+        .pointer("/audio/additional_codecs")
+        .and_then(Value::as_array)
+        .is_some_and(Vec::is_empty)
+    {
+        Some(CODECS_CLEAR_CONFIRM)
+    } else {
+        None
+    }
+}
+
 /// Turn calling on or off.
 pub fn set_status(phone_number_id: &str, enabled: bool) -> Request {
     set(phone_number_id, json!({ "status": status(enabled) }))

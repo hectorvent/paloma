@@ -110,6 +110,9 @@ pub fn exact_matches<'a>(
         .unwrap_or_default()
 }
 
+/// What editing a live template confirms: an approved one goes back to review.
+pub const EDIT_CONFIRM: &str = "edit a live template; an approved template goes back to review";
+
 pub fn create(waba_id: &str, body: Value) -> Request {
     Request::post(format!("{waba_id}/message_templates")).json(body)
 }

@@ -67,8 +67,8 @@ impl CommerceCommand {
                 Ok(())
             }
             Self::Set(a) => {
-                if (a.cart_enabled() == Some(false) || a.catalog_visible() == Some(false))
-                    && !app.confirm_or_abort("disable shopping cart or catalog visibility")?
+                if commerce::turns_off(a.cart_enabled(), a.catalog_visible())
+                    && !app.confirm_or_abort(commerce::DISABLE_CONFIRM)?
                 {
                     return Ok(());
                 }

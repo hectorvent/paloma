@@ -77,7 +77,8 @@ HANDLE=$(paloma media upload ./flyer.jpg --handle -q)
   `--type` must match exactly. An empty file also exits 5. No size limit is checked.
 - **App id:** the session belongs to a Meta app. Set `--app-id` or `PALOMA_APP_ID`.
   Otherwise Paloma looks up the first app subscribed to your WABA, even under `--dry-run`,
-  and tells you which one it used. It warns if there are several.
+  and tells you which one it used. It warns if there are several. With no app id and no
+  WABA to look one up in, or a WABA with no subscribed app, it exits `5`.
 - **Interrupted transfers:** if the connection drops, times out or Meta answers with a 500,
   502, 503 or 504, Paloma asks Meta how much arrived and continues from there, up to 3 tries
   in total. `--timeout` applies to each try. A later command can't pick up an earlier upload.

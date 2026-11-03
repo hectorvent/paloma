@@ -113,13 +113,15 @@ pub async fn plan(cx: Cx<'_>, spec: &Value) -> Result<KindPlan> {
         .get("id")
         .and_then(Value::as_str)
         .ok_or_else(|| Error::other("template has no id"))?;
+    // The same guard as `template update`.
     Ok(KindPlan {
         changes,
         preview: Some(edit_body.clone()),
         requests: vec![templates::edit(id, edit_body)],
         refusal: edit_refusal(&current, &name, &language, category_changed),
         ..KindPlan::default()
-    })
+    }
+    .confirming(templates::EDIT_CONFIRM))
 }
 
 /// Meta's limits on edits, which a live template's status is enough to check.

@@ -197,12 +197,10 @@ impl CallingCommand {
             |app: &App| -> Result<String> { Ok(app.ctx()?.require_phone_number_id()?.to_owned()) };
         // Turning a feature off, or emptying a list, changes what callers get.
         let confirm = match &command {
-            Self::Disable => Some(DISABLE_CALLING),
-            Self::Sip(Sip::Disable) => {
-                Some("turn SIP off, so calls stop reaching your SIP servers")
-            }
-            Self::Voicemail(Voicemail::Disable) => Some("turn voicemail off"),
-            Self::Codecs(Codecs::Clear) => Some("remove every additional audio codec"),
+            Self::Disable => Some(calling::DISABLE_CONFIRM),
+            Self::Sip(Sip::Disable) => Some(calling::SIP_OFF_CONFIRM),
+            Self::Voicemail(Voicemail::Disable) => Some(calling::VOICEMAIL_OFF_CONFIRM),
+            Self::Codecs(Codecs::Clear) => Some(calling::CODECS_CLEAR_CONFIRM),
             _ => None,
         };
         let req = match command {
@@ -254,8 +252,6 @@ impl CallingCommand {
     }
 }
 
-const DISABLE_CALLING: &str = "turn calling off, so people can't call the number";
-
 async fn set(app: &App, a: Set) -> Result<()> {
     if let Some(file) = a.file {
         let v = read_json(&file)?;
@@ -265,8 +261,8 @@ async fn set(app: &App, a: Set) -> Result<()> {
             ));
         }
         let phone = app.ctx()?.require_phone_number_id()?.to_owned();
-        if v.get("status").and_then(serde_json::Value::as_str) == Some("DISABLED")
-            && !app.confirm_or_abort(DISABLE_CALLING)?
+        if let Some(what) = calling::confirm_for(&v)
+            && !app.confirm_or_abort(what)?
         {
             return Ok(());
         }
@@ -303,7 +299,7 @@ async fn set(app: &App, a: Set) -> Result<()> {
         ));
     }
     let phone = app.ctx()?.require_phone_number_id()?.to_owned();
-    if settings.status == Some("DISABLED") && !app.confirm_or_abort(DISABLE_CALLING)? {
+    if settings.status == Some("DISABLED") && !app.confirm_or_abort(calling::DISABLE_CONFIRM)? {
         return Ok(());
     }
     app.send_and_emit(&calling::set_settings(&phone, &settings), no_id)

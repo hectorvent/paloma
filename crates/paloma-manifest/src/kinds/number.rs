@@ -137,8 +137,10 @@ pub async fn plan(cx: Cx<'_>, spec: &Value) -> Result<KindPlan> {
     if desired.is_empty() {
         return Ok(KindPlan::synced());
     }
-    let disruptive =
-        desired.contains_key("new_display_name") || desired.contains_key("search_visibility");
+    let replaces_pin = desired.contains_key("pin");
+    let disruptive = replaces_pin
+        || desired.contains_key("new_display_name")
+        || desired.contains_key("search_visibility");
     let body = Value::Object(desired);
     let plan = KindPlan {
         changes,
@@ -146,7 +148,10 @@ pub async fn plan(cx: Cx<'_>, spec: &Value) -> Result<KindPlan> {
         requests: vec![phone_numbers::update(phone, body)],
         ..KindPlan::default()
     };
-    Ok(if disruptive {
+    // The same guards as `number pin set`, `name set` and `visibility set`.
+    Ok(if replaces_pin {
+        plan.confirming(phone_numbers::PIN_CONFIRM)
+    } else if disruptive {
         plan.confirming("change this number's display name or search visibility")
     } else {
         plan

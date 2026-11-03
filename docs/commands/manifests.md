@@ -138,12 +138,14 @@ compared whole, since Meta replaces them wholesale). Read-only, Meta-managed fie
 ## Per-kind notes
 
 - **Calling** maps to the `/settings` `calling` object. Remember that enabling SIP
-  routes calls as SIP INVITEs and stops the `calls` webhook.
+  routes calls as SIP INVITEs and stops the `calls` webhook. A document that turns calling,
+  SIP or voicemail off, or empties `audio.additionalCodecs`, confirms first, like the
+  matching `calling` commands.
 - **Profile** maps to the business profile. The profile photo is read-only here and
   is not exported or applied.
 - **Number** exports an observational snapshot plus writable search visibility.
   `pin` and `newDisplayName` are write-only submissions and always count as drift.
-  A PIN is a secret, so export never includes it; use interpolation instead of
+  A `pin` confirms first, like `number pin set`. A PIN is a secret, so export never includes it; use interpolation instead of
   committing one. Meta is deprecating the PIN for eligible numbers (see
   [`number pin set`](number.md#paloma-number-pin-set)), so leave `pin` out for those. Observational fields are ignored on apply.
 - **Commerce** maps to `whatsapp_commerce_settings`: `isCartEnabled`, `isCatalogVisible`.
@@ -154,7 +156,7 @@ compared whole, since Meta replaces them wholesale). Read-only, Meta-managed fie
 - **Template** is a managed *set* (WABA-scoped), one manifest per template keyed by
   `name` + `language`. `export template` snapshots every template as a multi-document
   file. `apply` creates a missing template or edits a changed one (an **edit
-  resubmits it for approval**); unchanged templates are skipped. Templates absent from
+  resubmits it for approval**, so it confirms first, like `template update`); unchanged templates are skipped. Templates absent from
   a manifest are never deleted (use `paloma template delete`). A `spec` may give full
   `components` or the `body`/`example` shorthand, and that choice sets what drift means:
   - With **`components`**, every component and field you declare is compared:
@@ -175,7 +177,9 @@ compared whole, since Meta replaces them wholesale). Read-only, Meta-managed fie
 - <a name="webhook"></a>**Webhook** is the webhook configuration (WABA-scoped), with two
   aspects in one spec: `callbackUrl` (mapped to the per-WABA `override_callback_uri`) and
   an optional `fields` list (the app-level subscribed event types). `apply` reconciles
-  each independently and writes only what changed. `verifyToken` is a write-only secret:
+  each independently and writes only what changed. Any change confirms first, like
+  `webhook subscribe` and `webhook fields set`, and `callbackUrl` must be an https URL, as
+  there. `verifyToken` is a write-only secret:
   never exported, required **only when the callback URL changes** (so export -> apply is a
   tokenless no-op). Do not commit a verify token; pull it from the keyring or an env
   var with a [placeholder](#variables--secrets) (`${keyring:...}` / `${WHATSAPP_VERIFY_TOKEN}`),

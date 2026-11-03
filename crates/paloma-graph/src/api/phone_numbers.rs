@@ -83,6 +83,10 @@ pub fn deregister(phone_number_id: &str) -> Request {
 }
 
 /// Set the two-step verification PIN.
+/// What replacing the two-step verification PIN confirms.
+pub const PIN_CONFIRM: &str =
+    "replace this number's two-step verification PIN; the old PIN stops working";
+
 pub fn set_pin(phone_number_id: &str, pin: &str) -> Request {
     Request::post(phone_number_id).json(json!({ "pin": pin }))
 }

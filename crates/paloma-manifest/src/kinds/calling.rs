@@ -55,10 +55,11 @@ pub async fn plan(cx: Cx<'_>, spec: &Value) -> Result<KindPlan> {
     let phone = cx.ctx.require_phone_number_id()?;
     let cur = current(cx).await?;
     let preview = json!({ "messaging_product": MESSAGING_PRODUCT, "calling": spec });
-    Ok(singleton_plan(
-        spec,
-        &cur,
-        preview,
-        calling::set(phone, spec.clone()),
-    ))
+    let plan = singleton_plan(spec, &cur, preview, calling::set(phone, spec.clone()));
+    // The same guards as `calling disable`, `sip disable`, `voicemail disable` and
+    // `codecs clear`: each changes what callers get.
+    Ok(match calling::confirm_for(spec) {
+        Some(what) if !plan.in_sync() => plan.confirming(what),
+        _ => plan,
+    })
 }

@@ -407,31 +407,22 @@ fn every_flag_named_in_source_strings_exists() {
                 && path.to_string_lossy().contains("/src/")
             {
                 let text = std::fs::read_to_string(&path).unwrap();
-                for (number, line) in text.lines().enumerate() {
-                    if line.trim_start().starts_with("//") {
-                        continue;
-                    }
-                    for literal in line.split('"').skip(1).step_by(2) {
-                        let mut rest = literal;
-                        while let Some(at) = rest.find("--") {
-                            let tail = &rest[at + 2..];
-                            let name: String = tail
-                                .chars()
-                                .take_while(|c| {
-                                    c.is_ascii_lowercase() || c.is_ascii_digit() || *c == '-'
-                                })
-                                .collect();
-                            if name.starts_with(|c: char| c.is_ascii_lowercase())
-                                && !known.contains(&name)
-                            {
-                                unknown.push(format!(
-                                    "{}:{}: --{name}",
-                                    path.display(),
-                                    number + 1
-                                ));
-                            }
-                            rest = &tail[name.len()..];
+                for (line, literal) in string_literals(&text) {
+                    let mut rest = literal.as_str();
+                    while let Some(at) = rest.find("--") {
+                        let tail = &rest[at + 2..];
+                        let name: String = tail
+                            .chars()
+                            .take_while(|c| {
+                                c.is_ascii_lowercase() || c.is_ascii_digit() || *c == '-'
+                            })
+                            .collect();
+                        if name.starts_with(|c: char| c.is_ascii_lowercase())
+                            && !known.contains(&name)
+                        {
+                            unknown.push(format!("{}:{line}: --{name}", path.display()));
                         }
+                        rest = &tail[name.len()..];
                     }
                 }
             }
@@ -442,4 +433,59 @@ fn every_flag_named_in_source_strings_exists() {
         "strings name flags the CLI doesn't have:\n{}",
         unknown.join("\n")
     );
+}
+
+/// Every `"..."` string literal in Rust source, with the line it starts on. It reads whole
+/// files, so a literal continued onto the next line with `\` and escaped quotes count, and
+/// it skips `//` comments and char literals outside strings.
+fn string_literals(text: &str) -> Vec<(usize, String)> {
+    let (mut out, mut line) = (Vec::new(), 1);
+    let mut chars = text.chars().peekable();
+    while let Some(c) = chars.next() {
+        match c {
+            '\n' => line += 1,
+            '/' if chars.peek() == Some(&'/') => {
+                for c in chars.by_ref() {
+                    if c == '\n' {
+                        line += 1;
+                        break;
+                    }
+                }
+            }
+            // A char literal such as '"' or '\'', so its quote doesn't open a string. A
+            // lifetime (`'a`) has no closing quote within three characters and is left alone.
+            '\'' => {
+                let ahead: String = chars.clone().take(4).collect();
+                let len = if let Some(escaped) = ahead.strip_prefix('\\') {
+                    escaped.find('\'').map(|i| i + 2)
+                } else {
+                    ahead.chars().nth(1).filter(|&c| c == '\'').map(|_| 2)
+                };
+                for _ in 0..len.unwrap_or(0) {
+                    chars.next();
+                }
+            }
+            '"' => {
+                let (start, mut literal) = (line, String::new());
+                while let Some(c) = chars.next() {
+                    match c {
+                        '\\' => match chars.next() {
+                            Some('\n') => line += 1,
+                            Some(escaped) => literal.push(escaped),
+                            None => {}
+                        },
+                        '"' => break,
+                        '\n' => {
+                            line += 1;
+                            literal.push(c);
+                        }
+                        _ => literal.push(c),
+                    }
+                }
+                out.push((start, literal));
+            }
+            _ => {}
+        }
+    }
+    out
 }

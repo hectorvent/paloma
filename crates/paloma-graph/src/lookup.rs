@@ -57,18 +57,6 @@ pub async fn find_app(
     })
 }
 
-/// The app id to manage field subscriptions for, without saying how it was chosen.
-pub async fn resolve_app_id(
-    client: &Client,
-    explicit: Option<&str>,
-    waba_id: &str,
-) -> Result<String> {
-    Ok(find_app(client, explicit, Some(waba_id))
-        .await?
-        .id()
-        .to_owned())
-}
-
 /// The WABA-scoped manifest callback: WABA override, then app-level configuration.
 /// Number overrides must stay out of WABA exports and reconciliation.
 pub async fn current_callback_url(

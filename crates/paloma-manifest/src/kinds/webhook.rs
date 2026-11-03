@@ -6,19 +6,33 @@ use paloma_core::{Error, Result};
 use paloma_graph::api::webhook;
 use serde_json::{Map, Value, json};
 
+use paloma_graph::lookup::{AppChoice, find_app};
+
 use crate::kind::{Cx, KindPlan, read};
+
+/// The app a fields change goes to, named like `webhook fields set` does, since a WABA can
+/// have several subscribed apps.
+fn describe(app: &AppChoice) -> String {
+    match app {
+        AppChoice::Given(id) => format!("app {id}"),
+        AppChoice::Discovered { id, subscribed } if *subscribed > 1 => format!(
+            "app {id}, the first of {subscribed} subscribed to the WABA; pick one with --app-id"
+        ),
+        AppChoice::Discovered { id, .. } => format!("app {id}, subscribed to the WABA"),
+    }
+}
 
 pub fn template() -> Value {
     json!({ "callbackUrl": "", "verifyToken": "", "fields": [] })
 }
 
-/// `(app_id, subscriptions response)`; needs an app id and the app secret.
-async fn subscriptions(cx: Cx<'_>) -> Result<(String, Value)> {
+/// The app, its subscriptions response, and how the app was picked; needs an app id and
+/// the app secret.
+async fn subscriptions(cx: Cx<'_>) -> Result<(AppChoice, Value)> {
     let waba = cx.ctx.require_waba_id()?;
-    let app_id =
-        paloma_graph::lookup::resolve_app_id(cx.client, cx.ctx.app_id.as_deref(), waba).await?;
-    let subs = read(cx, &webhook::app_subscriptions(&app_id)).await?;
-    Ok((app_id, subs))
+    let app = find_app(cx.client, cx.ctx.app_id.as_deref(), Some(waba)).await?;
+    let subs = read(cx, &webhook::app_subscriptions(app.id())).await?;
+    Ok((app, subs))
 }
 
 pub async fn export(cx: Cx<'_>) -> Result<Vec<Value>> {
@@ -58,8 +72,12 @@ pub async fn plan(cx: Cx<'_>, spec: &Value) -> Result<KindPlan> {
     let verify_token = text("verify_token");
     let mut plan = KindPlan::default();
     let mut preview = Map::new();
+    let mut callback_changes = false;
+    let mut fields_change = false;
 
     if let Some(desired) = text("callback_url") {
+        // The same checks as `webhook subscribe`, before any read.
+        webhook::check_callback_url(desired, "callbackUrl")?;
         let current = paloma_graph::lookup::current_callback_url(
             cx.client,
             waba,
@@ -79,6 +97,7 @@ pub async fn plan(cx: Cx<'_>, spec: &Value) -> Result<KindPlan> {
                 json!({ "override_callback_uri": desired, "verify_token": "******" }),
             );
             plan.requests.push(webhook::subscribe(waba, desired, token));
+            callback_changes = true;
         }
     }
 
@@ -94,7 +113,8 @@ pub async fn plan(cx: Cx<'_>, spec: &Value) -> Result<KindPlan> {
                 desired.push(f.to_owned());
             }
         }
-        let (app_id, subs) = subscriptions(cx).await?;
+        let (app, subs) = subscriptions(cx).await?;
+        let app_id = app.id().to_owned();
         let current: BTreeSet<String> = webhook::subscribed_fields(&subs).into_iter().collect();
         let wanted: BTreeSet<String> = desired.iter().cloned().collect();
         if wanted != current {
@@ -116,10 +136,12 @@ pub async fn plan(cx: Cx<'_>, spec: &Value) -> Result<KindPlan> {
             let callback = webhook::app_callback_url(&subs)
                 .or_else(|| text("callback_url").map(str::to_owned));
             plan.changes.push(format!(
-                "fields +[{}] -[{}]",
+                "fields +[{}] -[{}] on {}",
                 added.join(", "),
-                removed.join(", ")
+                removed.join(", "),
+                describe(&app)
             ));
+            fields_change = true;
             let mut body = json!({ "object": "whatsapp_business_account", "fields": desired });
             if let Some(c) = &callback {
                 body["callback_url"] = c.clone().into();
@@ -136,6 +158,13 @@ pub async fn plan(cx: Cx<'_>, spec: &Value) -> Result<KindPlan> {
 
     if !plan.requests.is_empty() {
         plan.preview = Some(Value::Object(preview));
+        // The same guards as `webhook subscribe` and `webhook fields set`: either changes
+        // what production receives.
+        plan.confirm = Some(match (callback_changes, fields_change) {
+            (true, true) => webhook::SUBSCRIBE_AND_FIELDS_CONFIRM,
+            (true, false) => webhook::SUBSCRIBE_CONFIRM,
+            _ => webhook::FIELDS_CONFIRM,
+        });
     }
     Ok(plan)
 }

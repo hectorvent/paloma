@@ -6,6 +6,14 @@ pub fn get(phone_number_id: &str) -> Request {
     Request::get(format!("{phone_number_id}/whatsapp_commerce_settings"))
 }
 
+/// What turning the cart or the catalog off confirms: customers notice it.
+pub const DISABLE_CONFIRM: &str = "disable shopping cart or catalog visibility";
+
+/// Whether a change turns the cart or the catalog off.
+pub fn turns_off(cart_enabled: Option<bool>, catalog_visible: Option<bool>) -> bool {
+    cart_enabled == Some(false) || catalog_visible == Some(false)
+}
+
 /// Graph takes these as query parameters, not a JSON body.
 pub fn set(
     phone_number_id: &str,

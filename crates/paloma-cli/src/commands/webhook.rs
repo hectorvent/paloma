@@ -3,7 +3,7 @@
 use std::path::PathBuf;
 
 use clap::{Args, Subcommand, ValueEnum};
-use paloma_core::{Error, ExitCode, Result, limits, validate};
+use paloma_core::{Error, ExitCode, Result, limits};
 use paloma_graph::api::webhook::{self, AVAILABLE_FIELDS};
 use paloma_graph::callback::{self, Probe, Url};
 use paloma_graph::request::redact_url;
@@ -200,7 +200,7 @@ impl WebhookCommand {
                 if !app.confirm_or_abort(if number {
                     "change the phone-number webhook callback"
                 } else {
-                    "change the WABA webhook subscription and callback"
+                    webhook::SUBSCRIBE_CONFIRM
                 })? {
                     return Ok(());
                 }
@@ -224,15 +224,7 @@ impl WebhookCommand {
 
 /// Explicit callback changes must be usable by Meta before a token is requested.
 fn check_callback_url(url: &str) -> Result<()> {
-    validate::not_blank(url, "--callback-url")?;
-    validate::max_chars(url, limits::MAX_WEBHOOK_CALLBACK_URL, "callback URL")?;
-    if callback::parse_url(url)?.scheme() != "https" {
-        return Err(Error::validation(format!(
-            "--callback-url must be an https URL: {}",
-            redact_url(url)
-        )));
-    }
-    Ok(())
+    webhook::check_callback_url(url, "--callback-url")
 }
 
 /// Meta needs a real certificate; plain HTTP is only good for trying things out locally.
@@ -440,7 +432,7 @@ impl Fields {
                 } else {
                     None
                 };
-                app.ensure_can_confirm("change the app's webhook subscriptions")?;
+                app.ensure_can_confirm(webhook::FIELDS_CONFIRM)?;
                 let app_id = super::upload::app_id(app).await?;
                 if !app.confirm_or_abort(&format!(
                     "subscribe app {app_id} to: {}",

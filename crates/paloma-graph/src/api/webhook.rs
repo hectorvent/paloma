@@ -1,9 +1,32 @@
 //! Webhook callbacks: the per-WABA override (`subscribed_apps`) and the app-level field
 //! subscriptions (`/{app-id}/subscriptions`, app-token authorized).
 
+use paloma_core::{Error, Result, limits, validate};
 use serde_json::{Value, json};
 
 use crate::Request;
+
+/// What changing the WABA's callback confirms.
+pub const SUBSCRIBE_CONFIRM: &str = "change the WABA webhook subscription and callback";
+/// What changing the app's subscribed fields confirms.
+pub const FIELDS_CONFIRM: &str = "change the app's webhook subscriptions";
+/// What changing both confirms.
+pub const SUBSCRIBE_AND_FIELDS_CONFIRM: &str =
+    "change the WABA webhook callback and the app's webhook subscriptions";
+
+/// A callback Meta will accept: an https URL within the length limit. `what` names the
+/// input in the error (`--callback-url`, or `callbackUrl` in a manifest).
+pub fn check_callback_url(url: &str, what: &str) -> Result<()> {
+    validate::not_blank(url, what)?;
+    validate::max_chars(url, limits::MAX_WEBHOOK_CALLBACK_URL, what)?;
+    if crate::callback::parse_url(url)?.scheme() != "https" {
+        return Err(Error::validation(format!(
+            "{what} must be an https URL: {}",
+            crate::request::redact_url(url)
+        )));
+    }
+    Ok(())
+}
 
 /// Every `whatsapp_business_account` webhook field an app can subscribe to.
 pub const AVAILABLE_FIELDS: [&str; 28] = [

@@ -89,11 +89,68 @@ async fn apply_writes_only_drift() {
     let home = TempDir::new().unwrap();
     let file = calling_manifest(&home, "DISABLED");
     paloma(Some(&graph), &home)
-        .args(["apply", "-f"])
+        .args(["apply", "--yes", "-f"])
         .arg(&file)
         .assert()
         .success()
         .stderr(predicate::str::contains("Calling/111 configured"));
+}
+
+/// `apply` asks for the same confirmations and runs the same checks as the commands that
+/// make the same change, so a manifest isn't a way around them.
+#[tokio::test(flavor = "multi_thread")]
+async fn apply_guards_writes_like_the_matching_commands() {
+    let graph = MockServer::start().await;
+    mock_calling_settings(&graph).await;
+    let home = TempDir::new().unwrap();
+    let calling = calling_manifest(&home, "DISABLED");
+    paloma(Some(&graph), &home)
+        .args(["apply", "-f"])
+        .arg(&calling)
+        .assert()
+        .code(5)
+        .stderr(
+            predicate::str::contains("turn calling off").and(predicate::str::contains("--yes")),
+        );
+
+    // Turning SIP off confirms, like `calling sip disable`.
+    let sip = home.path().join("sip.yaml");
+    std::fs::write(
+        &sip,
+        format!("apiVersion: paloma/v1\nkind: Calling\nmetadata:\n  phoneNumberId: \"{PHONE}\"\nspec:\n  sip:\n    status: DISABLED\n"),
+    )
+    .unwrap();
+    paloma(Some(&graph), &home)
+        .args(["apply", "-f"])
+        .arg(&sip)
+        .assert()
+        .code(5)
+        .stderr(predicate::str::contains("turn SIP off"));
+    assert!(
+        graph
+            .received_requests()
+            .await
+            .unwrap()
+            .iter()
+            .all(|r| r.method.as_str() == "GET"),
+        "a refused plan writes nothing"
+    );
+
+    // A plain-http callback is refused before the kind reads anything.
+    let fresh = MockServer::start().await;
+    let webhook = home.path().join("webhook.yaml");
+    std::fs::write(
+        &webhook,
+        "apiVersion: paloma/v1\nkind: Webhook\nspec:\n  callbackUrl: http://example.com/hook\n  verifyToken: t\n",
+    )
+    .unwrap();
+    paloma(Some(&fresh), &home)
+        .args(["apply", "--yes", "-f"])
+        .arg(&webhook)
+        .assert()
+        .code(5)
+        .stderr(predicate::str::contains("callbackUrl must be an https URL"));
+    assert!(fresh.received_requests().await.unwrap().is_empty());
 }
 
 #[test]
@@ -233,7 +290,7 @@ async fn template_apply_edits_with_the_declared_components() {
     let home = TempDir::new().unwrap();
     let file = template_manifest(&home, "Reply STOP to unsubscribe");
     paloma(Some(&graph), &home)
-        .args(["apply", "-f"])
+        .args(["apply", "--yes", "-f"])
         .arg(&file)
         .assert()
         .success();
@@ -294,7 +351,7 @@ async fn template_shorthand_edit_keeps_the_other_live_components() {
     let home = TempDir::new().unwrap();
     let file = shorthand_manifest(&home, "UTILITY", "Your order is on its way.");
     paloma(Some(&graph), &home)
-        .args(["apply", "-f"])
+        .args(["apply", "--yes", "-f"])
         .arg(&file)
         .assert()
         .success();
@@ -317,7 +374,7 @@ async fn template_category_change_sends_only_the_category() {
     let home = TempDir::new().unwrap();
     let file = shorthand_manifest(&home, "MARKETING", "Your order shipped.");
     paloma(Some(&graph), &home)
-        .args(["apply", "-f"])
+        .args(["apply", "--yes", "-f"])
         .arg(&file)
         .assert()
         .success();
@@ -442,7 +499,7 @@ async fn template_apply_drift_on_a_later_page_edits_instead_of_creating() {
     let home = TempDir::new().unwrap();
     let file = template_manifest(&home, "Reply STOP to unsubscribe");
     paloma(Some(&graph), &home)
-        .args(["apply", "-f"])
+        .args(["apply", "--yes", "-f"])
         .arg(&file)
         .assert()
         .success();
