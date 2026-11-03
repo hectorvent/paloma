@@ -8,28 +8,65 @@ use serde_json::Value;
 use crate::api::{templates, webhook};
 use crate::{Client, paging};
 
-/// The app id to manage field subscriptions for: the explicit one, else the first app
-/// subscribed to the WABA.
+/// Which app a request acts for, and how it was chosen.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum AppChoice {
+    /// The user gave it (`--app-id`, `PALOMA_APP_ID` or the profile).
+    Given(String),
+    /// The first of `subscribed` apps on the WABA. A WABA can have several, and the first
+    /// may not be the token's, so callers say which one they picked.
+    Discovered { id: String, subscribed: usize },
+}
+
+impl AppChoice {
+    pub fn id(&self) -> &str {
+        match self {
+            Self::Given(id) | Self::Discovered { id, .. } => id,
+        }
+    }
+}
+
+/// The app id: the explicit one, else the first app subscribed to the WABA. With neither,
+/// it's input the user can supply, so it's a validation error (exit 5).
+pub async fn find_app(
+    client: &Client,
+    explicit: Option<&str>,
+    waba_id: Option<&str>,
+) -> Result<AppChoice> {
+    if let Some(id) = explicit.filter(|s| !s.trim().is_empty()) {
+        return Ok(AppChoice::Given(id.to_owned()));
+    }
+    let Some(waba_id) = waba_id.filter(|s| !s.trim().is_empty()) else {
+        return Err(Error::validation(
+            "no app id: pass --app-id, set PALOMA_APP_ID, or set a WABA id to look it up",
+        ));
+    };
+    let subscribed = client
+        .execute(&webhook::subscribed_apps(waba_id))
+        .await?
+        .json()?;
+    let id = webhook::subscribed_app_id(&subscribed).ok_or_else(|| {
+        Error::validation(
+            "no app id: pass --app-id, set PALOMA_APP_ID, or subscribe an app to the WABA first",
+        )
+    })?;
+    let count = subscribed["data"].as_array().map_or(0, Vec::len);
+    Ok(AppChoice::Discovered {
+        id,
+        subscribed: count,
+    })
+}
+
+/// The app id to manage field subscriptions for, without saying how it was chosen.
 pub async fn resolve_app_id(
     client: &Client,
     explicit: Option<&str>,
     waba_id: &str,
 ) -> Result<String> {
-    if let Some(id) = explicit.filter(|s| !s.trim().is_empty()) {
-        return Ok(id.to_owned());
-    }
-    let subscribed = client
-        .execute(&webhook::subscribed_apps(waba_id))
+    Ok(find_app(client, explicit, Some(waba_id))
         .await?
-        .json()?;
-    webhook::subscribed_app_id(&subscribed).ok_or_else(no_subscribed_app)
-}
-
-/// No app id was given and none is subscribed to the WABA.
-pub fn no_subscribed_app() -> Error {
-    Error::validation(
-        "no app id: pass --app-id, set PALOMA_APP_ID, or subscribe an app to the WABA first",
-    )
+        .id()
+        .to_owned())
 }
 
 /// The WABA-scoped manifest callback: WABA override, then app-level configuration.

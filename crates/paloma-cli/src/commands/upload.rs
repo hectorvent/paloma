@@ -7,34 +7,24 @@ use paloma_graph::retry;
 
 use crate::app::App;
 
-/// The app id: explicit, or discovered from the WABA (a read, done even under
-/// --dry-run so the printed request is the real one). A WABA can have several apps and the
-/// first may not be the token's, so a discovered id is always reported.
+/// The app id, saying on stderr which app was picked when it had to be looked up (a read,
+/// done even under --dry-run so the printed request is the real one).
 pub async fn app_id(app: &App) -> Result<String> {
-    use paloma_graph::api::webhook;
+    use paloma_graph::lookup::{AppChoice, find_app};
 
     let ctx = app.ctx()?;
-    if let Some(id) = ctx.app_id.clone() {
-        return Ok(id);
+    let choice = find_app(app.client()?, ctx.app_id.as_deref(), ctx.waba_id.as_deref()).await?;
+    let waba = ctx.waba_id.as_deref().unwrap_or_default();
+    match &choice {
+        AppChoice::Given(_) => {}
+        AppChoice::Discovered { id, subscribed } if *subscribed > 1 => app.out.warn(format!(
+            "WABA {waba} has {subscribed} subscribed apps; using the first, {id}. Pick one with --app-id"
+        )),
+        AppChoice::Discovered { id, .. } => app
+            .out
+            .note(format!("using app {id}, subscribed to WABA {waba}")),
     }
-    let Some(waba) = ctx.waba_id.clone() else {
-        return Err(Error::auth(
-            "no app id: pass --app-id, set PALOMA_APP_ID, or set a WABA id to look it up",
-        ));
-    };
-    let subscribed = app.fetch(&webhook::subscribed_apps(&waba)).await?.json()?;
-    let id = webhook::subscribed_app_id(&subscribed)
-        .ok_or_else(paloma_graph::lookup::no_subscribed_app)?;
-    let count = subscribed["data"].as_array().map_or(0, Vec::len);
-    if count > 1 {
-        app.out.warn(format!(
-            "WABA {waba} has {count} subscribed apps; using the first, {id}. Pick one with --app-id"
-        ));
-    } else {
-        app.out
-            .note(format!("using app {id}, subscribed to WABA {waba}"));
-    }
-    Ok(id)
+    Ok(choice.id().to_owned())
 }
 
 /// A file checked for the Resumable Upload API, so a bad one fails before any API call.

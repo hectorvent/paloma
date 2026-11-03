@@ -275,7 +275,8 @@ async fn upload_handle_warns_when_the_waba_has_several_apps_and_names_app_id_whe
         .args(["media", "upload", "--handle", "--dry-run"])
         .arg(&file)
         .assert()
-        .code(3)
+        // Missing input the user can supply, like any other missing flag.
+        .code(5)
         .stdout(predicate::str::is_empty())
         .stderr(predicate::str::contains("--app-id"));
 }
