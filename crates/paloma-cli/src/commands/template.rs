@@ -9,7 +9,7 @@ use crate::output::Output;
 use clap::{ArgGroup, Args, Subcommand, ValueEnum};
 use paloma_core::{Error, ExitCode, Result, limits, validate};
 use paloma_graph::api::templates::{
-    self, AnalyticsQuery, Button, Examples, GroupUpdate, Header, InlineTemplate, LibraryFilter,
+    self, AnalyticsQuery, Button, GroupUpdate, Header, InlineTemplate, LibraryFilter,
     LibraryTemplate, ListFilter, Migration,
 };
 use paloma_graph::paging;

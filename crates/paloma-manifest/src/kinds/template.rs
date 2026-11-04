@@ -170,6 +170,11 @@ fn create_body(spec: &Value, name: &str, language: &str) -> Result<Value> {
             .collect(),
         _ => Vec::new(),
     };
+    // The same checks as `template create --body --example`, so a manifest can't submit
+    // a template review would reject for its name, length or examples.
+    paloma_core::validate::template_name(name)?;
+    paloma_core::validate::template_text(text, paloma_core::limits::MAX_TEMPLATE_BODY, "body")?;
+    templates::examples(text, &example, false, "example")?;
     Ok(templates::inline_body(
         name, category, language, text, &example,
     ))

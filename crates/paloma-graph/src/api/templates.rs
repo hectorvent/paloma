@@ -1,8 +1,17 @@
 //! Message templates (`/{waba-id}/message_templates`).
 
-use serde_json::{Value, json};
+use paloma_core::{Error, Result, validate};
 
 use crate::Request;
+use serde_json::{Value, json};
+mod analytics;
+mod group;
+mod inline;
+mod library;
+pub use analytics::*;
+pub use group::*;
+pub use inline::*;
+pub use library::*;
 
 /// Filters for listing templates.
 #[derive(Debug, Clone, Default)]
@@ -118,175 +127,6 @@ pub fn create(waba_id: &str, body: Value) -> Request {
     Request::post(format!("{waba_id}/message_templates")).json(body)
 }
 
-/// A minimal BODY-only template, with optional example values for its variables.
-pub fn inline_body(
-    name: &str,
-    category: &str,
-    language: &str,
-    body: &str,
-    example: &[String],
-) -> Value {
-    let mut component = json!({ "type": "BODY", "text": body });
-    if !example.is_empty() {
-        component["example"] = json!({ "body_text": [example] });
-    }
-    json!({ "name": name, "category": category, "language": language, "components": [component] })
-}
-
-/// Variable examples, in the shape the template's `parameter_format` calls for.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum Examples {
-    Positional(Vec<String>),
-    /// `(parameter name, example value)` pairs.
-    Named(Vec<(String, String)>),
-}
-
-impl Examples {
-    fn is_empty(&self) -> bool {
-        match self {
-            Self::Positional(values) => values.is_empty(),
-            Self::Named(pairs) => pairs.is_empty(),
-        }
-    }
-
-    fn named_params(pairs: &[(String, String)]) -> Value {
-        pairs
-            .iter()
-            .map(|(name, value)| json!({ "param_name": name, "example": value }))
-            .collect()
-    }
-
-    fn header(&self) -> Value {
-        match self {
-            Self::Positional(values) => json!({ "header_text": values }),
-            Self::Named(pairs) => {
-                json!({ "header_text_named_params": Self::named_params(pairs) })
-            }
-        }
-    }
-
-    fn body(&self) -> Value {
-        match self {
-            Self::Positional(values) => json!({ "body_text": [values] }),
-            Self::Named(pairs) => json!({ "body_text_named_params": Self::named_params(pairs) }),
-        }
-    }
-}
-
-/// A template header. Media headers carry a Resumable Upload handle, not a media id.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum Header {
-    Text { text: String, example: Examples },
-    Media { format: String, handle: String },
-}
-
-/// A button with a typed inline form; the other button types stay with `--file`.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum Button {
-    QuickReply {
-        text: String,
-    },
-    Url {
-        text: String,
-        url: String,
-        example: Option<String>,
-    },
-    PhoneNumber {
-        text: String,
-        phone_number: String,
-    },
-    CopyCode {
-        example: String,
-    },
-}
-
-impl Button {
-    fn to_json(&self) -> Value {
-        match self {
-            Self::QuickReply { text } => json!({ "type": "QUICK_REPLY", "text": text }),
-            Self::Url {
-                text,
-                url,
-                example: None,
-            } => json!({ "type": "URL", "text": text, "url": url }),
-            Self::Url {
-                text,
-                url,
-                example: Some(example),
-            } => json!({ "type": "URL", "text": text, "url": url, "example": [example] }),
-            Self::PhoneNumber { text, phone_number } => {
-                json!({ "type": "PHONE_NUMBER", "text": text, "phone_number": phone_number })
-            }
-            Self::CopyCode { example } => json!({ "type": "COPY_CODE", "example": example }),
-        }
-    }
-}
-
-/// A template described by typed flags.
-#[derive(Debug, Clone)]
-pub struct InlineTemplate {
-    pub name: String,
-    pub category: paloma_core::TemplateCategory,
-    pub language: String,
-    pub parameter_format: Option<String>,
-    pub header: Option<Header>,
-    pub body: String,
-    pub body_example: Examples,
-    pub footer: Option<String>,
-    pub buttons: Vec<Button>,
-    pub allow_category_change: bool,
-    pub ttl_seconds: Option<i64>,
-}
-
-/// The create payload for an [`InlineTemplate`]. Optional fields are left out when unset,
-/// so Meta's defaults apply.
-pub fn inline_template(t: &InlineTemplate) -> Value {
-    let mut components = Vec::new();
-    match &t.header {
-        Some(Header::Text { text, example }) => {
-            let mut header = json!({ "type": "HEADER", "format": "TEXT", "text": text });
-            if !example.is_empty() {
-                header["example"] = example.header();
-            }
-            components.push(header);
-        }
-        Some(Header::Media { format, handle }) => components.push(json!({
-            "type": "HEADER",
-            "format": format,
-            "example": { "header_handle": [handle] },
-        })),
-        None => {}
-    }
-    let mut body = json!({ "type": "BODY", "text": t.body });
-    if !t.body_example.is_empty() {
-        body["example"] = t.body_example.body();
-    }
-    components.push(body);
-    if let Some(footer) = &t.footer {
-        components.push(json!({ "type": "FOOTER", "text": footer }));
-    }
-    if !t.buttons.is_empty() {
-        let buttons: Vec<Value> = t.buttons.iter().map(Button::to_json).collect();
-        components.push(json!({ "type": "BUTTONS", "buttons": buttons }));
-    }
-    let mut template = json!({
-        "name": t.name,
-        "category": t.category.as_str(),
-        "language": t.language,
-        "components": components,
-    });
-    if let Some(format) = &t.parameter_format {
-        template["parameter_format"] = json!(format);
-    }
-    if t.allow_category_change {
-        template["allow_category_change"] = json!(true);
-    }
-    if let Some(ttl) = t.ttl_seconds {
-        template["message_send_ttl_seconds"] = json!(ttl);
-    }
-    template
-}
-
 /// `POST /{template-id}`: edit an existing template.
 pub fn edit(template_id: &str, body: Value) -> Request {
     Request::post(template_id).json(body)
@@ -343,68 +183,6 @@ pub fn unpause(template_id: &str) -> Request {
     Request::post(format!("{template_id}/unpause"))
 }
 
-/// Filters for browsing the Template Library.
-#[derive(Debug, Clone, Default)]
-pub struct LibraryFilter {
-    pub search: Option<String>,
-    pub topic: Option<String>,
-    pub usecase: Option<String>,
-    pub industry: Option<String>,
-    pub language: Option<String>,
-    pub name: Option<String>,
-}
-
-/// `GET /message_template_library`. The library is Meta's, so the path has no WABA.
-pub fn library_list(filter: &LibraryFilter, after: Option<&str>) -> Request {
-    Request::get("message_template_library")
-        .query_opt("search", filter.search.as_deref())
-        .query_opt("topic", filter.topic.as_deref())
-        .query_opt("usecase", filter.usecase.as_deref())
-        .query_opt("industry", filter.industry.as_deref())
-        .query_opt("language", filter.language.as_deref())
-        .query_opt("name", filter.name.as_deref())
-        .query_opt("after", after)
-}
-
-/// A template to create from a Template Library entry.
-#[derive(Debug, Clone)]
-pub struct LibraryTemplate {
-    pub name: String,
-    pub language: String,
-    pub library_template: String,
-    pub button_inputs: Option<Value>,
-    pub body_inputs: Option<Value>,
-}
-
-/// The create payload for a [`LibraryTemplate`], for [`create`]. Meta's page writes
-/// `library_template_button_inputs` as a quoted string that isn't valid JSON, but types it
-/// as an array of objects, as its reference does, so that's what is sent. The same page says
-/// the category must be `UTILITY` when creating from the library.
-pub fn library_template(t: &LibraryTemplate) -> Value {
-    let mut template = json!({
-        "name": t.name,
-        "category": "UTILITY",
-        "language": t.language,
-        "library_template_name": t.library_template,
-    });
-    if let Some(inputs) = &t.button_inputs {
-        template["library_template_button_inputs"] = inputs.clone();
-    }
-    if let Some(inputs) = &t.body_inputs {
-        template["library_template_body_inputs"] = inputs.clone();
-    }
-    template
-}
-
-/// `GET /{template-id}/compare`, against one other template, over `start..end` in UNIX
-/// seconds.
-pub fn compare(template_id: &str, other_id: &str, start: u64, end: u64) -> Request {
-    Request::get(format!("{template_id}/compare"))
-        .query("template_ids", format!("[{other_id}]"))
-        .query("start", start)
-        .query("end", end)
-}
-
 /// What to migrate. Unset fields are left to Meta's defaults.
 #[derive(Debug, Clone, Default)]
 pub struct Migration<'a> {
@@ -457,111 +235,48 @@ pub fn upsert(waba_id: &str, body: Value) -> Request {
     Request::post(format!("{waba_id}/upsert_message_templates")).json(body)
 }
 
-/// `POST /{waba-id}/template_groups`. Unlike other template id lists, Meta types these as
-/// integers.
-pub fn group_create(
-    waba_id: &str,
-    name: &str,
-    description: Option<&str>,
-    template_ids: &[u64],
-) -> Request {
-    let mut body = json!({ "name": name, "whatsapp_business_templates": template_ids });
-    if let Some(description) = description {
-        body["description"] = json!(description);
-    }
-    Request::post(format!("{waba_id}/template_groups")).json(body)
-}
-
-/// `GET /{group-id}`.
-pub fn group_get(group_id: &str) -> Request {
-    Request::get(group_id)
-}
-
-/// A partial update of a template group. Unset fields stay as they are.
-#[derive(Debug, Clone, Copy, Default)]
-pub struct GroupUpdate<'a> {
-    pub name: Option<&'a str>,
-    pub description: Option<&'a str>,
-    pub add_templates: &'a [u64],
-    pub remove_templates: &'a [u64],
-}
-
-/// `POST /{group-id}`.
-pub fn group_update(group_id: &str, update: &GroupUpdate<'_>) -> Request {
-    let mut body = json!({});
-    if let Some(name) = update.name {
-        body["name"] = json!(name);
-    }
-    if let Some(description) = update.description {
-        body["description"] = json!(description);
-    }
-    if !update.add_templates.is_empty() {
-        body["add_templates"] = json!(update.add_templates);
-    }
-    if !update.remove_templates.is_empty() {
-        body["remove_templates"] = json!(update.remove_templates);
-    }
-    Request::post(group_id).json(body)
-}
-
-/// `DELETE /{group-id}`. The templates in the group stay.
-pub fn group_delete(group_id: &str) -> Request {
-    Request::delete(group_id)
-}
-
-/// The window and metrics of an analytics request.
-#[derive(Debug, Clone, Copy, Default)]
-pub struct AnalyticsQuery<'a> {
-    pub start: &'a str,
-    pub end: &'a str,
-    pub metrics: &'a [String],
-    pub waba_timezone: bool,
-}
-
-/// The parameters both analytics edges share. Meta's table says `DAILY` and its example
-/// requests say `daily`, on the same page; the requests are what is sent.
-fn analytics_request(node: String, query: &AnalyticsQuery<'_>, after: Option<&str>) -> Request {
-    let metrics = (!query.metrics.is_empty()).then(|| query.metrics.join(","));
-    Request::get(node)
-        .query("granularity", "daily")
-        .query("start", query.start)
-        .query("end", query.end)
-        .query_opt("metric_types", metrics)
-        .query_opt("use_waba_timezone", query.waba_timezone.then_some(true))
-        .query_opt("after", after)
-}
-
-fn id_array(ids: &[String]) -> String {
-    format!("[{}]", ids.join(","))
-}
-
-/// `GET /{waba-id}/template_analytics`.
-pub fn analytics(
-    waba_id: &str,
-    template_ids: &[String],
-    product_type: Option<&str>,
-    query: &AnalyticsQuery<'_>,
-    after: Option<&str>,
-) -> Request {
-    analytics_request(format!("{waba_id}/template_analytics"), query, after)
-        .query("template_ids", id_array(template_ids))
-        .query_opt("product_type", product_type)
-}
-
-/// `GET /{waba-id}/template_group_analytics`.
-pub fn group_analytics(
-    waba_id: &str,
-    group_ids: &[String],
-    query: &AnalyticsQuery<'_>,
-    after: Option<&str>,
-) -> Request {
-    analytics_request(format!("{waba_id}/template_group_analytics"), query, after)
-        .query("template_group_ids", id_array(group_ids))
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn positional_examples_need_one_value_per_variable_numbered_from_one() {
+        let ok = examples(
+            "Hi {{1}}, order {{2}}",
+            &["Ana".into(), "7".into()],
+            false,
+            "e",
+        );
+        assert_eq!(
+            ok.unwrap(),
+            Examples::Positional(vec!["Ana".into(), "7".into()])
+        );
+        assert!(
+            examples("Hi {{1}}", &[], false, "e").is_err(),
+            "a value is missing"
+        );
+        assert!(
+            examples("Hi {{2}}", &["x".into()], false, "e").is_err(),
+            "numbering has a gap"
+        );
+        assert!(
+            examples("Hi {{name}}", &["x".into()], false, "e").is_err(),
+            "not positional"
+        );
+        assert!(
+            examples("Hi {{1}}", &[" ".into()], false, "e").is_err(),
+            "blank value"
+        );
+    }
+
+    #[test]
+    fn named_examples_need_a_pair_for_each_variable_in_the_text() {
+        let ok = examples("Hi {{name}}", &["name=Ana".into()], true, "e").unwrap();
+        assert_eq!(ok, Examples::Named(vec![("name".into(), "Ana".into())]));
+        assert!(examples("Hi {{name}}", &["other=Ana".into()], true, "e").is_err());
+        assert!(examples("Hi {{name}}", &["Ana".into()], true, "e").is_err());
+        assert_eq!(distinct_variables("{{b}} {{a}} {{b}}"), ["a", "b"]);
+    }
 
     fn minimal() -> InlineTemplate {
         InlineTemplate {

@@ -289,7 +289,12 @@ pub(super) fn inline_template(name: &str, a: &Create) -> Result<InlineTemplate> 
         parameter_format: a.parameter_format.as_ref().map(enum_name),
         header: inline_header(a, format)?,
         body: body.to_owned(),
-        body_example: examples(body, &split_examples(&a.example), format, "--example")?,
+        body_example: templates::examples(
+            body,
+            &split_examples(&a.example),
+            format == ParameterFormat::Named,
+            "--example",
+        )?,
         footer: a.footer.clone(),
         buttons: parse_buttons(&a.buttons, &a.url_examples)?,
         allow_category_change: a.allow_category_change,
@@ -300,14 +305,19 @@ pub(super) fn inline_template(name: &str, a: &Create) -> Result<InlineTemplate> 
 pub(super) fn inline_header(a: &Create, format: ParameterFormat) -> Result<Option<Header>> {
     if let Some(text) = &a.header_text {
         validate::template_text(text, limits::MAX_TEMPLATE_HEADER_TEXT, "--header-text")?;
-        if distinct_variables(text).len() > limits::MAX_TEMPLATE_HEADER_PARAMS {
+        if templates::distinct_variables(text).len() > limits::MAX_TEMPLATE_HEADER_PARAMS {
             return Err(Error::validation(format!(
                 "--header-text can have at most {} variable",
                 limits::MAX_TEMPLATE_HEADER_PARAMS
             )));
         }
         let given: Vec<String> = a.header_example.iter().cloned().collect();
-        let example = examples(text, &given, format, "--header-example")?;
+        let example = templates::examples(
+            text,
+            &given,
+            format == ParameterFormat::Named,
+            "--header-example",
+        )?;
         return Ok(Some(Header::Text {
             text: text.clone(),
             example,
@@ -323,81 +333,6 @@ pub(super) fn inline_header(a: &Create, format: ParameterFormat) -> Result<Optio
         }
         _ => Ok(None),
     }
-}
-
-pub(super) fn distinct_variables(text: &str) -> Vec<&str> {
-    let mut variables = validate::template_variables(text);
-    variables.sort_unstable();
-    variables.dedup();
-    variables
-}
-
-/// Check `given` covers the variables in `text`, as Meta requires an example for each, and
-/// shape them for the parameter format.
-pub(super) fn examples(
-    text: &str,
-    given: &[String],
-    format: ParameterFormat,
-    flag: &str,
-) -> Result<Examples> {
-    let variables = distinct_variables(text);
-    if format == ParameterFormat::Named {
-        return named_examples(&variables, given, flag);
-    }
-    let mut numbers = Vec::with_capacity(variables.len());
-    for variable in &variables {
-        let Ok(number) = variable.parse::<usize>() else {
-            return Err(Error::validation(format!(
-                "variable {{{{{variable}}}}} isn't positional; pass --parameter-format named"
-            )));
-        };
-        numbers.push(number);
-    }
-    numbers.sort_unstable();
-    if numbers.iter().copied().ne(1..=numbers.len()) {
-        return Err(Error::validation(
-            "positional variables must be numbered from {{1}} without gaps",
-        ));
-    }
-    if given.len() != numbers.len() {
-        return Err(Error::validation(format!(
-            "{flag} has {} value(s) for {} variable(s)",
-            given.len(),
-            numbers.len()
-        )));
-    }
-    for value in given {
-        validate::not_blank(value, flag)?;
-    }
-    Ok(Examples::Positional(given.to_vec()))
-}
-
-pub(super) fn named_examples(variables: &[&str], given: &[String], flag: &str) -> Result<Examples> {
-    let mut pairs = Vec::with_capacity(given.len());
-    for example in given {
-        let Some((name, value)) = example.split_once('=') else {
-            return Err(Error::validation(format!(
-                "{flag} must use name=value with --parameter-format named"
-            )));
-        };
-        validate::template_parameter_name(name)?;
-        validate::not_blank(value, flag)?;
-        if !variables.contains(&name) {
-            return Err(Error::validation(format!(
-                "{flag} names '{name}', which isn't a variable in the text"
-            )));
-        }
-        pairs.push((name.to_owned(), value.to_owned()));
-    }
-    for variable in variables {
-        validate::template_parameter_name(variable)?;
-        if !pairs.iter().any(|(name, _)| name == variable) {
-            return Err(Error::validation(format!(
-                "{flag} has no example for {{{{{variable}}}}}"
-            )));
-        }
-    }
-    Ok(Examples::Named(pairs))
 }
 
 /// Parse `--button` values in display order and apply Meta's per-type and grouping limits.
