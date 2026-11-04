@@ -79,9 +79,9 @@ pub struct Create {
     /// Template name (inline mode).
     #[arg(long, requires_all = ["category", "language", "body"])]
     pub(super) name: Option<String>,
-    /// MARKETING, UTILITY or AUTHENTICATION.
-    #[arg(long)]
-    pub(super) category: Option<String>,
+    /// The template's category, which decides its TTL range and how it is sent.
+    #[arg(long, value_parser = crate::commands::util::template_category(), ignore_case = true)]
+    pub(super) category: Option<paloma_core::TemplateCategory>,
     /// Language code, e.g. en_US.
     #[arg(long)]
     pub(super) language: Option<String>,
@@ -256,13 +256,15 @@ pub(super) fn split_examples(given: &[String]) -> Vec<String> {
 
 /// Validate the inline flags and turn them into a template, before anything needs an id.
 pub(super) fn inline_template(name: &str, a: &Create) -> Result<InlineTemplate> {
-    let category = a.category.as_deref().unwrap_or_default();
+    let Some(category) = a.category else {
+        unreachable!("clap requires --category with --name");
+    };
     let body = a.body.as_deref().unwrap_or_default();
     let format = a.parameter_format.unwrap_or(ParameterFormat::Positional);
 
     validate::template_name(name)?;
     validate::template_text(body, limits::MAX_TEMPLATE_BODY, "--body")?;
-    if category.eq_ignore_ascii_case("AUTHENTICATION")
+    if category == paloma_core::TemplateCategory::Authentication
         && (a.header_text.is_some()
             || a.header_media.is_some()
             || a.footer.is_some()
@@ -282,7 +284,7 @@ pub(super) fn inline_template(name: &str, a: &Create) -> Result<InlineTemplate> 
     }
     Ok(InlineTemplate {
         name: name.to_owned(),
-        category: category.to_owned(),
+        category,
         language: a.language.clone().unwrap_or_default(),
         parameter_format: a.parameter_format.as_ref().map(enum_name),
         header: inline_header(a, format)?,
@@ -519,12 +521,12 @@ pub(super) fn parse_button<'a>(
 
 /// `message_send_ttl_seconds` for a `--ttl`. Authentication and utility templates spell
 /// Meta's 30-day default as -1; marketing takes 30 days in seconds like any other value.
-fn ttl_seconds(category: &str, ttl: Duration) -> Result<i64> {
+fn ttl_seconds(category: paloma_core::TemplateCategory, ttl: Duration) -> Result<i64> {
     const THIRTY_DAYS: u64 = 30 * 24 * 60 * 60;
     if ttl.subsec_nanos() != 0 {
         return Err(Error::validation("--ttl must be whole seconds"));
     }
-    if ttl.as_secs() == THIRTY_DAYS && !category.eq_ignore_ascii_case("MARKETING") {
+    if ttl.as_secs() == THIRTY_DAYS && category != paloma_core::TemplateCategory::Marketing {
         return Ok(limits::TEMPLATE_TTL_30_DAYS);
     }
     i64::try_from(ttl.as_secs()).map_err(|_| Error::validation("--ttl is too long"))

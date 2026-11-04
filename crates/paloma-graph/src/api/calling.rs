@@ -82,19 +82,64 @@ fn status(enabled: bool) -> &'static str {
     if enabled { "ENABLED" } else { "DISABLED" }
 }
 
-/// Top-level calling settings. Values are Meta's wire names; `None` leaves a setting as it
-/// is.
-#[derive(Debug, Default)]
-pub struct Settings<'a> {
-    pub status: Option<&'a str>,
-    pub call_icon_visibility: Option<&'a str>,
-    pub callback_permission_status: Option<&'a str>,
-    /// `Some(empty)` shows the call button in every country again.
-    pub icon_countries: Option<Vec<String>>,
-    pub srtp_key_exchange_protocol: Option<&'a str>,
+/// A closed set of Meta's calling values, with the wire name each one sends.
+macro_rules! wire_enum {
+    ($(#[$doc:meta])* $name:ident { $($variant:ident => $wire:literal),+ $(,)? }) => {
+        $(#[$doc])*
+        #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+        pub enum $name {
+            $($variant),+
+        }
+
+        impl $name {
+            pub const fn as_str(self) -> &'static str {
+                match self {
+                    $(Self::$variant => $wire),+
+                }
+            }
+        }
+    };
 }
 
-impl Settings<'_> {
+wire_enum!(
+    /// On or off, for calling itself and for callback permission.
+    Toggle { Enabled => "ENABLED", Disabled => "DISABLED" }
+);
+wire_enum!(
+    /// Whether WhatsApp shows the call button.
+    CallIcon { Default => "DEFAULT", DisableAll => "DISABLE_ALL" }
+);
+wire_enum!(
+    /// SRTP key exchange for SIP calls. The guide's values: the settings reference says
+    /// `DTLS-SRTP` and `SDES-SRTP`, but it also gets the casing of `status` wrong.
+    Srtp { Dtls => "DTLS", Sdes => "SDES" }
+);
+wire_enum!(
+    /// Additional audio codecs.
+    Codec { Pcma => "PCMA", Pcmu => "PCMU" }
+);
+wire_enum!(
+    /// When voicemail answers.
+    VoicemailTrigger { Reject => "REJECT", Timeout => "TIMEOUT" }
+);
+
+/// Top-level calling settings; `None` leaves a setting as it is.
+#[derive(Debug, Default)]
+pub struct Settings {
+    pub status: Option<Toggle>,
+    pub call_icon_visibility: Option<CallIcon>,
+    pub callback_permission_status: Option<Toggle>,
+    /// `Some(empty)` shows the call button in every country again.
+    pub icon_countries: Option<Vec<String>>,
+    pub srtp_key_exchange_protocol: Option<Srtp>,
+}
+
+impl Settings {
+    /// Whether these settings turn calling off, which [`DISABLE_CONFIRM`] guards.
+    pub fn turns_off(&self) -> bool {
+        self.status == Some(Toggle::Disabled)
+    }
+
     pub fn is_empty(&self) -> bool {
         self.body().as_object().is_none_or(Map::is_empty)
     }
@@ -106,15 +151,18 @@ impl Settings<'_> {
                 m.insert(key.into(), v.into());
             }
         };
-        put("status", self.status);
-        put("call_icon_visibility", self.call_icon_visibility);
+        put("status", self.status.map(Toggle::as_str));
+        put(
+            "call_icon_visibility",
+            self.call_icon_visibility.map(CallIcon::as_str),
+        );
         put(
             "callback_permission_status",
-            self.callback_permission_status,
+            self.callback_permission_status.map(Toggle::as_str),
         );
         put(
             "srtp_key_exchange_protocol",
-            self.srtp_key_exchange_protocol,
+            self.srtp_key_exchange_protocol.map(Srtp::as_str),
         );
         if let Some(countries) = &self.icon_countries {
             m.insert(
@@ -181,7 +229,8 @@ pub fn disable_sip(phone_number_id: &str) -> Request {
 }
 
 /// Replace the additional audio codecs; an empty list clears them.
-pub fn set_codecs(phone_number_id: &str, codecs: &[&str]) -> Request {
+pub fn set_codecs(phone_number_id: &str, codecs: &[Codec]) -> Request {
+    let codecs: Vec<&str> = codecs.iter().map(|c| c.as_str()).collect();
     set(
         phone_number_id,
         json!({ "audio": { "additional_codecs": codecs } }),
@@ -191,10 +240,11 @@ pub fn set_codecs(phone_number_id: &str, codecs: &[&str]) -> Request {
 /// Turn voicemail on. `timeout_seconds` goes with a `TIMEOUT` trigger.
 pub fn set_voicemail(
     phone_number_id: &str,
-    triggers: &[&str],
+    triggers: &[VoicemailTrigger],
     announcement_media_id: u64,
     timeout_seconds: Option<u32>,
 ) -> Request {
+    let triggers: Vec<&str> = triggers.iter().map(|t| t.as_str()).collect();
     let mut audio = json!({ "announcement_media_id": announcement_media_id });
     if let Some(seconds) = timeout_seconds {
         audio["timeout_seconds"] = json!(seconds);
@@ -278,7 +328,7 @@ mod tests {
     #[test]
     fn settings_send_only_what_is_set() {
         let settings = Settings {
-            status: Some("ENABLED"),
+            status: Some(Toggle::Enabled),
             icon_countries: Some(vec!["US".into()]),
             ..Settings::default()
         };

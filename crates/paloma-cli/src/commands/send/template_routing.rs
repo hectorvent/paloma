@@ -83,8 +83,11 @@ async fn lookup_endpoint(
             "Graph returned multiple exact template matches; refusing to choose a category",
         ));
     };
-    template.get("category").and_then(Value::as_str)
-        .and_then(TemplateEndpoint::for_category)
+    template
+        .get("category")
+        .and_then(Value::as_str)
+        .and_then(|c| c.parse::<paloma_core::TemplateCategory>().ok())
+        .map(TemplateEndpoint::for_category)
         .ok_or_else(|| Error::other("template has a missing or unsupported category; select --via cloud|marketing explicitly if you know its current category"))
 }
 

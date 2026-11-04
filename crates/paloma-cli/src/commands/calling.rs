@@ -11,7 +11,7 @@ use paloma_core::limits::{DEFAULT_SIP_PORT, MAX_VOICEMAIL_TIMEOUT_SECONDS};
 use paloma_core::{Error, Result, validate};
 use paloma_graph::api::calling;
 
-use super::util::{enum_name, read_json};
+use super::util::read_json;
 use crate::app::{App, no_id};
 
 #[derive(Debug, Subcommand)]
@@ -49,44 +49,40 @@ pub enum CallingCommand {
     Analytics(insights::Analytics),
 }
 
-#[derive(Debug, Clone, Copy, ValueEnum)]
-#[value(rename_all = "SCREAMING_SNAKE_CASE")]
-enum Toggle {
-    Enabled,
-    Disabled,
+/// A CLI enum with the same variants as its `paloma_graph::api::calling` counterpart, which
+/// carries Meta's wire value. clap needs its own `ValueEnum`, and the graph crate has no clap.
+macro_rules! cli_enum {
+    ($(#[$doc:meta])* $vis:vis $name:ident => $graph:ident { $($(#[$vdoc:meta])* $variant:ident),+ $(,)? }) => {
+        $(#[$doc])*
+        #[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
+        #[value(rename_all = "SCREAMING_SNAKE_CASE")]
+        $vis enum $name {
+            $($(#[$vdoc])* $variant),+
+        }
+
+        impl From<$name> for calling::$graph {
+            fn from(value: $name) -> Self {
+                match value {
+                    $($name::$variant => Self::$variant),+
+                }
+            }
+        }
+    };
 }
 
-#[derive(Debug, Clone, Copy, ValueEnum)]
-#[value(rename_all = "SCREAMING_SNAKE_CASE")]
-enum CallIcon {
-    Default,
-    DisableAll,
-}
-
-#[derive(Debug, Clone, Copy, ValueEnum)]
-#[value(rename_all = "SCREAMING_SNAKE_CASE")]
-pub enum Codec {
-    Pcma,
-    Pcmu,
-}
-
-/// The guide's values. The settings reference says `DTLS-SRTP` and `SDES-SRTP`, but it also
-/// gets the casing of `status` wrong, so the guide wins.
-#[derive(Debug, Clone, Copy, ValueEnum)]
-#[value(rename_all = "SCREAMING_SNAKE_CASE")]
-enum Srtp {
-    Dtls,
-    Sdes,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
-#[value(rename_all = "SCREAMING_SNAKE_CASE")]
-enum VoicemailTrigger {
+cli_enum!(Toggle => Toggle { Enabled, Disabled });
+cli_enum!(CallIcon => CallIcon { Default, DisableAll });
+cli_enum!(pub Codec => Codec { Pcma, Pcmu });
+cli_enum!(
+    /// The guide's values; see `paloma_graph::api::calling::Srtp`.
+    Srtp => Srtp { Dtls, Sdes }
+);
+cli_enum!(VoicemailTrigger => VoicemailTrigger {
     /// You reject the call.
     Reject,
     /// Nobody accepts or rejects the call within --ring-seconds.
     Timeout,
-}
+});
 
 #[derive(Debug, Args)]
 pub struct Set {
@@ -226,14 +222,12 @@ impl CallingCommand {
             }
             Self::Sip(Sip::Disable) => calling::disable_sip(&phone(app)?),
             Self::Codecs(Codecs::Set { codecs }) => {
-                let names: Vec<String> = codecs.iter().map(enum_name).collect();
-                let names: Vec<&str> = names.iter().map(String::as_str).collect();
-                calling::set_codecs(&phone(app)?, &names)
+                let codecs: Vec<calling::Codec> = codecs.into_iter().map(Into::into).collect();
+                calling::set_codecs(&phone(app)?, &codecs)
             }
             Self::Codecs(Codecs::Clear) => calling::set_codecs(&phone(app)?, &[]),
             Self::Voicemail(Voicemail::Set(a)) => {
                 let (triggers, media_id, timeout) = voicemail(&a)?;
-                let triggers: Vec<&str> = triggers.iter().map(String::as_str).collect();
                 let req = calling::set_voicemail(&phone(app)?, &triggers, media_id, timeout);
                 app.out.note(
                     "Meta advises turning call hours off while voicemail is on, because people \
@@ -281,16 +275,12 @@ async fn set(app: &App, a: Set) -> Result<()> {
                 .collect::<Result<Vec<_>>>()?,
         )
     };
-    let status = a.status.map(|v| enum_name(&v));
-    let call_icon = a.call_icon.map(|v| enum_name(&v));
-    let callback = a.callback_permission.map(|v| enum_name(&v));
-    let srtp = a.srtp.map(|v| enum_name(&v));
     let settings = calling::Settings {
-        status: status.as_deref(),
-        call_icon_visibility: call_icon.as_deref(),
-        callback_permission_status: callback.as_deref(),
+        status: a.status.map(Into::into),
+        call_icon_visibility: a.call_icon.map(Into::into),
+        callback_permission_status: a.callback_permission.map(Into::into),
         icon_countries,
-        srtp_key_exchange_protocol: srtp.as_deref(),
+        srtp_key_exchange_protocol: a.srtp.map(Into::into),
     };
     if settings.is_empty() {
         return Err(Error::validation(
@@ -299,7 +289,7 @@ async fn set(app: &App, a: Set) -> Result<()> {
         ));
     }
     let phone = app.ctx()?.require_phone_number_id()?.to_owned();
-    if settings.status == Some("DISABLED") && !app.confirm_or_abort(calling::DISABLE_CONFIRM)? {
+    if settings.turns_off() && !app.confirm_or_abort(calling::DISABLE_CONFIRM)? {
         return Ok(());
     }
     app.send_and_emit(&calling::set_settings(&phone, &settings), no_id)
@@ -308,7 +298,7 @@ async fn set(app: &App, a: Set) -> Result<()> {
 
 /// Triggers (deduplicated, in order), the greeting's media id and the ring timeout. Meta
 /// silently drops a `TIMEOUT` trigger without a timeout, so that is refused here.
-fn voicemail(a: &VoicemailSet) -> Result<(Vec<String>, u64, Option<u32>)> {
+fn voicemail(a: &VoicemailSet) -> Result<(Vec<calling::VoicemailTrigger>, u64, Option<u32>)> {
     let announcement = a.announcement.trim();
     validate::numeric_id(announcement, "--announcement")?;
     let media_id: u64 = announcement
@@ -334,11 +324,11 @@ fn voicemail(a: &VoicemailSet) -> Result<(Vec<String>, u64, Option<u32>)> {
         (true, Some(seconds)) => Some(seconds),
         (false, None) => None,
     };
-    let mut triggers: Vec<String> = Vec::new();
+    let mut triggers: Vec<calling::VoicemailTrigger> = Vec::new();
     for trigger in &a.triggers {
-        let name = enum_name(trigger);
-        if !triggers.contains(&name) {
-            triggers.push(name);
+        let trigger = (*trigger).into();
+        if !triggers.contains(&trigger) {
+            triggers.push(trigger);
         }
     }
     Ok((triggers, media_id, timeout))

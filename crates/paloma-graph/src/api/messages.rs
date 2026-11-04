@@ -33,11 +33,11 @@ impl TemplateEndpoint {
         }
     }
 
-    pub fn for_category(category: &str) -> Option<Self> {
+    pub const fn for_category(category: paloma_core::TemplateCategory) -> Self {
         match category {
-            "MARKETING" => Some(Self::Marketing),
-            "UTILITY" | "AUTHENTICATION" => Some(Self::Cloud),
-            _ => None,
+            paloma_core::TemplateCategory::Marketing => Self::Marketing,
+            paloma_core::TemplateCategory::Utility
+            | paloma_core::TemplateCategory::Authentication => Self::Cloud,
         }
     }
 }

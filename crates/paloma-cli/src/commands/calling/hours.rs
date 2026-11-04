@@ -146,7 +146,9 @@ impl Hours {
                     app.out.info("call hours aren't set on this number");
                     return Ok(());
                 };
-                if hours.get("status").and_then(Value::as_str) == Some("DISABLED") {
+                if hours.get("status").and_then(Value::as_str)
+                    == Some(calling::Toggle::Disabled.as_str())
+                {
                     app.out.info("call hours are already disabled");
                     return Ok(());
                 }

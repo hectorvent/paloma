@@ -343,12 +343,12 @@ pub fn template_variables(text: &str) -> Vec<&str> {
 
 /// A TTL within the range Meta documents for the category. Other categories have no
 /// documented range, so Meta decides.
-pub fn template_ttl(category: &str, ttl: i64) -> Result<()> {
-    let (range, thirty_days) = match category.to_ascii_uppercase().as_str() {
-        "AUTHENTICATION" => (TEMPLATE_TTL_AUTHENTICATION, true),
-        "UTILITY" => (TEMPLATE_TTL_UTILITY, true),
-        "MARKETING" => (TEMPLATE_TTL_MARKETING, false),
-        _ => return Ok(()),
+pub fn template_ttl(category: crate::TemplateCategory, ttl: i64) -> Result<()> {
+    use crate::TemplateCategory as C;
+    let (range, thirty_days) = match category {
+        C::Authentication => (TEMPLATE_TTL_AUTHENTICATION, true),
+        C::Utility => (TEMPLATE_TTL_UTILITY, true),
+        C::Marketing => (TEMPLATE_TTL_MARKETING, false),
     };
     if range.contains(&ttl) || (thirty_days && ttl == TEMPLATE_TTL_30_DAYS) {
         return Ok(());
@@ -781,15 +781,16 @@ mod tests {
 
     #[test]
     fn template_ttl_ranges_follow_the_category() {
-        assert!(template_ttl("UTILITY", 30).is_ok());
-        assert!(template_ttl("utility", 43_200).is_ok());
-        assert!(template_ttl("UTILITY", -1).is_ok());
-        assert!(template_ttl("UTILITY", 43_201).is_err());
-        assert!(template_ttl("AUTHENTICATION", 900).is_ok());
-        assert!(template_ttl("AUTHENTICATION", 901).is_err());
-        assert!(template_ttl("MARKETING", 43_200).is_ok());
-        assert!(template_ttl("MARKETING", 120).is_err());
-        assert!(template_ttl("MARKETING", -1).is_err());
+        use crate::TemplateCategory::{Authentication, Marketing, Utility};
+        assert!(template_ttl(Utility, 30).is_ok());
+        assert!(template_ttl(Utility, 43_200).is_ok());
+        assert!(template_ttl(Utility, -1).is_ok());
+        assert!(template_ttl(Utility, 43_201).is_err());
+        assert!(template_ttl(Authentication, 900).is_ok());
+        assert!(template_ttl(Authentication, 901).is_err());
+        assert!(template_ttl(Marketing, 43_200).is_ok());
+        assert!(template_ttl(Marketing, 120).is_err());
+        assert!(template_ttl(Marketing, -1).is_err());
     }
 
     #[test]

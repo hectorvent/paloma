@@ -158,9 +158,9 @@ pub struct List {
     /// Filter by status (APPROVED, PENDING, REJECTED, ...).
     #[arg(long)]
     status: Option<String>,
-    /// Filter by category (MARKETING, UTILITY, AUTHENTICATION).
-    #[arg(long)]
-    category: Option<String>,
+    /// Filter by category.
+    #[arg(long, value_parser = super::util::template_category(), ignore_case = true)]
+    category: Option<paloma_core::TemplateCategory>,
     /// Filter by language code.
     #[arg(long)]
     language: Option<String>,

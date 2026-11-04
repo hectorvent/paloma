@@ -45,6 +45,16 @@ pub fn acted_on(response: &serde_json::Value, ok: &str, field: &str) -> Option<S
     (!ids.is_empty()).then(|| ids.join("\n"))
 }
 
+/// The values `--category` takes, from [`TemplateCategory::ALL`]; any case is accepted.
+pub fn template_category()
+-> impl clap::builder::TypedValueParser<Value = paloma_core::TemplateCategory> {
+    use clap::builder::{PossibleValuesParser, TypedValueParser};
+    PossibleValuesParser::new(
+        paloma_core::TemplateCategory::ALL.map(paloma_core::TemplateCategory::as_str),
+    )
+    .map(|name| name.parse().expect("only listed names reach here"))
+}
+
 /// All of stdin, for `--*-stdin` flags and piped payloads.
 pub fn read_stdin(what: &str) -> Result<String> {
     let mut buf = String::new();

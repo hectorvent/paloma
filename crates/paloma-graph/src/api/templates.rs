@@ -9,7 +9,7 @@ use crate::Request;
 pub struct ListFilter {
     pub name: Option<String>,
     pub status: Option<String>,
-    pub category: Option<String>,
+    pub category: Option<paloma_core::TemplateCategory>,
     pub language: Option<String>,
     pub fields: Option<String>,
     pub limit: Option<u32>,
@@ -19,7 +19,10 @@ pub fn list(waba_id: &str, filter: &ListFilter, after: Option<&str>) -> Request 
     Request::get(format!("{waba_id}/message_templates"))
         .query_opt("name", filter.name.as_deref())
         .query_opt("status", filter.status.as_deref())
-        .query_opt("category", filter.category.as_deref())
+        .query_opt(
+            "category",
+            filter.category.map(paloma_core::TemplateCategory::as_str),
+        )
         .query_opt("language", filter.language.as_deref())
         .query_opt("fields", filter.fields.as_deref())
         .query_opt("limit", filter.limit)
@@ -225,7 +228,7 @@ impl Button {
 #[derive(Debug, Clone)]
 pub struct InlineTemplate {
     pub name: String,
-    pub category: String,
+    pub category: paloma_core::TemplateCategory,
     pub language: String,
     pub parameter_format: Option<String>,
     pub header: Option<Header>,
@@ -270,7 +273,7 @@ pub fn inline_template(t: &InlineTemplate) -> Value {
     }
     let mut template = json!({
         "name": t.name,
-        "category": t.category,
+        "category": t.category.as_str(),
         "language": t.language,
         "components": components,
     });
@@ -565,7 +568,7 @@ mod tests {
     fn minimal() -> InlineTemplate {
         InlineTemplate {
             name: "t".into(),
-            category: "UTILITY".into(),
+            category: paloma_core::TemplateCategory::Utility,
             language: "en_US".into(),
             parameter_format: None,
             header: None,

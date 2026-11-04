@@ -9,7 +9,9 @@ pub mod compliance;
 pub mod credentials;
 pub mod error;
 pub mod limits;
+pub mod template;
 pub mod validate;
 
 pub use credentials::Credentials;
 pub use error::{Error, ExitCode, Result};
+pub use template::TemplateCategory;

@@ -1809,3 +1809,36 @@ async fn template_upsert_rejects_non_string_and_blank_languages_before_a_request
     }
     assert!(graph.received_requests().await.unwrap().is_empty());
 }
+
+/// Categories are a closed set: a typo fails locally with the choices, in any case, and the
+/// right value reaches Meta in its own spelling.
+#[test]
+fn template_category_is_a_closed_set_in_any_case() {
+    let home = TempDir::new().unwrap();
+    let create = |category: &str| {
+        let mut cmd = paloma(None, &home);
+        cmd.args([
+            "template",
+            "create",
+            "--name",
+            "t",
+            "--language",
+            "en",
+            "--body",
+            "Hi",
+        ])
+        .args(["--category", category, "--dry-run", "-o", "json"]);
+        cmd
+    };
+    create("utlity")
+        .assert()
+        .code(2)
+        .stderr(predicate::str::contains("UTILITY"));
+    let out = create("utility").output().unwrap();
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert_eq!(stdout_json(&out)["body"]["category"], "UTILITY");
+}
