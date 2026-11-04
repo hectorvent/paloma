@@ -15,5 +15,5 @@ pub mod store;
 
 pub use profile::{Profile, ProfileKey};
 pub use resolve::{Context, Overrides};
-pub use secrets::{KeyringStore, MemoryStore, SecretStore};
+pub use secrets::{KeyringStore, SecretStore};
 pub use store::{Config, ConfigFile};

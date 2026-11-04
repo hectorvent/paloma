@@ -14,7 +14,9 @@ pub mod interpolate;
 pub mod kind;
 mod kinds;
 pub mod manifest;
+pub mod plan;
 pub mod yaml;
 
 pub use kind::{Kind, KindPlan};
 pub use manifest::{API_VERSION, Manifest};
+pub use plan::Scope;

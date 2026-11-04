@@ -96,7 +96,7 @@ impl App {
             paloma_graph::DEFAULT_API_VERSION,
             Arc::clone(&self.store),
         );
-        for w in &ctx.warnings {
+        for w in ctx.warnings() {
             self.out.warn(w);
         }
         Ok(self.ctx.get_or_init(|| Arc::new(ctx)))
@@ -107,7 +107,7 @@ impl App {
             return Ok(c);
         }
         let ctx = self.ctx()?;
-        let mut config = ClientConfig::new(&self.globals.graph_url, &ctx.api_version);
+        let mut config = ClientConfig::new(&self.globals.graph_url, ctx.api_version());
         config.timeout = self.globals.timeout;
         let out = self.out.clone();
         config.on_retry = Some(RetryNotice::new(move |message| out.note(message)));

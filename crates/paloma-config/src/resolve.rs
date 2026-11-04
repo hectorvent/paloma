@@ -68,19 +68,21 @@ impl LazySecret {
     }
 }
 
-/// The fully-resolved, immutable execution context for one invocation.
+/// The fully-resolved, immutable execution context for one invocation. Its fields are
+/// private so the precedence decided in [`Context::resolve`] can't be bypassed later.
+#[derive(Clone)]
 pub struct Context {
-    pub profile: String,
-    pub phone_number_id: Option<String>,
-    pub waba_id: Option<String>,
-    pub app_id: Option<String>,
-    pub api_version: String,
+    profile: String,
+    phone_number_id: Option<String>,
+    waba_id: Option<String>,
+    app_id: Option<String>,
+    api_version: String,
     /// The account to bill, for tokens that reach several on one phone number. Optional,
     /// because Meta resolves it from the token when there is only one.
-    pub messaging_account_id: Option<String>,
+    messaging_account_id: Option<String>,
     /// Diagnostics produced during resolution (e.g. a plaintext token in config); the
     /// CLI prints them to stderr.
-    pub warnings: Vec<String>,
+    warnings: Vec<String>,
     token: Arc<LazySecret>,
     app_secret: Arc<LazySecret>,
     store: Arc<dyn SecretStore>,
@@ -155,17 +157,41 @@ impl Context {
     #[must_use]
     pub fn with_phone_number_id(&self, id: impl Into<String>) -> Self {
         Self {
-            profile: self.profile.clone(),
             phone_number_id: Some(id.into()),
-            waba_id: self.waba_id.clone(),
-            app_id: self.app_id.clone(),
-            api_version: self.api_version.clone(),
-            messaging_account_id: self.messaging_account_id.clone(),
             warnings: Vec::new(),
-            token: Arc::clone(&self.token),
-            app_secret: Arc::clone(&self.app_secret),
-            store: Arc::clone(&self.store),
+            ..self.clone()
         }
+    }
+
+    /// The selected profile's name.
+    pub fn profile(&self) -> &str {
+        &self.profile
+    }
+
+    pub fn phone_number_id(&self) -> Option<&str> {
+        self.phone_number_id.as_deref()
+    }
+
+    pub fn waba_id(&self) -> Option<&str> {
+        self.waba_id.as_deref()
+    }
+
+    pub fn app_id(&self) -> Option<&str> {
+        self.app_id.as_deref()
+    }
+
+    /// The Graph API version every request uses unless it names its own.
+    pub fn api_version(&self) -> &str {
+        &self.api_version
+    }
+
+    pub fn messaging_account_id(&self) -> Option<&str> {
+        self.messaging_account_id.as_deref()
+    }
+
+    /// What resolution noticed and the CLI should say on stderr.
+    pub fn warnings(&self) -> &[String] {
+        &self.warnings
     }
 
     /// The access token if one is configured (reads the keyring on first call).

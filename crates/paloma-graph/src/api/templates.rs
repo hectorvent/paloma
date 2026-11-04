@@ -51,8 +51,6 @@ pub fn lookup_page(
 
 /// The fields behind `template get --quality`.
 pub const QUALITY_FIELDS: &str = "name,language,status,quality_score,health_status";
-/// The fields a send needs to route a template by its latest category.
-pub const CATEGORY_FIELDS: &str = "name,language,category";
 
 /// [`lookup_page`] asking for specific fields.
 pub fn lookup_fields_page(
@@ -73,7 +71,7 @@ pub fn lookup_fields_page(
 }
 
 /// The latest category of the template named exactly `name` in `language`, from a lookup
-/// made with [`CATEGORY_FIELDS`].
+/// that asked for `category`.
 pub fn latest_category<'a>(response: &'a Value, name: &str, language: &str) -> Option<&'a str> {
     exact_matches(response, name, Some(language))
         .first()?

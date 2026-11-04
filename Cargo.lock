@@ -1600,7 +1600,6 @@ dependencies = [
 name = "paloma-manifest"
 version = "0.1.0"
 dependencies = [
- "paloma-config",
  "paloma-core",
  "paloma-graph",
  "serde",

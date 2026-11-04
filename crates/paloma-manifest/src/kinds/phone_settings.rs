@@ -103,7 +103,7 @@ fn writable(live: &Value) -> Value {
 }
 
 pub async fn export(cx: Cx<'_>) -> Result<Vec<Value>> {
-    let phone = cx.ctx.require_phone_number_id()?;
+    let phone = cx.scope.require_phone_number_id()?;
     Ok(vec![writable(
         &read(cx, &phone_numbers::settings(phone)).await?,
     )])
@@ -114,7 +114,7 @@ pub async fn plan(cx: Cx<'_>, spec: &Value) -> Result<KindPlan> {
     if desired.as_object().is_some_and(Map::is_empty) {
         return Ok(KindPlan::synced());
     }
-    let phone = cx.ctx.require_phone_number_id()?;
+    let phone = cx.scope.require_phone_number_id()?;
     let current = writable(&read(cx, &phone_numbers::settings(phone)).await?);
     let mut plan = KindPlan::synced();
     let mut bodies = Vec::new();

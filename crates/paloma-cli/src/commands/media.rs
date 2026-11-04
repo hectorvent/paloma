@@ -91,7 +91,7 @@ impl MediaCommand {
             }
             Self::Get { media_id } => app.send_and_emit(&media::get(&media_id), field_id).await,
             Self::Delete { media_id } => {
-                let phone = app.ctx()?.phone_number_id.clone();
+                let phone = app.ctx()?.phone_number_id().map(str::to_owned);
                 if !app.confirm_or_abort(&format!("delete media {media_id}"))? {
                     return Ok(());
                 }

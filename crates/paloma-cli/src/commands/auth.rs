@@ -40,7 +40,7 @@ impl AuthCommand {
             Self::Status { scopes: false } => {
                 let (ctx, number) = phone_status(app).await?;
                 let Some(number) = number else { return Ok(()) };
-                let waba = app.ctx()?.waba_id.clone();
+                let waba = app.ctx()?.waba_id().map(str::to_owned);
                 app.out.emit(
                     &Output::new(json!({
                         "token": "valid",
@@ -183,5 +183,5 @@ async fn phone_status(app: &App) -> Result<((String, String), Option<Value>)> {
         Some(resp) => Some(resp.json()?),
         None => None,
     };
-    Ok(((ctx.profile.clone(), phone), number))
+    Ok(((ctx.profile().to_owned(), phone), number))
 }

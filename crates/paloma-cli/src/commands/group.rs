@@ -289,7 +289,7 @@ async fn pin(app: &App, group: &str, message: &str, days: Option<u32>) -> Result
     let phone = ctx.require_phone_number_id()?.to_owned();
     let payload = messages::with_messaging_account(
         groups::pin_payload(group, message, days),
-        ctx.messaging_account_id.as_deref(),
+        ctx.messaging_account_id(),
     );
     app.send_and_emit(&messages::send(&phone, payload), messages::message_id)
         .await

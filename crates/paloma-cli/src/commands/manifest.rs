@@ -6,9 +6,9 @@ use std::path::PathBuf;
 use clap::Args;
 use paloma_config::secrets::KEYRING_PREFIX;
 use paloma_core::{Error, ExitCode, Result};
-use paloma_manifest::interpolate::{Scheme, interpolate};
+use paloma_manifest::interpolate::Scheme;
 use paloma_manifest::kind::Cx;
-use paloma_manifest::{Kind, KindPlan, Manifest, case, yaml};
+use paloma_manifest::{Kind, KindPlan, Manifest, Scope, case, plan, yaml};
 use serde_json::Value;
 
 use crate::app::App;
@@ -54,11 +54,11 @@ pub struct Diff {
 
 impl Export {
     pub async fn run(self, app: &App) -> Result<()> {
-        let kind = Kind::parse(&self.kind.replace('-', ""))?;
+        let kind: Kind = self.kind.parse()?;
         let manifests: Vec<Value> = if self.skeleton {
             let phone = kind.phone_scoped().then_some("<phone-number-id>");
             vec![Manifest::document(
-                kind.name(),
+                kind,
                 phone,
                 Value::Object(serde_json::Map::new()),
             )]
@@ -69,15 +69,16 @@ impl Export {
             } else {
                 None
             };
+            let scope = scope(app)?;
             let specs = kind
                 .export(Cx {
                     client: app.client()?,
-                    ctx,
+                    scope: &scope,
                 })
                 .await?;
             specs
                 .iter()
-                .map(|s| Manifest::document(kind.name(), phone.as_deref(), case::to_camel(s)))
+                .map(|s| Manifest::document(kind, phone.as_deref(), case::to_camel(s)))
                 .collect()
         };
         if manifests.is_empty() {
@@ -230,10 +231,19 @@ fn print_changes(app: &App, plan: &KindPlan) {
     }
 }
 
+/// The ids the run targets before any document narrows them.
+fn scope(app: &App) -> Result<Scope> {
+    let ctx = app.ctx()?;
+    Ok(Scope::new(
+        ctx.waba_id(),
+        ctx.phone_number_id(),
+        ctx.app_id(),
+    ))
+}
+
 /// Parse, interpolate and plan every document, failing before any write if one is bad.
 async fn plans(app: &App, file: &std::path::Path) -> Result<Vec<(String, KindPlan)>> {
     let text = super::util::read_file(file)?;
-    let docs = yaml::read_documents(&text, &file.display().to_string())?;
     let lookup = |scheme: Scheme, name: &str| -> Option<String> {
         match scheme {
             Scheme::Env => std::env::var(name).ok(),
@@ -244,41 +254,24 @@ async fn plans(app: &App, file: &std::path::Path) -> Result<Vec<(String, KindPla
                 .flatten(),
         }
     };
-    let manifests = docs
-        .iter()
-        .map(|d| {
-            Manifest::from_doc(&interpolate(d, &lookup)?)
-                .and_then(|m| Ok((Kind::parse(&m.kind)?, m)))
-        })
-        .collect::<Result<Vec<_>>>()?;
+    let manifests = plan::load(&text, &file.display().to_string(), &lookup)?;
 
-    let base = app.ctx()?;
+    let base = scope(app)?;
     let client = app.client()?;
     let mut out = Vec::with_capacity(manifests.len());
-    for (kind, m) in manifests {
-        let target = app
-            .globals
-            .phone_number_id
-            .clone()
-            .or_else(|| m.phone_number_id());
-        let ctx = match target {
-            Some(id) => base.with_phone_number_id(id),
-            None => base.with_phone_number_id(base.phone_number_id.clone().unwrap_or_default()),
-        };
-        let scope = if kind.phone_scoped() {
-            ctx.phone_number_id.as_deref()
-        } else {
-            ctx.waba_id.as_deref()
-        };
-        let label = format!(
-            "{}/{}",
-            kind.name(),
-            scope.filter(|s| !s.is_empty()).unwrap_or("?")
-        );
-        let plan = kind
-            .plan(Cx { client, ctx: &ctx }, &case::to_snake(&m.spec))
+    for m in manifests {
+        let scope = base.for_document(&m, app.globals.phone_number_id.as_deref());
+        let plan = m
+            .kind
+            .plan(
+                Cx {
+                    client,
+                    scope: &scope,
+                },
+                &case::to_snake(&m.spec),
+            )
             .await?;
-        out.push((label, plan));
+        out.push((scope.label(m.kind), plan));
     }
     Ok(out)
 }

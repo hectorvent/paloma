@@ -4,5 +4,5 @@
 
 pub mod app;
 pub mod cli;
-pub mod commands;
+pub(crate) mod commands;
 pub mod output;

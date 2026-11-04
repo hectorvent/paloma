@@ -12,7 +12,7 @@ pub fn template() -> Value {
 }
 
 async fn current(cx: Cx<'_>) -> Result<Value> {
-    let phone = cx.ctx.require_phone_number_id()?;
+    let phone = cx.scope.require_phone_number_id()?;
     let node = read(cx, &automation::get(phone))
         .await?
         .get("conversational_automation")
@@ -25,7 +25,7 @@ pub async fn export(cx: Cx<'_>) -> Result<Vec<Value>> {
 }
 
 pub async fn plan(cx: Cx<'_>, spec: &Value) -> Result<KindPlan> {
-    let phone = cx.ctx.require_phone_number_id()?;
+    let phone = cx.scope.require_phone_number_id()?;
     let cur = current(cx).await?;
     Ok(singleton_plan(
         spec,

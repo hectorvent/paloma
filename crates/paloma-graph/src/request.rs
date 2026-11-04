@@ -21,11 +21,6 @@ impl Method {
             Self::Delete => "DELETE",
         }
     }
-
-    /// Whether the call changes state on Meta's side.
-    pub const fn is_write(self) -> bool {
-        !matches!(self, Self::Get)
-    }
 }
 
 /// Which bearer token authorizes the call.
@@ -110,14 +105,14 @@ pub enum Body {
 /// A fully-specified Graph API call.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Request {
-    pub method: Method,
-    pub target: Target,
-    pub query: Vec<(String, String)>,
-    pub headers: Vec<(String, String)>,
-    pub body: Body,
-    pub auth: Auth,
+    pub(crate) method: Method,
+    pub(crate) target: Target,
+    pub(crate) query: Vec<(String, String)>,
+    pub(crate) headers: Vec<(String, String)>,
+    pub(crate) body: Body,
+    pub(crate) auth: Auth,
     /// A Graph version for this call alone, when the version itself is what's being acted on.
-    pub api_version: Option<String>,
+    pub(crate) api_version: Option<String>,
 }
 
 impl Request {
@@ -467,7 +462,7 @@ pub fn redact_url(text: &str) -> String {
 
 /// Non-JSON responses are omitted from diagnostics because they have no reliable
 /// field boundaries for identifying credentials.
-pub fn diagnostic_body(text: &str) -> String {
+pub(crate) fn diagnostic_body(text: &str) -> String {
     serde_json::from_str::<Value>(text).map_or_else(
         |_| "<non-JSON body omitted>".into(),
         |value| redact_json(&value).to_string(),

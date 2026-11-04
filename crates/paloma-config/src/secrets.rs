@@ -2,10 +2,13 @@
 //!
 //! Secrets never live in plaintext config or argv. The [`SecretStore`] trait is the
 //! single seam: the real implementation talks to the platform keyring (macOS Keychain,
-//! Windows Credential Manager, Linux Secret Service), and [`MemoryStore`] backs tests.
+//! Windows Credential Manager, Linux Secret Service), and `MemoryStore` backs this crate's tests.
 
+#[cfg(test)]
 use std::collections::HashMap;
-use std::sync::{Mutex, OnceLock};
+#[cfg(test)]
+use std::sync::Mutex;
+use std::sync::OnceLock;
 
 use paloma_core::{Error, Result};
 
@@ -135,10 +138,12 @@ fn init_platform_store() -> keyring_core::Result<()> {
 
 /// An in-process store for tests.
 #[derive(Debug, Default)]
+#[cfg(test)]
 pub struct MemoryStore {
     secrets: Mutex<HashMap<String, String>>,
 }
 
+#[cfg(test)]
 impl MemoryStore {
     pub fn with(entries: &[(&str, &str)]) -> Self {
         let map = entries
@@ -151,6 +156,7 @@ impl MemoryStore {
     }
 }
 
+#[cfg(test)]
 impl SecretStore for MemoryStore {
     fn get(&self, account: &str) -> Result<Option<String>> {
         Ok(self.secrets.lock().expect("poisoned").get(account).cloned())

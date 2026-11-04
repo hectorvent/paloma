@@ -16,13 +16,13 @@ use crate::request::Method;
 pub const MAX_ATTEMPTS: u32 = 3;
 /// The longest wait worth holding a command open for. Past this, fail and let the caller
 /// decide, since a silent long wait looks like a hang.
-pub const MAX_WAIT: Duration = Duration::from_secs(30);
+pub(crate) const MAX_WAIT: Duration = Duration::from_secs(30);
 /// The wait before the second try; it doubles each time.
 pub const BASE_BACKOFF: Duration = Duration::from_secs(1);
 
 /// How a try failed, for the kinds of failure worth classifying.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Failure {
+pub(crate) enum Failure {
     /// The connection was never established.
     Unreachable,
     /// The server answered with this status.
@@ -38,7 +38,7 @@ pub const fn is_server_error(status: u16) -> bool {
 }
 
 /// How long to wait before repeating try number `attempt`, or `None` to stop.
-pub fn delay(
+pub(crate) fn delay(
     method: Method,
     attempt: u32,
     failure: Failure,
@@ -68,7 +68,7 @@ pub fn delay(
 
 /// A `Retry-After` in delta-seconds. Anything else counts as no hint, including the
 /// HTTP-date form, so a value that can't be understood never licenses a repeated write.
-pub fn parse_retry_after(value: &str) -> Option<Duration> {
+pub(crate) fn parse_retry_after(value: &str) -> Option<Duration> {
     let value = value.trim();
     if value.is_empty() || !value.bytes().all(|b| b.is_ascii_digit()) {
         return None;

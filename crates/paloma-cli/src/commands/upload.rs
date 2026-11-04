@@ -13,8 +13,8 @@ pub async fn app_id(app: &App) -> Result<String> {
     use paloma_graph::lookup::{AppChoice, find_app};
 
     let ctx = app.ctx()?;
-    let choice = find_app(app.client()?, ctx.app_id.as_deref(), ctx.waba_id.as_deref()).await?;
-    let waba = ctx.waba_id.as_deref().unwrap_or_default();
+    let choice = find_app(app.client()?, ctx.app_id(), ctx.waba_id()).await?;
+    let waba = ctx.waba_id().unwrap_or_default();
     match &choice {
         AppChoice::Given(_) => {}
         AppChoice::Discovered { id, subscribed } if *subscribed > 1 => app.out.warn(format!(

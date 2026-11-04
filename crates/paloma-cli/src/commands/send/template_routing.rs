@@ -20,7 +20,7 @@ pub(super) async fn send(
 ) -> Result<()> {
     let ctx = app.ctx()?;
     let phone = ctx.require_phone_number_id()?;
-    let payload = messages::with_messaging_account(payload, ctx.messaging_account_id.as_deref());
+    let payload = messages::with_messaging_account(payload, ctx.messaging_account_id());
     if let Some(endpoint) = via.endpoint() {
         return app
             .send_and_emit(
@@ -29,7 +29,7 @@ pub(super) async fn send(
             )
             .await;
     }
-    let account = ctx.messaging_account_id.as_deref().or(ctx.waba_id.as_deref()).ok_or_else(|| {
+    let account = ctx.messaging_account_id().or(ctx.waba_id()).ok_or_else(|| {
         Error::auth("automatic template routing needs --messaging-account-id or --waba-id; set one on the profile, or select --via cloud|marketing to skip category lookup")
     })?;
     if app.dry_run() {

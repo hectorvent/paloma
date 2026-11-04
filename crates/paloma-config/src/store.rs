@@ -108,26 +108,6 @@ impl ConfigFile {
         })
     }
 
-    /// Insert or replace a whole profile, optionally making it the default.
-    pub fn upsert_profile(&self, name: &str, profile: &Profile, make_default: bool) -> Result<()> {
-        let path = self.path.clone();
-        self.edit(|doc| {
-            if make_default {
-                doc["default_profile"] = value(name);
-            }
-            let table = profile_table(doc, name, &path)?;
-            for key in ProfileKey::ALL {
-                match profile.get(key).filter(|v| !v.is_empty()) {
-                    Some(v) => table[key.as_str()] = value(v),
-                    None => {
-                        table.remove(key.as_str());
-                    }
-                }
-            }
-            Ok(())
-        })
-    }
-
     pub fn set_default_profile(&self, name: &str) -> Result<()> {
         self.edit(|doc| {
             doc["default_profile"] = value(name);
@@ -204,7 +184,7 @@ fn create_parent(path: &Path) -> Result<()> {
 
 /// `$XDG_CONFIG_HOME/paloma/config.toml` (`~/.config/...` on Linux and macOS),
 /// `%APPDATA%\paloma\config.toml` on Windows.
-pub fn default_path() -> Result<PathBuf> {
+pub(crate) fn default_path() -> Result<PathBuf> {
     use etcetera::BaseStrategy;
     let strategy = etcetera::choose_base_strategy()
         .map_err(|e| Error::other(format!("cannot locate the config directory: {e}")))?;
@@ -275,26 +255,6 @@ mod tests {
             cfg.profile("staging").unwrap().api_version.as_deref(),
             Some("v26.0")
         );
-    }
-
-    #[test]
-    fn upsert_sets_default_and_clears_unset_keys() {
-        let dir = tempfile::tempdir().unwrap();
-        let file = ConfigFile::at(dir.path().join("sub/config.toml"));
-        let p = Profile {
-            phone_number_id: Some("1".into()),
-            waba_id: Some("2".into()),
-            ..Profile::default()
-        };
-        file.upsert_profile("a", &p, true).unwrap();
-        let p2 = Profile {
-            phone_number_id: Some("3".into()),
-            ..Profile::default()
-        };
-        file.upsert_profile("a", &p2, false).unwrap();
-        let cfg = file.load().unwrap();
-        assert_eq!(cfg.default_profile_name(), "a");
-        assert_eq!(cfg.profile("a").unwrap(), &p2);
     }
 
     #[test]

@@ -12,7 +12,7 @@ pub fn template() -> Value {
 }
 
 async fn current(cx: Cx<'_>) -> Result<Value> {
-    let phone = cx.ctx.require_phone_number_id()?;
+    let phone = cx.scope.require_phone_number_id()?;
     let mut cur = read(cx, &commerce::get(phone))
         .await?
         .pointer("/data/0")
@@ -29,7 +29,7 @@ pub async fn export(cx: Cx<'_>) -> Result<Vec<Value>> {
 }
 
 pub async fn plan(cx: Cx<'_>, spec: &Value) -> Result<KindPlan> {
-    let phone = cx.ctx.require_phone_number_id()?;
+    let phone = cx.scope.require_phone_number_id()?;
     let cur = current(cx).await?;
     let flag = |k: &str| spec.get(k).and_then(Value::as_bool);
     let req = commerce::set(phone, flag("is_cart_enabled"), flag("is_catalog_visible"));

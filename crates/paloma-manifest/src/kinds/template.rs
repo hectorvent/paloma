@@ -21,7 +21,7 @@ pub fn template() -> Value {
 }
 
 pub async fn export(cx: Cx<'_>) -> Result<Vec<Value>> {
-    let waba = cx.ctx.require_waba_id()?;
+    let waba = cx.scope.require_waba_id()?;
     // Follow every page: an export that silently dropped templates would mislead a later diff.
     let all = paging::collect_all(cx.client, None, |after| {
         templates::list(waba, &ListFilter::default(), after)
@@ -59,7 +59,7 @@ pub async fn plan(cx: Cx<'_>, spec: &Value) -> Result<KindPlan> {
     let create_body = create_body(spec, &name, &language)?;
     let shorthand = spec.get("components").is_none();
     let desired = normalize(&create_body, shorthand, None);
-    let waba = cx.ctx.require_waba_id()?;
+    let waba = cx.scope.require_waba_id()?;
 
     // Follow the cursor: stopping short would plan a create for a template that exists.
     let found = paloma_graph::lookup::find_page(cx.client, waba, &name, Some(&language)).await?;

@@ -296,13 +296,13 @@ impl SimulateArgs {
             None => {
                 let sample = SampleContext {
                     waba_id: ctx
-                        .waba_id
-                        .clone()
-                        .unwrap_or_else(|| webhook_samples::EXAMPLE_WABA_ID.into()),
+                        .waba_id()
+                        .unwrap_or(webhook_samples::EXAMPLE_WABA_ID)
+                        .to_owned(),
                     phone_number_id: ctx
-                        .phone_number_id
-                        .clone()
-                        .unwrap_or_else(|| webhook_samples::EXAMPLE_PHONE_NUMBER_ID.into()),
+                        .phone_number_id()
+                        .unwrap_or(webhook_samples::EXAMPLE_PHONE_NUMBER_ID)
+                        .to_owned(),
                     timestamp: std::time::SystemTime::now()
                         .duration_since(std::time::UNIX_EPOCH)
                         .map_or(0, |d| d.as_secs()),

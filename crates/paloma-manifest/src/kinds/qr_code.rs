@@ -15,7 +15,7 @@ pub fn template() -> Value {
 }
 
 pub async fn export(cx: Cx<'_>) -> Result<Vec<Value>> {
-    let phone = cx.ctx.require_phone_number_id()?;
+    let phone = cx.scope.require_phone_number_id()?;
     let all = paging::collect_all(cx.client, None, |after| qr::list(phone, None, after)).await?;
     // Live rows are reported as Graph returned them: the input rules in `spec_fields` belong
     // to `plan`, and one unusual row mustn't hide the rest of the export.
@@ -30,7 +30,7 @@ pub async fn export(cx: Cx<'_>) -> Result<Vec<Value>> {
 
 pub async fn plan(cx: Cx<'_>, spec: &Value) -> Result<KindPlan> {
     let (code, message) = spec_fields(spec)?;
-    let phone = cx.ctx.require_phone_number_id()?;
+    let phone = cx.scope.require_phone_number_id()?;
     let response = read(cx, &qr::get(phone, code, None)).await?;
     let current = qr::details(&response, code)?.ok_or_else(|| {
         Error::validation(format!(

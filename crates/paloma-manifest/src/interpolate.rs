@@ -50,7 +50,7 @@ fn walk(v: &Value, path: &str, lookup: &dyn Fn(Scheme, &str) -> Option<String>) 
 }
 
 /// Expand every `${...}` and `$$` in one string.
-pub fn expand(
+pub(crate) fn expand(
     value: &str,
     path: &str,
     lookup: &dyn Fn(Scheme, &str) -> Option<String>,

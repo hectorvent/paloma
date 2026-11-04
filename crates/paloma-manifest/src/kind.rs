@@ -4,10 +4,11 @@
 //! the full set is visible in one place, and adding a kind means adding a variant here
 //! and a module under `kinds/`.
 
-use paloma_config::Context;
 use paloma_core::{Error, Result};
 use paloma_graph::{Client, Request};
 use serde_json::Value;
+use std::fmt;
+use std::str::FromStr;
 
 use crate::kinds;
 
@@ -28,7 +29,7 @@ pub struct KindPlan {
 }
 
 impl KindPlan {
-    pub fn synced() -> Self {
+    pub(crate) fn synced() -> Self {
         Self::default()
     }
 
@@ -39,17 +40,17 @@ impl KindPlan {
     /// Require a confirmation before this plan's writes. Each kind decides, because only
     /// the kind knows whether a write is carried in a body, a query or a path.
     #[must_use]
-    pub fn confirming(mut self, what: &'static str) -> Self {
+    pub(crate) fn confirming(mut self, what: &'static str) -> Self {
         self.confirm = Some(what);
         self
     }
 }
 
-/// What a kind needs to read live state: the client and the (per-manifest) context.
+/// What a kind needs to read live state: the client and the document's scope.
 #[derive(Debug, Clone, Copy)]
 pub struct Cx<'a> {
     pub client: &'a Client,
-    pub ctx: &'a Context,
+    pub scope: &'a crate::Scope,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -109,20 +110,6 @@ impl Kind {
             Self::Template => "template",
             Self::Webhook => "webhook",
         }
-    }
-
-    /// Resolve a `kind` name, case-insensitively.
-    pub fn parse(name: &str) -> Result<Self> {
-        Self::ALL
-            .into_iter()
-            .find(|k| k.name().eq_ignore_ascii_case(name.trim()))
-            .ok_or_else(|| {
-                let known: Vec<_> = Self::ALL.iter().map(|k| k.name()).collect();
-                Error::validation(format!(
-                    "unknown kind '{name}' (known: {})",
-                    known.join(", ")
-                ))
-            })
     }
 
     /// Whether the kind lives on a phone number (else on the WABA/app).
@@ -206,4 +193,31 @@ pub(crate) fn singleton_plan(
 
 pub(crate) async fn read(cx: Cx<'_>, req: &Request) -> Result<Value> {
     cx.client.execute(req).await?.json()
+}
+
+/// The manifest name (`PhoneSettings`), as a document's `kind:` writes it.
+impl fmt::Display for Kind {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.name())
+    }
+}
+
+/// A manifest name or the CLI's kebab-case name, in any case: `PhoneSettings`,
+/// `phone-settings` and `phonesettings` are all the same kind.
+impl FromStr for Kind {
+    type Err = Error;
+
+    fn from_str(name: &str) -> Result<Self> {
+        let wanted = name.trim().replace('-', "");
+        Self::ALL
+            .into_iter()
+            .find(|k| k.name().eq_ignore_ascii_case(&wanted))
+            .ok_or_else(|| {
+                let known: Vec<_> = Self::ALL.iter().map(|k| k.name()).collect();
+                Error::validation(format!(
+                    "unknown kind '{name}' (known: {})",
+                    known.join(", ")
+                ))
+            })
+    }
 }

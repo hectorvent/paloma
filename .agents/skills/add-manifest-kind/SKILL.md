@@ -25,11 +25,17 @@ Collections (many objects per WABA): `kinds/template.rs`.
 
 Specs arrive **snake_case** (`case` converts from the manifest's camelCase after
 `${...}` interpolation); keep the module in snake_case. Requests come from pure
-builders in `paloma-graph/src/api/` (add one if missing).
+builders in `paloma-graph/src/api/` (add one if missing). Read ids from `cx.scope`
+(`require_phone_number_id`, `require_waba_id`, `app_id`), never from CLI settings.
+
+**Guard like the command.** If the matching `paloma <group>` command confirms or checks a
+write, the kind must too: use the same guard from `paloma_graph::api::<resource>` (e.g.
+`calling::confirm_for`, `webhook::check_callback_url`) and pass its text to
+`KindPlan::confirming`, so `apply` is never a way around a command's confirmation.
 
 ## 2. Register it (`kind.rs`)
 
-Add the variant, then every `match`: `ALL`, `name`, `parse`, `phone_scoped` (true when
+Add the variant, then every `match`: `ALL`, `name`, `cli_name`, `phone_scoped` (true when
 the node hangs off a phone number id), `spec_template`, `export`, `plan`. The compiler
 finds the ones you miss. Add `pub mod` in `kinds.rs`.
 

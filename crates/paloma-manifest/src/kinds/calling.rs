@@ -26,7 +26,7 @@ pub fn template() -> Value {
 
 /// The writable calling settings, minus server-assigned and secret SIP fields.
 async fn current(cx: Cx<'_>) -> Result<Value> {
-    let phone = cx.ctx.require_phone_number_id()?;
+    let phone = cx.scope.require_phone_number_id()?;
     let mut node = read(cx, &calling::get(phone, false))
         .await?
         .get("calling")
@@ -52,7 +52,7 @@ pub async fn export(cx: Cx<'_>) -> Result<Vec<Value>> {
 }
 
 pub async fn plan(cx: Cx<'_>, spec: &Value) -> Result<KindPlan> {
-    let phone = cx.ctx.require_phone_number_id()?;
+    let phone = cx.scope.require_phone_number_id()?;
     let cur = current(cx).await?;
     let preview = json!({ "messaging_product": MESSAGING_PRODUCT, "calling": spec });
     let plan = singleton_plan(spec, &cur, preview, calling::set(phone, spec.clone()));

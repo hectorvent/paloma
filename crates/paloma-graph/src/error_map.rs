@@ -49,7 +49,7 @@ pub fn is_marketing_parameter_refusal(error: &Error) -> bool {
     )
 }
 
-pub fn map_error(status: u16, body: &str) -> Error {
+pub(crate) fn map_error(status: u16, body: &str) -> Error {
     let root: Value = serde_json::from_str(body).unwrap_or(Value::Null);
     let error = root.get("error").unwrap_or(&root);
     let raw_code = error.get("code").and_then(Value::as_i64);

@@ -33,7 +33,7 @@ pub fn template() -> Value {
     json!({"pin":"","newDisplayName":"","searchVisibility":""})
 }
 pub async fn export(cx: Cx<'_>) -> Result<Vec<Value>> {
-    let phone = cx.ctx.require_phone_number_id()?;
+    let phone = cx.scope.require_phone_number_id()?;
     let mut live = read(
         cx,
         &phone_numbers::get(phone, &format!("{EXPORT_FIELDS},search_visibility")),
@@ -94,7 +94,7 @@ pub async fn plan(cx: Cx<'_>, spec: &Value) -> Result<KindPlan> {
     if desired.is_empty() {
         return Ok(KindPlan::synced());
     }
-    let phone = cx.ctx.require_phone_number_id()?;
+    let phone = cx.scope.require_phone_number_id()?;
     let mut changes = Vec::new();
     let mut fields = Vec::new();
     if desired.contains_key("search_visibility") {

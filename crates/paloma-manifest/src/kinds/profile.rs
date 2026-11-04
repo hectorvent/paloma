@@ -12,7 +12,7 @@ pub fn template() -> Value {
 }
 
 async fn current(cx: Cx<'_>) -> Result<Value> {
-    let phone = cx.ctx.require_phone_number_id()?;
+    let phone = cx.scope.require_phone_number_id()?;
     Ok(read(cx, &profile::get(phone))
         .await?
         .pointer("/data/0")
@@ -34,7 +34,7 @@ pub async fn plan(cx: Cx<'_>, spec: &Value) -> Result<KindPlan> {
         .as_object()
         .ok_or_else(|| Error::validation("Profile spec must be a mapping"))?
         .clone();
-    let phone = cx.ctx.require_phone_number_id()?;
+    let phone = cx.scope.require_phone_number_id()?;
     let cur = current(cx).await?;
     let req = profile::set(phone, fields);
     let preview = req.json_body().cloned().unwrap_or_default();

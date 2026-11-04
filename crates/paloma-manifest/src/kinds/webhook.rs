@@ -29,21 +29,18 @@ pub fn template() -> Value {
 /// The app, its subscriptions response, and how the app was picked; needs an app id and
 /// the app secret.
 async fn subscriptions(cx: Cx<'_>) -> Result<(AppChoice, Value)> {
-    let waba = cx.ctx.require_waba_id()?;
-    let app = find_app(cx.client, cx.ctx.app_id.as_deref(), Some(waba)).await?;
+    let waba = cx.scope.require_waba_id()?;
+    let app = find_app(cx.client, cx.scope.app_id(), Some(waba)).await?;
     let subs = read(cx, &webhook::app_subscriptions(app.id())).await?;
     Ok((app, subs))
 }
 
 pub async fn export(cx: Cx<'_>) -> Result<Vec<Value>> {
-    let waba = cx.ctx.require_waba_id()?;
+    let waba = cx.scope.require_waba_id()?;
     let mut spec = Map::new();
-    if let Some(url) = paloma_graph::lookup::current_callback_url(
-        cx.client,
-        waba,
-        cx.ctx.phone_number_id.as_deref(),
-    )
-    .await?
+    if let Some(url) =
+        paloma_graph::lookup::current_callback_url(cx.client, waba, cx.scope.phone_number_id())
+            .await?
     {
         spec.insert("callback_url".into(), url.into());
     }
@@ -62,7 +59,7 @@ pub async fn export(cx: Cx<'_>) -> Result<Vec<Value>> {
 }
 
 pub async fn plan(cx: Cx<'_>, spec: &Value) -> Result<KindPlan> {
-    let waba = cx.ctx.require_waba_id()?;
+    let waba = cx.scope.require_waba_id()?;
     let text = |k: &str| {
         spec.get(k)
             .and_then(Value::as_str)
@@ -78,12 +75,9 @@ pub async fn plan(cx: Cx<'_>, spec: &Value) -> Result<KindPlan> {
     if let Some(desired) = text("callback_url") {
         // The same checks as `webhook subscribe`, before any read.
         webhook::check_callback_url(desired, "callbackUrl")?;
-        let current = paloma_graph::lookup::current_callback_url(
-            cx.client,
-            waba,
-            cx.ctx.phone_number_id.as_deref(),
-        )
-        .await?;
+        let current =
+            paloma_graph::lookup::current_callback_url(cx.client, waba, cx.scope.phone_number_id())
+                .await?;
         if current.as_deref() != Some(desired) {
             let token = verify_token.ok_or_else(|| {
                 Error::validation("Webhook change needs a 'verifyToken' in the spec (a secret), or use `paloma webhook subscribe`")

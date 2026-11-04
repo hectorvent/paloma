@@ -23,7 +23,7 @@ fn transform(v: &Value, key: &dyn Fn(&str) -> String) -> Value {
     }
 }
 
-pub fn camel_to_snake(s: &str) -> String {
+pub(crate) fn camel_to_snake(s: &str) -> String {
     let mut out = String::with_capacity(s.len() + 4);
     for c in s.chars() {
         if c.is_uppercase() {
@@ -36,7 +36,7 @@ pub fn camel_to_snake(s: &str) -> String {
     out
 }
 
-pub fn snake_to_camel(s: &str) -> String {
+pub(crate) fn snake_to_camel(s: &str) -> String {
     let mut out = String::with_capacity(s.len());
     let mut upper = false;
     for c in s.chars() {

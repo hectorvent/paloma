@@ -65,7 +65,7 @@ fn desired(spec: &Value) -> Result<Map<String, Value>> {
 }
 
 async fn current(cx: Cx<'_>) -> Result<Value> {
-    let waba = cx.ctx.require_waba_id()?;
+    let waba = cx.scope.require_waba_id()?;
     let live = read(cx, &account::get(waba, SETTINGS_FIELDS)).await?;
     Ok(Value::Object(settings_of(&live)))
 }
@@ -76,7 +76,7 @@ pub async fn export(cx: Cx<'_>) -> Result<Vec<Value>> {
 
 pub async fn plan(cx: Cx<'_>, spec: &Value) -> Result<KindPlan> {
     let desired = Value::Object(desired(spec)?);
-    let waba = cx.ctx.require_waba_id()?;
+    let waba = cx.scope.require_waba_id()?;
     let cur = current(cx).await?;
     let request = account::set(waba, desired.clone());
     Ok(singleton_plan(&desired, &cur, desired.clone(), request))

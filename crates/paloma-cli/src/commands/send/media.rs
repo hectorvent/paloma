@@ -103,7 +103,7 @@ pub(super) async fn send_media(app: &App, kind: MediaKind, a: Media, voice: bool
                 );
                 let payload = messages::with_messaging_account(
                     addressed(payload, a.group),
-                    app.ctx()?.messaging_account_id.as_deref(),
+                    app.ctx()?.messaging_account_id(),
                 );
                 return app.print_dry_run(&[upload, messages::send(&phone, payload)]);
             }

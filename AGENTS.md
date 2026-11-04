@@ -34,7 +34,7 @@ paloma-core      errors + exit codes, validation, limits, 24h policy, Credential
 paloma-config    config.toml (toml_edit writes), profiles, keyring, Context resolution
 paloma-graph     Request (a call as data), Client, error_map, paging, api::<resource>, lookup,
                  callback (calling webhook endpoints), webhook_samples
-paloma-manifest  YAML manifests: interpolate, case, diff, Kind enum + kinds/*
+paloma-manifest  YAML manifests: interpolate, case, diff, plan + Scope, Kind enum + kinds/*
 paloma-cli       clap tree (commands/*), App wiring, output::Printer
 ```
 
