@@ -1,7 +1,6 @@
 //! Meta's template library: ready-made templates that skip review once created.
 
-#[allow(clippy::wildcard_imports)] // part of `templates`: shares its imports and helpers
-use super::*;
+use super::{Request, Value, json};
 
 /// Filters for browsing the Template Library.
 #[derive(Debug, Clone, Default)]

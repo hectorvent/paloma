@@ -1,7 +1,6 @@
 //! Local files and their media types, checked against Meta's per-type limits.
 
-#[allow(clippy::wildcard_imports)] // part of `validate`: shares its imports and helpers
-use super::*;
+use super::{DOCUMENT_MEDIA, Error, MAX_CAPTION, MEDIA_LIMITS, MediaLimit, Path, PathBuf, Result};
 
 pub fn caption(caption: Option<&str>) -> Result<()> {
     if let Some(c) = caption {

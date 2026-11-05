@@ -1,8 +1,10 @@
 //! Media sends: a local file is checked against Meta's type and size limits, then uploaded,
 //! before the message goes out; an id or link is sent as-is.
 
-#[allow(clippy::wildcard_imports)] // part of `send`: shares its imports and helpers
-use super::*;
+use super::{
+    App, ArgGroup, Args, Error, MediaKind, MediaOptions, MediaSource, PathBuf, Policy, Reply,
+    Result, addressed, check_to, dispatch, limits, media_api, messages, validate,
+};
 
 #[derive(Debug, Args)]
 #[command(group(ArgGroup::new("source").required(true).args(["file", "id", "link"])))]

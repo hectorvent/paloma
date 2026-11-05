@@ -1,7 +1,9 @@
 //! Catalog messages: one product, a sectioned product list, or the catalog button.
 
-#[allow(clippy::wildcard_imports)] // part of `send`: shares its imports and helpers
-use super::*;
+use super::{
+    App, Args, Error, InteractiveHeader, InteractiveText, Policy, Reply, Result, check_body,
+    check_footer, dispatch, limits, messages, split_rows, validate,
+};
 
 #[derive(Debug, Args)]
 pub struct ProductMessage {

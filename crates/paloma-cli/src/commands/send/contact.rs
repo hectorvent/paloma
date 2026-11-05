@@ -1,7 +1,9 @@
 //! Contact cards, from typed flags for one card or a JSON file for several.
 
-#[allow(clippy::wildcard_imports)] // part of `send`: shares its imports and helpers
-use super::*;
+use super::{
+    App, ArgGroup, Args, Error, Path, PathBuf, Policy, Reply, Result, Value, dispatch, limits,
+    messages, read_json, validate,
+};
 
 #[derive(Debug, Args)]
 #[command(group(ArgGroup::new("contact_source").required(true).args(["file", "name"])))]

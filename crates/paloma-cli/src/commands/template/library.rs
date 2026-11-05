@@ -1,7 +1,9 @@
 //! Meta's template library: ready-made templates that skip review once created.
 
-#[allow(clippy::wildcard_imports)] // part of `template`: shares its imports and helpers
-use super::*;
+use super::{
+    App, Args, Error, LIBRARY_COLUMNS, LibraryFilter, LibraryTemplate, Pagination, PathBuf, Result,
+    Rows, Subcommand, field_id, list, read_json, templates, validate,
+};
 
 #[derive(Debug, Subcommand)]
 pub enum LibraryCommand {

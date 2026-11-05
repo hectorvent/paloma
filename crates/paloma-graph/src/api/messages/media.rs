@@ -1,7 +1,7 @@
 //! Media messages: an uploaded id or a link, with the options each type allows.
 
-#[allow(clippy::wildcard_imports)] // part of `messages`: shares the envelope and helpers
-use super::*;
+use super::{Serialize, Value, envelope, json, non_blank, validate};
+use paloma_core::{Error, Result};
 
 /// Media message types that share the `{id | link, caption?, filename?}` shape.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -86,4 +86,26 @@ pub fn media(to: &str, kind: MediaKind, source: &MediaSource, options: &MediaOpt
         voice: (options.voice && kind.supports_voice()).then_some(true),
     };
     envelope(to, kind.as_str(), options.reply_to, m)
+}
+
+/// A media id or an http(s) link. An error never echoes the value, since a link can carry
+/// credentials in its query string.
+pub fn media_reference(value: &str, flag: &str) -> Result<MediaSource> {
+    validate::not_blank(value, flag)?;
+    let value = value.trim();
+    let invalid = || Error::validation(format!("{flag} must be a media id or an http(s) link"));
+    if value.chars().any(char::is_whitespace) {
+        return Err(invalid());
+    }
+    if crate::request::has_http_scheme(value) {
+        let host = value.split_once("://").map_or("", |(_, rest)| rest);
+        if host.is_empty() || host.starts_with('/') {
+            return Err(invalid());
+        }
+        return Ok(MediaSource::Link(value.to_owned()));
+    }
+    if value.contains([':', '/']) {
+        return Err(invalid());
+    }
+    Ok(MediaSource::Id(value.to_owned()))
 }

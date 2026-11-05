@@ -1,7 +1,10 @@
 //! Template analytics and the side-by-side comparison of two templates.
 
-#[allow(clippy::wildcard_imports)] // part of `template`: shares its imports and helpers
-use super::*;
+use super::{
+    ANALYTICS_COLUMNS, AnalyticsQuery, App, ArgGroup, Args, COMPARE_COLUMNS, Error, Format,
+    GROUP_ANALYTICS_COLUMNS, Output, Result, SystemTime, UNIX_EPOCH, Value, ValueEnum, enum_name,
+    json, limits, paging, templates, validate,
+};
 
 #[derive(Debug, Args)]
 pub struct Compare {

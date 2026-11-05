@@ -8,8 +8,6 @@
 //!
 //! Commands never write to stdout directly; bypassing this breaks `-q` and `-o`.
 
-use std::fmt::Write as _;
-
 use crate::cli::Format;
 use anstyle::{AnsiColor, Style};
 use comfy_table::{Cell, Table};

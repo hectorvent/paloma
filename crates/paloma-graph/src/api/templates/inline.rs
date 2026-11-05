@@ -1,8 +1,7 @@
 //! Templates built from typed fields, and the example checks Meta's review applies to
 //! them, shared by `template create` and the Template manifest's body shorthand.
 
-#[allow(clippy::wildcard_imports)] // part of `templates`: shares its imports and helpers
-use super::*;
+use super::{Error, Result, Value, json, validate};
 
 /// A minimal BODY-only template, with optional example values for its variables.
 pub fn inline_body(

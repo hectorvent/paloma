@@ -1,8 +1,7 @@
 //! Identifiers and codes that end up in a Graph path or query: node ids, versions,
 //! countries, PINs and verification codes.
 
-#[allow(clippy::wildcard_imports)] // part of `validate`: shares its imports and helpers
-use super::*;
+use super::{DATA_LOCALIZATION_REGIONS, Error, PIN_DIGITS, Result, max_chars, not_blank};
 
 /// QR codes are opaque alphanumeric identifiers, not Graph numeric node ids.
 pub fn qr_code(code: &str) -> Result<()> {

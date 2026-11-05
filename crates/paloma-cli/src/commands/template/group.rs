@@ -1,7 +1,9 @@
 //! Template groups, which analytics can report on together.
 
-#[allow(clippy::wildcard_imports)] // part of `template`: shares its imports and helpers
-use super::*;
+use super::{
+    App, ArgGroup, Args, GroupUpdate, Result, Subcommand, field_id, integer_ids, limits, templates,
+    validate,
+};
 
 #[derive(Debug, Subcommand)]
 pub enum GroupCommand {

@@ -1,8 +1,7 @@
 //! Who a message or setting is for: E.164 numbers, business-scoped user IDs, usernames
 //! and calling codes.
 
-#[allow(clippy::wildcard_imports)] // part of `validate`: shares its imports and helpers
-use super::*;
+use super::{Error, MAX_BSUID_ID, Result};
 
 /// The two kinds of business-scoped user ID (BSUID).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

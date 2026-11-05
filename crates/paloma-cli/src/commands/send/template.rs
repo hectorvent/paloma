@@ -1,8 +1,10 @@
 //! Template sends: typed parameters or a components file, and the route (`/messages` or
 //! `/marketing_messages`) each template category needs.
 
-#[allow(clippy::wildcard_imports)] // part of `send`: shares its imports and helpers
-use super::*;
+use super::{
+    App, Args, Error, MediaKind, PathBuf, Reply, Result, Value, ValueEnum, addressed, check_to,
+    limits, messages, read_json, template_routing, validate,
+};
 
 #[derive(Debug, Args)]
 pub struct Template {
@@ -190,7 +192,7 @@ pub(super) fn template_header(a: &Template) -> Result<Option<messages::TemplateH
     ];
     for (value, kind, flag) in media {
         if let Some(value) = value {
-            let source = media_reference(value, flag)?;
+            let source = messages::media_reference(value, flag)?;
             return Ok(Some(messages::TemplateHeader::Media(kind, source)));
         }
     }

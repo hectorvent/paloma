@@ -1,8 +1,12 @@
 //! Interactive messages. Each type has its own limits, all checked before any request,
 //! because Meta rejects the whole message for one bad row or card.
 
-#[allow(clippy::wildcard_imports)] // part of `send`: shares its imports and helpers
-use super::*;
+use super::{
+    App, ArgGroup, Args, Button, Error, InteractiveHeader, InteractiveText, MAX_LIST_ROWS,
+    MAX_REPLY_BUTTONS, MediaKind, MediaSource, Path, PathBuf, Policy, Reply, Result, Row, Section,
+    Subcommand, Value, check_body, check_footer, dispatch, limits, messages, read_json, split_rows,
+    validate,
+};
 
 #[derive(Debug, Subcommand)]
 pub enum Interactive {
@@ -282,7 +286,7 @@ impl Interactive {
                     (Some(path), _) => media_cards_file(path)?,
                     (None, Some(catalog_id)) => {
                         validate::not_blank(catalog_id, "--catalog-id")?;
-                        check_card_count(a.products.len())?;
+                        messages::check_card_count(a.products.len())?;
                         let products: Vec<String> =
                             a.products.iter().map(|p| p.trim().to_owned()).collect();
                         for product in &products {
@@ -389,17 +393,6 @@ pub(super) fn address_parameters_file(path: &Path) -> Result<Value> {
     Ok(parameters)
 }
 
-pub(super) fn check_card_count(count: usize) -> Result<()> {
-    if limits::CAROUSEL_CARDS.contains(&count) {
-        return Ok(());
-    }
-    Err(Error::validation(format!(
-        "a carousel holds {} to {} cards (got {count})",
-        limits::CAROUSEL_CARDS.start(),
-        limits::CAROUSEL_CARDS.end()
-    )))
-}
-
 /// The media cards from a `--card-file`, as authored apart from what
 /// [`messages::media_cards`] fills in.
 pub(super) fn media_cards_file(path: &Path) -> Result<Vec<Value>> {
@@ -412,159 +405,10 @@ pub(super) fn media_cards_file(path: &Path) -> Result<Vec<Value>> {
         },
         _ => return Err(invalid()),
     };
-    check_card_count(cards.len())?;
+    messages::check_card_count(cards.len())?;
     let cards = messages::media_cards(cards);
-    check_media_cards(&cards)?;
+    messages::check_media_cards(&cards)?;
     Ok(cards)
-}
-
-/// What a card's action has to match on every other card.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(super) enum CardButtons {
-    Url,
-    QuickReplies(usize),
-}
-
-/// Errors name the card by position and never echo its text.
-pub(super) fn check_media_cards(cards: &[Value]) -> Result<()> {
-    let mut indexes = Vec::with_capacity(cards.len());
-    let mut first_buttons = None;
-    for (position, card) in cards.iter().enumerate() {
-        let invalid = |problem: &str| Error::validation(format!("cards[{position}] {problem}"));
-        if !card.is_object() {
-            return Err(invalid("must be an object"));
-        }
-        if card.get("type").and_then(Value::as_str) == Some("product") {
-            return Err(invalid(
-                "is a product card; use --products and --catalog-id instead",
-            ));
-        }
-        // Meta's syntax and examples use this one value on every media card.
-        if card.get("type").is_some_and(|kind| kind != "cta_url") {
-            return Err(invalid("type must be cta_url, or left out"));
-        }
-        let index = card
-            .get("card_index")
-            .and_then(Value::as_u64)
-            .filter(|index| *index < *limits::CAROUSEL_CARDS.end() as u64)
-            .ok_or_else(|| {
-                invalid(&format!(
-                    "card_index must be a whole number from 0 to {}",
-                    limits::CAROUSEL_CARDS.end() - 1
-                ))
-            })?;
-        if indexes.contains(&index) {
-            return Err(invalid("repeats a card_index"));
-        }
-        indexes.push(index);
-        check_card_header(card, position)?;
-        if let Some(body) = card.get("body") {
-            let body = body
-                .get("text")
-                .and_then(Value::as_str)
-                .filter(|text| !text.trim().is_empty())
-                .ok_or_else(|| invalid("body needs a non-empty 'text' string"))?;
-            validate::max_chars(
-                body,
-                limits::MAX_CAROUSEL_CARD_BODY,
-                &format!("cards[{position}] body"),
-            )?;
-            if body.matches('\n').count() > limits::MAX_CAROUSEL_CARD_BODY_LINE_BREAKS {
-                return Err(invalid(&format!(
-                    "body has more than {} line breaks",
-                    limits::MAX_CAROUSEL_CARD_BODY_LINE_BREAKS
-                )));
-            }
-        }
-        let buttons = check_card_action(card, position)?;
-        if *first_buttons.get_or_insert(buttons) != buttons {
-            return Err(invalid(
-                "has different buttons from cards[0]; every card needs the same type and number",
-            ));
-        }
-    }
-    Ok(())
-}
-
-/// Meta's page only takes a card's media as a link, and only an image or a video.
-pub(super) fn check_card_header(card: &Value, position: usize) -> Result<()> {
-    let invalid = |problem: &str| Error::validation(format!("cards[{position}] {problem}"));
-    let kind = card
-        .pointer("/header/type")
-        .and_then(Value::as_str)
-        .filter(|kind| matches!(*kind, "image" | "video"))
-        .ok_or_else(|| invalid("needs a header of type image or video"))?;
-    let link = card
-        .pointer(&format!("/header/{kind}/link"))
-        .and_then(Value::as_str)
-        .ok_or_else(|| invalid("header needs an http(s) link, not a media id"))?;
-    if link != link.trim() {
-        return Err(invalid("header link has spaces around it"));
-    }
-    match media_reference(link, &format!("cards[{position}] header link"))? {
-        MediaSource::Link(_) => Ok(()),
-        MediaSource::Id(_) => Err(invalid("header needs an http(s) link, not a media id")),
-    }
-}
-
-pub(super) fn check_card_action(card: &Value, position: usize) -> Result<CardButtons> {
-    let invalid = |problem: &str| Error::validation(format!("cards[{position}] {problem}"));
-    let text = |pointer: &str, problem: &str| {
-        card.pointer(pointer)
-            .and_then(Value::as_str)
-            .filter(|text| !text.trim().is_empty())
-            .map(str::to_owned)
-            .ok_or_else(|| invalid(problem))
-    };
-    let label = format!("cards[{position}] button label");
-    match (
-        card.pointer("/action/buttons"),
-        card.pointer("/action/parameters"),
-    ) {
-        (Some(buttons), None) => {
-            let buttons = buttons
-                .as_array()
-                .filter(|buttons| !buttons.is_empty())
-                .ok_or_else(|| invalid("action.buttons must be a non-empty array"))?;
-            for button in buttons {
-                if button.get("type").and_then(Value::as_str) != Some("quick_reply") {
-                    return Err(invalid("action.buttons entries must be quick_reply"));
-                }
-                let reply = |field: &str| {
-                    button
-                        .pointer(&format!("/quick_reply/{field}"))
-                        .and_then(Value::as_str)
-                        .filter(|text| !text.trim().is_empty())
-                        .ok_or_else(|| invalid("quick_reply needs a non-empty id and title"))
-                };
-                validate::max_chars(
-                    reply("id")?,
-                    limits::MAX_CAROUSEL_REPLY_ID,
-                    &format!("cards[{position}] button id"),
-                )?;
-                validate::max_chars(reply("title")?, limits::MAX_CAROUSEL_BUTTON_LABEL, &label)?;
-            }
-            Ok(CardButtons::QuickReplies(buttons.len()))
-        }
-        (None, Some(_)) => {
-            if card.pointer("/action/name").and_then(Value::as_str) != Some("cta_url") {
-                return Err(invalid("a URL button's action.name must be cta_url"));
-            }
-            let display = text(
-                "/action/parameters/display_text",
-                "URL button needs a non-empty display_text",
-            )?;
-            validate::max_chars(&display, limits::MAX_CAROUSEL_BUTTON_LABEL, &label)?;
-            let url = text("/action/parameters/url", "URL button needs a non-empty url")?;
-            if !paloma_graph::request::has_http_scheme(&url) || url != url.trim() {
-                return Err(invalid("URL button's url must be an http(s) link"));
-            }
-            Ok(CardButtons::Url)
-        }
-        _ => Err(invalid(
-            "action needs either one URL button or quick-reply buttons",
-        )),
-    }
 }
 
 pub(super) fn interactive_media_header(
@@ -579,7 +423,7 @@ pub(super) fn interactive_media_header(
     ];
     for (value, kind, flag) in media {
         if let Some(value) = value {
-            let source = media_reference(value, flag)?;
+            let source = messages::media_reference(value, flag)?;
             return Ok(Some(InteractiveHeader::Media(kind, source)));
         }
     }

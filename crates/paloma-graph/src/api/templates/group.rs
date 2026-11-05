@@ -1,7 +1,6 @@
 //! Template groups, which analytics reports on together.
 
-#[allow(clippy::wildcard_imports)] // part of `templates`: shares its imports and helpers
-use super::*;
+use super::{Request, json};
 
 /// `POST /{waba-id}/template_groups`. Unlike other template id lists, Meta types these as
 /// integers.

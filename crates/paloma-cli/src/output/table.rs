@@ -1,8 +1,9 @@
 //! `-o table`: lists become aligned columns, and a single object becomes key/value rows
 //! with nested objects indented under their key.
 
-#[allow(clippy::wildcard_imports)] // part of `output`: shares its imports
-use super::*;
+use std::fmt::Write as _;
+
+use super::{Cell, Table, Value, View};
 
 pub(super) fn render_table(data: &Value, view: View) -> String {
     match view {

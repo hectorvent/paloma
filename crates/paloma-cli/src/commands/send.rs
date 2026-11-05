@@ -13,7 +13,6 @@ use paloma_graph::api::messages::{
     self, Button, InteractiveHeader, InteractiveText, MediaKind, MediaOptions, MediaSource, Row,
     Section,
 };
-use paloma_graph::request::has_http_scheme;
 use serde_json::Value;
 use std::path::{Path, PathBuf};
 mod commerce;
@@ -272,28 +271,6 @@ impl SendCommand {
     }
 }
 
-/// A media id or an http(s) link. An error never echoes the value, since a link can carry
-/// credentials in its query string.
-fn media_reference(value: &str, flag: &str) -> Result<MediaSource> {
-    validate::not_blank(value, flag)?;
-    let value = value.trim();
-    let invalid = || Error::validation(format!("{flag} must be a media id or an http(s) link"));
-    if value.chars().any(char::is_whitespace) {
-        return Err(invalid());
-    }
-    if has_http_scheme(value) {
-        let host = value.split_once("://").map_or("", |(_, rest)| rest);
-        if host.is_empty() || host.starts_with('/') {
-            return Err(invalid());
-        }
-        return Ok(MediaSource::Link(value.to_owned()));
-    }
-    if value.contains([':', '/']) {
-        return Err(invalid());
-    }
-    Ok(MediaSource::Id(value.to_owned()))
-}
-
 fn check_body(body: &str) -> Result<()> {
     validate::not_blank(body, "--body")?;
     validate::max_chars(body, limits::MAX_INTERACTIVE_BODY, "--body")
@@ -339,8 +316,9 @@ async fn dispatch(app: &App, payload: Value) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::commerce::parse_product_sections;
-    use super::interactive::{check_media_cards, parse_buttons, parse_sections};
+    use super::interactive::{parse_buttons, parse_sections};
     use super::*;
+    use paloma_graph::api::messages::check_media_cards;
 
     #[test]
     fn buttons_parse_id_and_title() {

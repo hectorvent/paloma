@@ -1,7 +1,6 @@
 //! Template analytics and the side-by-side comparison of two templates.
 
-#[allow(clippy::wildcard_imports)] // part of `templates`: shares its imports and helpers
-use super::*;
+use super::Request;
 
 /// `GET /{template-id}/compare`, against one other template, over `start..end` in UNIX
 /// seconds.

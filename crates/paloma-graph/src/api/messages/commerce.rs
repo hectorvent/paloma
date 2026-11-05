@@ -1,7 +1,6 @@
 //! Catalog messages: one product, a sectioned product list, or the catalog button.
 
-#[allow(clippy::wildcard_imports)] // part of `messages`: shares the envelope and helpers
-use super::*;
+use super::{InteractiveText, Value, interactive, json};
 
 /// One catalog product. Meta doesn't allow a header on this kind, and the body is optional.
 pub fn interactive_product(

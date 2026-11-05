@@ -1,7 +1,9 @@
 //! Template names, ids, text, variables, TTLs and analytics windows.
 
-#[allow(clippy::wildcard_imports)] // part of `validate`: shares its imports and helpers
-use super::*;
+use super::{
+    Error, MAX_TEMPLATE_DELETE_IDS, MAX_TEMPLATE_NAME, Result, TEMPLATE_TTL_30_DAYS,
+    TEMPLATE_TTL_AUTHENTICATION, TEMPLATE_TTL_MARKETING, TEMPLATE_TTL_UTILITY, not_blank,
+};
 
 /// Named template parameters use lowercase ASCII letters and underscores.
 pub fn template_parameter_name(name: &str) -> Result<()> {

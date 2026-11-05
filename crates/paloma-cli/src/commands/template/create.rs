@@ -1,8 +1,11 @@
 //! Creating and editing templates: a JSON file, or typed flags that Paloma turns into
 //! components with the examples Meta requires for review.
 
-#[allow(clippy::wildcard_imports)] // part of `template`: shares its imports and helpers
-use super::*;
+use super::{
+    App, ArgGroup, Args, Button, Duration, Error, Header, InlineTemplate, Output, PREVIEW_COLUMNS,
+    ParameterFormat, PathBuf, Result, UPSERT_COLUMNS, Value, ValueEnum, enum_name, field_id,
+    limits, paging, read_json, templates, validate,
+};
 
 #[derive(Debug, Clone, Copy, ValueEnum)]
 #[value(rename_all = "SCREAMING_SNAKE_CASE")]

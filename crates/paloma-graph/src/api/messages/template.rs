@@ -1,8 +1,7 @@
 //! Template sends, their typed components, and which endpoint (`/messages` or
 //! `/marketing_messages`) a template's category goes to.
 
-#[allow(clippy::wildcard_imports)] // part of `messages`: shares the envelope and helpers
-use super::*;
+use super::{MediaKind, MediaSource, Request, Value, envelope, json, media_object};
 
 /// Marketing templates use a separate edge; utility and authentication stay on Cloud API.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

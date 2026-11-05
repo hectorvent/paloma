@@ -1,7 +1,9 @@
 //! Flow sends: the button that opens a WhatsApp Flow, with its token and starting data.
 
-#[allow(clippy::wildcard_imports)] // part of `send`: shares its imports and helpers
-use super::*;
+use super::{
+    App, ArgGroup, Args, Error, InteractiveCommon, PathBuf, Result, Value, ValueEnum, check_common,
+    dispatch, interactive_media_header, limits, messages, read_json, validate,
+};
 
 /// Where a Flow starts: `data_exchange` asks your endpoint for the first screen.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
