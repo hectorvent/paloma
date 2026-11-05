@@ -184,128 +184,38 @@ impl SetArgs {
 }
 
 impl AccountCommand {
-    #[allow(clippy::too_many_lines)] // one short arm per verb; each arm calls into its module
     pub async fn run(self, app: &App) -> Result<()> {
-        if let Self::Reach(command) = self {
-            return command.run(app).await;
-        }
-        if let Self::Users(UsersCommand::List(command)) = self {
-            return command.run(app).await;
-        }
-        if let Self::WelcomeSequence(command) = self {
-            return command.run(app).await;
-        }
-        if let Self::BillingCurrency(command) = self {
-            return command.run(app).await;
-        }
-        if let Self::Set(args) = self {
-            let body = args.body()?;
-            let waba = app.ctx()?.require_waba_id()?.to_owned();
-            if body.get("is_enabled_for_insights") == Some(&serde_json::Value::Bool(true)) {
-                if !app.confirm_or_abort(
-                    "enable template insights permanently (this cannot be undone)",
-                )? {
-                    return Ok(());
-                }
-                return app
-                    .send_and_emit(&account::enable_insights(&waba), no_id)
-                    .await;
-            }
-            if body
-                .get("disable_marketing_messages_on_cloud_api")
-                .and_then(serde_json::Value::as_bool)
-                == Some(true)
-                && !app.confirm_or_abort(
-                    "disable Cloud API marketing sends (MM API onboarding must be complete)",
-                )?
-            {
-                return Ok(());
-            }
-            return app.send_and_emit(&account::set(&waba, body), no_id).await;
-        }
-        if let Self::Get {
-            fields: Some(fields),
-        } = &self
-        {
-            validate::not_blank(fields, "fields")?;
-        }
-        if let Self::Analytics(args) = self {
-            return args.run(app).await;
-        }
-        if let Self::Limits(args) = &self {
-            args.page.check(None)?;
-        }
-        if let Self::Apps(AppsCommand::List(page)) = &self {
-            page.check(None)?;
-        }
-        if let Self::Limits(args) = &self
-            && let Some(id) = &args.business_id
-        {
-            validate::numeric_id(id, "business id")?;
-            return app
-                .send_and_emit(&account::portfolio_limit(id), no_id)
-                .await;
-        }
-        if let Self::Activity(ActivityCommand::List(args)) = &self {
-            validate::page_size(args.page.limit, Some(limits::MAX_ACTIVITIES_PAGE))?;
-        }
-        let waba = app.ctx()?.require_waba_id()?.to_owned();
         match self {
-            Self::Activity(ActivityCommand::List(a)) => {
-                super::listing::list(
-                    app,
-                    &a.page,
-                    |after| account::activities_page(&waba, after, a.page.limit),
-                    Rows {
-                        columns: &[
-                            "event_type",
-                            "timestamp",
-                            "actor_id",
-                            "actor_business_id",
-                            "category",
-                            "id",
-                        ],
-                        id: "id",
-                    },
-                )
-                .await
-            }
-            Self::Reach(_)
-            | Self::Users(_)
-            | Self::WelcomeSequence(_)
-            | Self::Set(_)
-            | Self::BillingCurrency(_)
-            | Self::Analytics(_) => {
-                unreachable!("handled before context resolution")
-            }
+            Self::Reach(command) => command.run(app).await,
+            Self::Users(UsersCommand::List(command)) => command.run(app).await,
+            Self::WelcomeSequence(command) => command.run(app).await,
+            Self::BillingCurrency(command) => command.run(app).await,
+            Self::Analytics(args) => args.run(app).await,
+            Self::Set(args) => args.run(app).await,
             Self::Get { fields } => {
-                app.send_and_emit(
-                    &account::get(&waba, fields.as_deref().unwrap_or(account::DETAIL_FIELDS)),
-                    field_id,
-                )
-                .await
+                if let Some(fields) = &fields {
+                    validate::not_blank(fields, "fields")?;
+                }
+                let waba = app.ctx()?.require_waba_id()?.to_owned();
+                let fields = fields.as_deref().unwrap_or(account::DETAIL_FIELDS);
+                app.send_and_emit(&account::get(&waba, fields), field_id)
+                    .await
             }
-            Self::Health => show_health(app, &account::get(&waba, account::HEALTH_FIELDS)).await,
-            Self::Limits(a) => {
+            Self::Health => {
+                let waba = app.ctx()?.require_waba_id()?.to_owned();
+                show_health(app, &account::get(&waba, account::HEALTH_FIELDS)).await
+            }
+            Self::Limits(args) => args.run(app).await,
+            Self::Apps(AppsCommand::List(page)) => {
+                page.check(None)?;
+                let waba = app.ctx()?.require_waba_id()?.to_owned();
                 super::listing::list(
                     app,
-                    &a.page,
-                    |after| account::limits(&waba, after).query_opt("limit", a.page.limit),
-                    Rows {
-                        columns: LIMIT_COLUMNS,
-                        id: "id",
-                    },
-                )
-                .await
-            }
-            Self::Apps(AppsCommand::List(a)) => {
-                super::listing::list(
-                    app,
-                    &a,
+                    &page,
                     |after| {
                         webhook::subscribed_apps(&waba)
                             .query_opt("after", after)
-                            .query_opt("limit", a.limit)
+                            .query_opt("limit", page.limit)
                     },
                     Rows {
                         columns: APP_COLUMNS,
@@ -314,7 +224,84 @@ impl AccountCommand {
                 )
                 .await
             }
+            Self::Activity(ActivityCommand::List(args)) => args.run(app).await,
         }
+    }
+}
+
+impl SetArgs {
+    async fn run(self, app: &App) -> Result<()> {
+        let body = self.body()?;
+        let waba = app.ctx()?.require_waba_id()?.to_owned();
+        if body.get("is_enabled_for_insights") == Some(&serde_json::Value::Bool(true)) {
+            if !app
+                .confirm_or_abort("enable template insights permanently (this cannot be undone)")?
+            {
+                return Ok(());
+            }
+            return app
+                .send_and_emit(&account::enable_insights(&waba), no_id)
+                .await;
+        }
+        if body
+            .get("disable_marketing_messages_on_cloud_api")
+            .and_then(serde_json::Value::as_bool)
+            == Some(true)
+            && !app.confirm_or_abort(
+                "disable Cloud API marketing sends (MM API onboarding must be complete)",
+            )?
+        {
+            return Ok(());
+        }
+        app.send_and_emit(&account::set(&waba, body), no_id).await
+    }
+}
+
+impl LimitsArgs {
+    /// Every number's limit on the WABA, or the shared limit of one business portfolio.
+    async fn run(self, app: &App) -> Result<()> {
+        self.page.check(None)?;
+        if let Some(id) = &self.business_id {
+            validate::numeric_id(id, "business id")?;
+            return app
+                .send_and_emit(&account::portfolio_limit(id), no_id)
+                .await;
+        }
+        let waba = app.ctx()?.require_waba_id()?.to_owned();
+        super::listing::list(
+            app,
+            &self.page,
+            |after| account::limits(&waba, after).query_opt("limit", self.page.limit),
+            Rows {
+                columns: LIMIT_COLUMNS,
+                id: "id",
+            },
+        )
+        .await
+    }
+}
+
+impl ActivitiesArgs {
+    async fn run(self, app: &App) -> Result<()> {
+        self.page.check(Some(limits::MAX_ACTIVITIES_PAGE))?;
+        let waba = app.ctx()?.require_waba_id()?.to_owned();
+        super::listing::list(
+            app,
+            &self.page,
+            |after| account::activities_page(&waba, after, self.page.limit),
+            Rows {
+                columns: &[
+                    "event_type",
+                    "timestamp",
+                    "actor_id",
+                    "actor_business_id",
+                    "category",
+                    "id",
+                ],
+                id: "id",
+            },
+        )
+        .await
     }
 }
 

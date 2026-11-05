@@ -219,28 +219,9 @@ impl PinInput {
 }
 
 impl NumberCommand {
-    #[allow(clippy::too_many_lines)] // one short arm per verb; each arm calls into its module
     pub async fn run(self, app: &App) -> Result<()> {
         match self {
-            Self::List(a) => {
-                validate::page_size(a.page.limit, Some(MAX_PHONE_NUMBERS_PAGE))?;
-                let waba = app.ctx()?.require_waba_id()?.to_owned();
-                let filter = ListFilter {
-                    account_mode: a.account_mode.map(Into::into),
-                    oldest_first: matches!(a.sort, Some(Sort::LastOnboardedAsc)),
-                    limit: a.page.limit,
-                };
-                super::listing::list(
-                    app,
-                    &a.page,
-                    |after| phone_numbers::list(&waba, &filter, after),
-                    Rows {
-                        columns: LIST_COLUMNS,
-                        id: "id",
-                    },
-                )
-                .await
-            }
+            Self::List(a) => a.run(app).await,
             Self::Get { phone_number_id } => {
                 let id = target(app, phone_number_id)?;
                 app.send_and_emit(&phone_numbers::get(&id, DETAIL_FIELDS), field_id)
@@ -285,65 +266,12 @@ impl NumberCommand {
             Self::Username(command) => command.run(app).await,
             Self::Contacts(command) => command.run(app).await,
             Self::Settings(command) => command.run(app).await,
-            Self::Verification(Verification::Request { method, language }) => {
-                validate::not_blank(&language, "language")?;
-                let phone = app.ctx()?.require_phone_number_id()?.to_owned();
-                if !app.confirm_or_abort(&format!(
-                    "send a verification SMS or voice call to number {phone}"
-                ))? {
-                    return Ok(());
-                }
-                let method = match method {
-                    CodeMethod::Sms => "SMS",
-                    CodeMethod::Voice => "VOICE",
-                };
-                app.send_and_emit(
-                    &phone_numbers::request_code(&phone, method, &language),
-                    no_id,
-                )
-                .await
-            }
-            Self::Verification(Verification::Confirm { code_stdin }) => {
-                let code = read_secret(
-                    app,
-                    &SecretSource {
-                        what: "verification code",
-                        flag: None,
-                        stdin_flag: "--code-stdin",
-                        env: "PALOMA_VERIFICATION_CODE",
-                        missing_is_auth: false,
-                    },
-                    None,
-                    code_stdin,
-                )?;
-                validate::verification_code(code.expose_secret())?;
-                let phone = app.ctx()?.require_phone_number_id()?.to_owned();
-                app.send_and_emit(
-                    &phone_numbers::verify_code(&phone, code.expose_secret()),
-                    no_id,
-                )
-                .await
-            }
+            Self::Verification(command) => command.run(app).await,
             Self::Add {
                 phone_number,
                 cc,
                 name,
-            } => {
-                validate::calling_code(&cc)?;
-                validate::recipient(&phone_number)?;
-                if !phone_number.bytes().all(|b| b.is_ascii_digit()) {
-                    return Err(paloma_core::Error::validation(
-                        "phone number must be international digits without a plus sign",
-                    ));
-                }
-                validate::not_blank(&name, "display name")?;
-                let waba = app.ctx()?.require_waba_id()?.to_owned();
-                app.send_and_emit(
-                    &phone_numbers::add(&waba, &cc, &phone_number, &name),
-                    field_id,
-                )
-                .await
-            }
+            } => add(app, &phone_number, &cc, &name).await,
             Self::Name(NameCommand::Set { name }) => {
                 validate::not_blank(&name, "display name")?;
                 let phone = app.ctx()?.require_phone_number_id()?.to_owned();
@@ -390,4 +318,87 @@ fn target(app: &App, explicit: Option<String>) -> Result<String> {
         }
         None => Ok(app.ctx()?.require_phone_number_id()?.to_owned()),
     }
+}
+
+impl ListArgs {
+    pub async fn run(self, app: &App) -> Result<()> {
+        validate::page_size(self.page.limit, Some(MAX_PHONE_NUMBERS_PAGE))?;
+        let waba = app.ctx()?.require_waba_id()?.to_owned();
+        let filter = ListFilter {
+            account_mode: self.account_mode.map(Into::into),
+            oldest_first: matches!(self.sort, Some(Sort::LastOnboardedAsc)),
+            limit: self.page.limit,
+        };
+        super::listing::list(
+            app,
+            &self.page,
+            |after| phone_numbers::list(&waba, &filter, after),
+            Rows {
+                columns: LIST_COLUMNS,
+                id: "id",
+            },
+        )
+        .await
+    }
+}
+
+impl Verification {
+    pub async fn run(self, app: &App) -> Result<()> {
+        match self {
+            Self::Request { method, language } => {
+                validate::not_blank(&language, "language")?;
+                let phone = app.ctx()?.require_phone_number_id()?.to_owned();
+                if !app.confirm_or_abort(&format!(
+                    "send a verification SMS or voice call to number {phone}"
+                ))? {
+                    return Ok(());
+                }
+                let method = match method {
+                    CodeMethod::Sms => "SMS",
+                    CodeMethod::Voice => "VOICE",
+                };
+                app.send_and_emit(
+                    &phone_numbers::request_code(&phone, method, &language),
+                    no_id,
+                )
+                .await
+            }
+            Self::Confirm { code_stdin } => {
+                let code = read_secret(
+                    app,
+                    &SecretSource {
+                        what: "verification code",
+                        flag: None,
+                        stdin_flag: "--code-stdin",
+                        env: "PALOMA_VERIFICATION_CODE",
+                        missing_is_auth: false,
+                    },
+                    None,
+                    code_stdin,
+                )?;
+                validate::verification_code(code.expose_secret())?;
+                let phone = app.ctx()?.require_phone_number_id()?.to_owned();
+                app.send_and_emit(
+                    &phone_numbers::verify_code(&phone, code.expose_secret()),
+                    no_id,
+                )
+                .await
+            }
+        }
+    }
+}
+
+/// Add a number to the WABA; verification and registration are separate steps.
+async fn add(app: &App, phone_number: &str, cc: &str, name: &str) -> Result<()> {
+    validate::calling_code(cc)?;
+    validate::recipient(phone_number)?;
+    if !phone_number.bytes().all(|b| b.is_ascii_digit()) {
+        return Err(paloma_core::Error::validation(
+            "phone number must be international digits without a plus sign",
+        ));
+    }
+    validate::not_blank(name, "display name")?;
+    let waba = app.ctx()?.require_waba_id()?.to_owned();
+    app.send_and_emit(&phone_numbers::add(&waba, cc, phone_number, name), field_id)
+        .await
 }

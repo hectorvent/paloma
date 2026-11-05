@@ -221,7 +221,6 @@ impl Interactive {
         }
     }
 
-    #[allow(clippy::too_many_lines)] // one short arm per verb; each arm calls into its module
     pub(super) async fn run(self, app: &App) -> Result<()> {
         let (to, body, reply, policy) = self.parts();
         validate::recipient(to)?;
@@ -298,40 +297,7 @@ impl Interactive {
                 };
                 messages::interactive_carousel(to, body, &cards, reply_to)
             }
-            Self::Call(a) => {
-                check_body(body)?;
-                if let Some(display) = &a.display {
-                    validate::not_blank(display, "--display")?;
-                    validate::max_chars(display, limits::MAX_CALL_BUTTON_TEXT, "--display")?;
-                }
-                let ttl_minutes = a
-                    .ttl
-                    .map(|ttl| {
-                        let minutes = u32::try_from(ttl.as_secs() / 60).ok().filter(|m| {
-                            ttl.as_secs() % 60 == 0
-                                && ttl.subsec_nanos() == 0
-                                && limits::CALL_BUTTON_TTL_MINUTES.contains(m)
-                        });
-                        minutes.ok_or_else(|| {
-                            Error::validation(format!(
-                                "--ttl must be whole minutes, from {}m to {}m",
-                                limits::CALL_BUTTON_TTL_MINUTES.start(),
-                                limits::CALL_BUTTON_TTL_MINUTES.end()
-                            ))
-                        })
-                    })
-                    .transpose()?;
-                if let Some(payload) = &a.payload {
-                    validate::not_blank(payload, "--payload")?;
-                    validate::max_chars(payload, limits::MAX_CALL_BUTTON_PAYLOAD, "--payload")?;
-                }
-                let button = messages::CallButton {
-                    display_text: a.display.as_deref(),
-                    ttl_minutes,
-                    payload: a.payload.as_deref(),
-                };
-                messages::interactive_call(to, body, &button, reply_to)
-            }
+            Self::Call(a) => call_payload(a, to, body, reply_to)?,
             Self::RequestContact(_) => {
                 check_body(body)?;
                 messages::interactive_request_contact(to, body, reply_to)
@@ -527,4 +493,45 @@ pub(super) fn parse_sections(specs: &[String]) -> Result<Vec<Section>> {
         )));
     }
     Ok(sections)
+}
+
+/// The call button, with its optional label, lifetime and tracking payload checked.
+fn call_payload(
+    a: &InteractiveCall,
+    to: &str,
+    body: &str,
+    reply_to: Option<&str>,
+) -> Result<Value> {
+    check_body(body)?;
+    if let Some(display) = &a.display {
+        validate::not_blank(display, "--display")?;
+        validate::max_chars(display, limits::MAX_CALL_BUTTON_TEXT, "--display")?;
+    }
+    let ttl_minutes = a
+        .ttl
+        .map(|ttl| {
+            let minutes = u32::try_from(ttl.as_secs() / 60).ok().filter(|m| {
+                ttl.as_secs() % 60 == 0
+                    && ttl.subsec_nanos() == 0
+                    && limits::CALL_BUTTON_TTL_MINUTES.contains(m)
+            });
+            minutes.ok_or_else(|| {
+                Error::validation(format!(
+                    "--ttl must be whole minutes, from {}m to {}m",
+                    limits::CALL_BUTTON_TTL_MINUTES.start(),
+                    limits::CALL_BUTTON_TTL_MINUTES.end()
+                ))
+            })
+        })
+        .transpose()?;
+    if let Some(payload) = &a.payload {
+        validate::not_blank(payload, "--payload")?;
+        validate::max_chars(payload, limits::MAX_CALL_BUTTON_PAYLOAD, "--payload")?;
+    }
+    let button = messages::CallButton {
+        display_text: a.display.as_deref(),
+        ttl_minutes,
+        payload: a.payload.as_deref(),
+    };
+    Ok(messages::interactive_call(to, body, &button, reply_to))
 }

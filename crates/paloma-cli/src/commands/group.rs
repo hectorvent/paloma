@@ -296,34 +296,9 @@ async fn pin(app: &App, group: &str, message: &str, days: Option<u32>) -> Result
 }
 
 impl GroupCommand {
-    #[allow(clippy::too_many_lines)] // one short arm per verb; each arm calls into its module
     pub async fn run(self, app: &App) -> Result<()> {
         match self {
-            Self::Create(a) => {
-                check_subject(&a.subject)?;
-                check_description(a.description.as_deref())?;
-                let phone = app.ctx()?.require_phone_number_id()?.to_owned();
-                let req = groups::create(
-                    &phone,
-                    &a.subject,
-                    a.description.as_deref(),
-                    a.join_approval.map(JoinApproval::api),
-                );
-                let Some(response) = app.send(&req).await? else {
-                    return Ok(());
-                };
-                let output = Output::response(&response)?;
-                let id = output
-                    .data
-                    .get("request_id")
-                    .and_then(Value::as_str)
-                    .map(str::to_owned);
-                app.out.note(
-                    "the group id and invite link arrive in a group_lifecycle_update webhook",
-                );
-                app.out.emit(&output.id(id));
-                Ok(())
-            }
+            Self::Create(a) => a.run(app).await,
             Self::List(a) => {
                 validate::page_size(a.page.limit, Some(limits::MAX_GROUPS_PAGE))?;
                 let phone = app.ctx()?.require_phone_number_id()?.to_owned();
@@ -335,35 +310,7 @@ impl GroupCommand {
                 app.send_and_emit(&groups::get(&group_id, fields), field_id)
                     .await
             }
-            Self::Update(a) => {
-                validate::group_id(&a.group_id)?;
-                if a.subject.is_none() && a.description.is_none() && a.photo.is_none() {
-                    return Err(Error::validation(
-                        "pass --subject, --description or --photo",
-                    ));
-                }
-                if let Some(subject) = &a.subject {
-                    check_subject(subject)?;
-                }
-                check_description(a.description.as_deref())?;
-                if let Some(photo) = &a.photo {
-                    check_photo(photo)?;
-                }
-                let req = match &a.photo {
-                    Some(photo) => groups::update_with_photo(
-                        &a.group_id,
-                        a.subject.as_deref(),
-                        a.description.as_deref(),
-                        photo,
-                    ),
-                    None => {
-                        groups::update(&a.group_id, a.subject.as_deref(), a.description.as_deref())
-                    }
-                };
-                let group_id = a.group_id.clone();
-                app.send_and_emit(&req, move |_| Some(group_id.clone()))
-                    .await
-            }
+            Self::Update(a) => a.run(app).await,
             Self::Delete { group_id } => {
                 validate::group_id(&group_id)?;
                 if !app.confirm_or_abort(&format!(
@@ -375,103 +322,9 @@ impl GroupCommand {
                 app.send_and_emit(&groups::delete(&group_id), move |_| Some(id.clone()))
                     .await
             }
-            Self::Invite(command) => {
-                let link = |v: &Value| {
-                    v.get("invite_link")
-                        .and_then(Value::as_str)
-                        .map(str::to_owned)
-                };
-                match command {
-                    Invite::Get { group_id } => {
-                        validate::group_id(&group_id)?;
-                        app.send_and_emit(&groups::invite_link(&group_id), link)
-                            .await
-                    }
-                    Invite::Reset { group_id } => {
-                        validate::group_id(&group_id)?;
-                        if !app.confirm_or_abort(&format!(
-                            "reset the invite link of group {group_id}; earlier links stop working"
-                        ))? {
-                            return Ok(());
-                        }
-                        app.send_and_emit(&groups::reset_invite_link(&group_id), link)
-                            .await
-                    }
-                }
-            }
-            Self::Members(Members::Remove { group_id, users }) => {
-                validate::group_id(&group_id)?;
-                if users.len() > limits::MAX_GROUP_PARTICIPANTS_PER_REQUEST {
-                    return Err(Error::validation(format!(
-                        "at most {} participants per request",
-                        limits::MAX_GROUP_PARTICIPANTS_PER_REQUEST
-                    )));
-                }
-                users.iter().try_for_each(|u| validate::recipient(u))?;
-                if !app.confirm_or_abort(&format!(
-                    "remove {} participant(s) from group {group_id}; they can't rejoin by invite link",
-                    users.len()
-                ))? {
-                    return Ok(());
-                }
-                send_partial(
-                    app,
-                    &groups::remove_participants(&group_id, &users),
-                    "failed_participants",
-                    &users,
-                )
-                .await
-            }
-            Self::Requests(command) => match command {
-                Requests::List { group_id, page } => {
-                    validate::group_id(&group_id)?;
-                    page.check(None)?;
-                    super::listing::list(
-                        app,
-                        &page,
-                        |after| groups::join_requests(&group_id, page.limit, after),
-                        Rows {
-                            columns: REQUEST_COLUMNS,
-                            id: "join_request_id",
-                        },
-                    )
-                    .await
-                }
-                Requests::Approve {
-                    group_id,
-                    request_ids,
-                } => {
-                    validate::group_id(&group_id)?;
-                    check_request_ids(&request_ids)?;
-                    send_partial(
-                        app,
-                        &groups::approve_join_requests(&group_id, &request_ids),
-                        "failed_join_requests",
-                        &request_ids,
-                    )
-                    .await
-                }
-                Requests::Reject {
-                    group_id,
-                    request_ids,
-                } => {
-                    validate::group_id(&group_id)?;
-                    check_request_ids(&request_ids)?;
-                    if !app.confirm_or_abort(&format!(
-                        "reject {} join request(s) to group {group_id}",
-                        request_ids.len()
-                    ))? {
-                        return Ok(());
-                    }
-                    send_partial(
-                        app,
-                        &groups::reject_join_requests(&group_id, &request_ids),
-                        "failed_join_requests",
-                        &request_ids,
-                    )
-                    .await
-                }
-            },
+            Self::Invite(command) => command.run(app).await,
+            Self::Members(command) => command.run(app).await,
+            Self::Requests(command) => command.run(app).await,
             Self::Pin {
                 group_id,
                 message_id,
@@ -491,5 +344,175 @@ impl GroupCommand {
                 pin(app, &group_id, &message_id, None).await
             }
         }
+    }
+}
+
+impl Create {
+    pub async fn run(self, app: &App) -> Result<()> {
+        check_subject(&self.subject)?;
+        check_description(self.description.as_deref())?;
+        let phone = app.ctx()?.require_phone_number_id()?.to_owned();
+        let req = groups::create(
+            &phone,
+            &self.subject,
+            self.description.as_deref(),
+            self.join_approval.map(JoinApproval::api),
+        );
+        let Some(response) = app.send(&req).await? else {
+            return Ok(());
+        };
+        let output = Output::response(&response)?;
+        let id = output
+            .data
+            .get("request_id")
+            .and_then(Value::as_str)
+            .map(str::to_owned);
+        app.out
+            .note("the group id and invite link arrive in a group_lifecycle_update webhook");
+        app.out.emit(&output.id(id));
+        Ok(())
+    }
+}
+
+impl Update {
+    pub async fn run(self, app: &App) -> Result<()> {
+        validate::group_id(&self.group_id)?;
+        if self.subject.is_none() && self.description.is_none() && self.photo.is_none() {
+            return Err(Error::validation(
+                "pass --subject, --description or --photo",
+            ));
+        }
+        if let Some(subject) = &self.subject {
+            check_subject(subject)?;
+        }
+        check_description(self.description.as_deref())?;
+        if let Some(photo) = &self.photo {
+            check_photo(photo)?;
+        }
+        let req = match &self.photo {
+            Some(photo) => groups::update_with_photo(
+                &self.group_id,
+                self.subject.as_deref(),
+                self.description.as_deref(),
+                photo,
+            ),
+            None => groups::update(
+                &self.group_id,
+                self.subject.as_deref(),
+                self.description.as_deref(),
+            ),
+        };
+        let group_id = self.group_id.clone();
+        app.send_and_emit(&req, move |_| Some(group_id.clone()))
+            .await
+    }
+}
+
+impl Invite {
+    pub async fn run(self, app: &App) -> Result<()> {
+        let link = |v: &Value| {
+            v.get("invite_link")
+                .and_then(Value::as_str)
+                .map(str::to_owned)
+        };
+        match self {
+            Invite::Get { group_id } => {
+                validate::group_id(&group_id)?;
+                app.send_and_emit(&groups::invite_link(&group_id), link)
+                    .await
+            }
+            Invite::Reset { group_id } => {
+                validate::group_id(&group_id)?;
+                if !app.confirm_or_abort(&format!(
+                    "reset the invite link of group {group_id}; earlier links stop working"
+                ))? {
+                    return Ok(());
+                }
+                app.send_and_emit(&groups::reset_invite_link(&group_id), link)
+                    .await
+            }
+        }
+    }
+}
+
+impl Requests {
+    pub async fn run(self, app: &App) -> Result<()> {
+        match self {
+            Requests::List { group_id, page } => {
+                validate::group_id(&group_id)?;
+                page.check(None)?;
+                super::listing::list(
+                    app,
+                    &page,
+                    |after| groups::join_requests(&group_id, page.limit, after),
+                    Rows {
+                        columns: REQUEST_COLUMNS,
+                        id: "join_request_id",
+                    },
+                )
+                .await
+            }
+            Requests::Approve {
+                group_id,
+                request_ids,
+            } => {
+                validate::group_id(&group_id)?;
+                check_request_ids(&request_ids)?;
+                send_partial(
+                    app,
+                    &groups::approve_join_requests(&group_id, &request_ids),
+                    "failed_join_requests",
+                    &request_ids,
+                )
+                .await
+            }
+            Requests::Reject {
+                group_id,
+                request_ids,
+            } => {
+                validate::group_id(&group_id)?;
+                check_request_ids(&request_ids)?;
+                if !app.confirm_or_abort(&format!(
+                    "reject {} join request(s) to group {group_id}",
+                    request_ids.len()
+                ))? {
+                    return Ok(());
+                }
+                send_partial(
+                    app,
+                    &groups::reject_join_requests(&group_id, &request_ids),
+                    "failed_join_requests",
+                    &request_ids,
+                )
+                .await
+            }
+        }
+    }
+}
+
+impl Members {
+    pub async fn run(self, app: &App) -> Result<()> {
+        let Self::Remove { group_id, users } = self;
+        validate::group_id(&group_id)?;
+        if users.len() > limits::MAX_GROUP_PARTICIPANTS_PER_REQUEST {
+            return Err(Error::validation(format!(
+                "at most {} participants per request",
+                limits::MAX_GROUP_PARTICIPANTS_PER_REQUEST
+            )));
+        }
+        users.iter().try_for_each(|u| validate::recipient(u))?;
+        if !app.confirm_or_abort(&format!(
+            "remove {} participant(s) from group {group_id}; they can't rejoin by invite link",
+            users.len()
+        ))? {
+            return Ok(());
+        }
+        send_partial(
+            app,
+            &groups::remove_participants(&group_id, &users),
+            "failed_participants",
+            &users,
+        )
+        .await
     }
 }

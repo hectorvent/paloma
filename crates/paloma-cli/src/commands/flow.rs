@@ -149,7 +149,6 @@ pub struct Assets {
 }
 
 impl FlowCommand {
-    #[allow(clippy::too_many_lines)] // one short arm per verb; each arm calls into its module
     pub async fn run(self, app: &App) -> Result<()> {
         match self {
             Self::Migrate(a) => a.run(app).await,
@@ -178,51 +177,8 @@ impl FlowCommand {
                 app.send_and_emit(&flows::get(&a.flow_id, &fields), field_id)
                     .await
             }
-            Self::Create(a) => {
-                let mut body = Map::new();
-                body.insert("name".into(), a.name.into());
-                body.insert("categories".into(), categories(&a.categories).into());
-                if let Some(path) = &a.flow_json {
-                    body.insert("flow_json".into(), read_json_text(path)?.into());
-                }
-                if let Some(id) = a.clone_from {
-                    body.insert("clone_flow_id".into(), id.into());
-                }
-                if let Some(uri) = a.endpoint_uri {
-                    body.insert("endpoint_uri".into(), uri.into());
-                }
-                if a.publish {
-                    body.insert("publish".into(), true.into());
-                }
-                let waba = app.ctx()?.require_waba_id()?.to_owned();
-                write(app, &[flows::create(&waba, Value::Object(body))]).await
-            }
-            Self::Update(a) => {
-                let mut meta = Map::new();
-                if let Some(n) = a.name {
-                    meta.insert("name".into(), n.into());
-                }
-                if !a.categories.is_empty() {
-                    meta.insert("categories".into(), categories(&a.categories).into());
-                }
-                if let Some(uri) = a.endpoint_uri {
-                    meta.insert("endpoint_uri".into(), uri.into());
-                }
-                if meta.is_empty() && a.flow_json.is_none() {
-                    return Err(Error::validation(
-                        "nothing to update: pass --name, --category, --endpoint-uri or --flow-json",
-                    ));
-                }
-                let mut reqs = Vec::new();
-                if !meta.is_empty() {
-                    reqs.push(flows::update(&a.flow_id, meta));
-                }
-                if let Some(path) = &a.flow_json {
-                    read_json_text(path)?;
-                    reqs.push(flows::upload_json(&a.flow_id, path));
-                }
-                write(app, &reqs).await
-            }
+            Self::Create(a) => a.run(app).await,
+            Self::Update(a) => a.run(app).await,
             Self::Publish { flow_id } => {
                 if !app.confirm_or_abort(&format!("publish flow {flow_id} (cannot be undone)"))? {
                     return Ok(());
@@ -241,40 +197,7 @@ impl FlowCommand {
                 }
                 write(app, &[flows::delete(&flow_id)]).await
             }
-            Self::Assets(a) => {
-                let req = flows::assets(&a.flow_id);
-                let Some(out) = a.out else {
-                    return app.send_and_emit(&req, crate::app::no_id).await;
-                };
-                if app.dry_run() {
-                    return app.print_dry_run(&[
-                        req,
-                        Request::get_url("<download_url of the FLOW_JSON asset>"),
-                    ]);
-                }
-                let assets = app.fetch(&req).await?.json()?;
-                let url = flows::flow_json_download_url(&assets).ok_or_else(|| {
-                    Error::other(format!(
-                        "flow {} has no {FLOW_JSON_NAME} asset to download",
-                        a.flow_id
-                    ))
-                })?;
-                let target = if out.is_dir() {
-                    out.join(FLOW_JSON_NAME)
-                } else {
-                    out
-                };
-                let bytes = app
-                    .client()?
-                    .download(&Request::get_url(url), &target)
-                    .await?;
-                let path = target.display().to_string();
-                app.out.note(format!("wrote {bytes} bytes to {path}"));
-                app.out.emit(
-                    &Output::new(json!({ "flow_id": a.flow_id, "path": path })).id(Some(path)),
-                );
-                Ok(())
-            }
+            Self::Assets(a) => a.run(app).await,
         }
     }
 }
@@ -319,4 +242,91 @@ async fn write(app: &App, reqs: &[Request]) -> Result<()> {
         "Flow JSON has {n} validation error{}",
         if n == 1 { "" } else { "s" }
     )))
+}
+
+impl Create {
+    pub async fn run(self, app: &App) -> Result<()> {
+        let mut body = Map::new();
+        body.insert("name".into(), self.name.into());
+        body.insert("categories".into(), categories(&self.categories).into());
+        if let Some(path) = &self.flow_json {
+            body.insert("flow_json".into(), read_json_text(path)?.into());
+        }
+        if let Some(id) = self.clone_from {
+            body.insert("clone_flow_id".into(), id.into());
+        }
+        if let Some(uri) = self.endpoint_uri {
+            body.insert("endpoint_uri".into(), uri.into());
+        }
+        if self.publish {
+            body.insert("publish".into(), true.into());
+        }
+        let waba = app.ctx()?.require_waba_id()?.to_owned();
+        write(app, &[flows::create(&waba, Value::Object(body))]).await
+    }
+}
+
+impl Update {
+    pub async fn run(self, app: &App) -> Result<()> {
+        let mut meta = Map::new();
+        if let Some(n) = self.name {
+            meta.insert("name".into(), n.into());
+        }
+        if !self.categories.is_empty() {
+            meta.insert("categories".into(), categories(&self.categories).into());
+        }
+        if let Some(uri) = self.endpoint_uri {
+            meta.insert("endpoint_uri".into(), uri.into());
+        }
+        if meta.is_empty() && self.flow_json.is_none() {
+            return Err(Error::validation(
+                "nothing to update: pass --name, --category, --endpoint-uri or --flow-json",
+            ));
+        }
+        let mut reqs = Vec::new();
+        if !meta.is_empty() {
+            reqs.push(flows::update(&self.flow_id, meta));
+        }
+        if let Some(path) = &self.flow_json {
+            read_json_text(path)?;
+            reqs.push(flows::upload_json(&self.flow_id, path));
+        }
+        write(app, &reqs).await
+    }
+}
+
+impl Assets {
+    pub async fn run(self, app: &App) -> Result<()> {
+        let req = flows::assets(&self.flow_id);
+        let Some(out) = self.out else {
+            return app.send_and_emit(&req, crate::app::no_id).await;
+        };
+        if app.dry_run() {
+            return app.print_dry_run(&[
+                req,
+                Request::get_url("<download_url of the FLOW_JSON asset>"),
+            ]);
+        }
+        let assets = app.fetch(&req).await?.json()?;
+        let url = flows::flow_json_download_url(&assets).ok_or_else(|| {
+            Error::other(format!(
+                "flow {} has no {FLOW_JSON_NAME} asset to download",
+                self.flow_id
+            ))
+        })?;
+        let target = if out.is_dir() {
+            out.join(FLOW_JSON_NAME)
+        } else {
+            out
+        };
+        let bytes = app
+            .client()?
+            .download(&Request::get_url(url), &target)
+            .await?;
+        let path = target.display().to_string();
+        app.out.note(format!("wrote {bytes} bytes to {path}"));
+        app.out
+            .emit(&Output::new(json!({ "flow_id": self.flow_id, "path": path })).id(Some(path)));
+        Ok(())
+    }
 }
