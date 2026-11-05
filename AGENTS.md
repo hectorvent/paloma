@@ -137,8 +137,11 @@ Known exceptions, each for a reason; don't add more without one:
    `Subcommand` enum in `crates/paloma-cli/src/commands/<group>.rs`; doc comments become
    `--help`. New top-level group → new module + variant in `commands.rs`.
 2. New Graph node → a pure builder in `crates/paloma-graph/src/api/<resource>.rs`.
-3. In `run`: validate → resolve ids from `app.ctx()?` → `app.send_and_emit(..)`.
-   Payload shaping belongs in `paloma-graph`, not in the command.
+3. In `run`: validate → resolve ids from `app.ctx()?` → confirm when the write needs it →
+   `app.send_and_emit(..)`. Payload shaping and Meta's rules (limits, guards, confirm text)
+   belong in `paloma-graph`, not in the command. A group's `run` only dispatches
+   (`Self::X(a) => a.run(app).await`); a verb with more than a few lines gets its own
+   `Args` struct with an `async fn run(self, app: &App)`.
 4. Contract test in `crates/paloma-cli/tests/cli/<group>.rs` (exit code, stdout vs stderr,
    exact request body); docs page under `docs/commands/`, linked from `docs/README.md`.
 

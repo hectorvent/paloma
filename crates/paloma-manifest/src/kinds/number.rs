@@ -44,8 +44,10 @@ pub async fn export(cx: Cx<'_>) -> Result<Vec<Value>> {
     }
     Ok(vec![live])
 }
-#[allow(clippy::too_many_lines)] // one block per Number field, each with its own write and confirmation
-pub async fn plan(cx: Cx<'_>, spec: &Value) -> Result<KindPlan> {
+/// The writable fields of a Number spec, checked offline: a PIN, a display name to submit,
+/// and search visibility in Meta's spelling. Observational fields from `export` are
+/// dropped, and anything else is refused.
+fn desired(spec: &Value) -> Result<Map<String, Value>> {
     let object = spec
         .as_object()
         .ok_or_else(|| Error::validation("Number spec must be a mapping"))?;
@@ -91,6 +93,11 @@ pub async fn plan(cx: Cx<'_>, spec: &Value) -> Result<KindPlan> {
             _ => return Err(Error::validation(format!("Number does not manage {key}"))),
         }
     }
+    Ok(desired)
+}
+
+pub async fn plan(cx: Cx<'_>, spec: &Value) -> Result<KindPlan> {
+    let mut desired = desired(spec)?;
     if desired.is_empty() {
         return Ok(KindPlan::synced());
     }
@@ -161,6 +168,21 @@ pub async fn plan(cx: Cx<'_>, spec: &Value) -> Result<KindPlan> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_spec_keeps_only_writable_fields_and_refuses_unknown_ones() {
+        let spec =
+            json!({ "search_visibility": "NON_VISIBLE", "verified_name": "Acme", "pin": 825194 });
+        let fields = desired(&spec).unwrap();
+        assert_eq!(fields.get("search_visibility"), Some(&json!("HIDDEN")));
+        assert_eq!(fields.get("pin"), Some(&json!("825194")));
+        assert!(
+            !fields.contains_key("verified_name"),
+            "observational fields are dropped"
+        );
+        assert!(desired(&json!({ "color": "blue" })).is_err());
+        assert!(desired(&json!({ "pin": "12" })).is_err());
+    }
 
     #[test]
     fn a_name_is_resubmitted_only_when_it_differs_or_was_turned_down() {
