@@ -33,7 +33,9 @@ paloma calling disable              # confirms; --yes to skip
 ## `paloma calling set`
 
 Update part of the config. For settings without a flag, such as `video`, use the `--file`
-escape hatch with a full `calling` object. Enum values are case-insensitive.
+escape hatch with a full `calling` object. Enum values are case-insensitive. Like the
+matching commands, it confirms when it turns calling off (`--status DISABLED`), and a
+`--file` that turns calling, SIP or voicemail off or empties the codecs confirms too.
 
 | Flag | Values |
 |------|--------|

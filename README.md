@@ -155,7 +155,7 @@ live in one `whatsapp.yaml`.
 | `PhoneSettings` | Local storage and customer identity-key checks |
 | `Account` | WABA name and timezone (excludes irreversible enrollment and billing) |
 | `QrCode` | Prefilled messages for existing QR codes |
-| `Calling` | Voice calling: status, call icon, callback permission, SIP servers, codecs |
+| `Calling` | Voice calling: status, call icon and the countries it shows in, callback permission, SIP servers, SRTP, codecs, voicemail |
 | `Profile` | Business profile: about, address, description, email, websites, vertical |
 | `Template` | Message templates as a managed set. Missing ones are created; changed ones are edited and go back to Meta for approval |
 | `Webhook` | Callback URL override and the event fields your app subscribes to |

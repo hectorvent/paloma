@@ -32,7 +32,7 @@ Read [docs/architecture.md](docs/architecture.md) first. The short version:
 ```
 paloma-core      errors + exit codes, validation, limits, 24h policy, Credentials trait
 paloma-config    config.toml (toml_edit writes), profiles, keyring, Context resolution
-paloma-graph     Request (a call as data), Client, error_map, paging, api::<resource>, lookup,
+paloma-graph     Request (a call as data), Client, error_map, retry, paging, api::<resource>, lookup,
                  callback (calling webhook endpoints), webhook_samples
 paloma-manifest  YAML manifests: interpolate, case, diff, plan + Scope, Kind enum + kinds/*
 paloma-cli       clap tree (commands/*), App wiring, output::Printer

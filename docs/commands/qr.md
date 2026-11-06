@@ -42,8 +42,8 @@ can leave a partial file. `--timeout` bounds each download request and its body 
 
 ## Output and confirmation
 
-`create`, `get`, `update` and `delete` print the QR code under `-q`. Lists have no primary
-id, so `list -q` produces no output. JSON/raw preserve the Graph response on a single
+`create`, `get`, `update` and `delete` print the QR code under `-q`, and `list -q` prints one
+code per line. JSON/raw preserve the Graph response on a single
 request; `--all` returns merged data. Meta wraps `get` responses in `data`.
 
 Deleting requires confirmation, or `--yes`, and expires the short link. Noninteractive

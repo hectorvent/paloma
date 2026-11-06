@@ -68,8 +68,8 @@ paloma webhook subscribe --number --yes  # clear only the number's alternate cal
 
 A per-number override requires phone-number context, with no WABA id needed. A default
 WABA subscription needs no verify token. Explicit token flags without a callback URL
-exit `5`. Callback URLs are limited to 200 characters and blank URLs are refused before
-context resolution. `get` resolves the effective URL in order: number override, WABA
+exit `5`. Callback URLs must be `https`, at most 200 characters, and not blank; anything
+else is refused before context resolution. `get` resolves the effective URL in order: number override, WABA
 override, app callback. `get -q` prints that effective URL.
 
 ## `paloma webhook unsubscribe`

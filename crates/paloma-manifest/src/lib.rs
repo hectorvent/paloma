@@ -5,8 +5,8 @@
 //! a kind; [`case`] converts losslessly with no per-field mapping. `${...}` placeholders
 //! are expanded by [`interpolate`] *before* case conversion, so kinds never see one.
 //!
-//! The pure pieces ([`case`], [`diff`], [`interpolate`], [`yaml`], [`manifest`]) are
-//! synchronous and dependency-free so they unit-test without a runtime.
+//! The pure pieces ([`case`], [`diff`], [`interpolate`], [`yaml`], [`manifest`], [`plan`])
+//! are synchronous and need no client, so they unit-test without a runtime.
 
 pub mod case;
 pub mod diff;

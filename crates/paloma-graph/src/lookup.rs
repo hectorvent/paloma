@@ -11,7 +11,7 @@ use crate::{Client, paging};
 /// Which app a request acts for, and how it was chosen.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum AppChoice {
-    /// The user gave it (`--app-id`, `PALOMA_APP_ID` or the profile).
+    /// The user gave it (`--app-id` or `PALOMA_APP_ID`).
     Given(String),
     /// The first of `subscribed` apps on the WABA. A WABA can have several, and the first
     /// may not be the token's, so callers say which one they picked.

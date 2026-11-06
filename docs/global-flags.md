@@ -106,7 +106,7 @@ Without `--all`, a page that has more after it ends with a note on stderr naming
 | Code | Meaning |
 |------|---------|
 | `0` | Success |
-| `1` | Generic error |
+| `1` | Generic error; also `diff` when it found drift |
 | `2` | Usage error (bad flags/arguments) |
 | `3` | Auth/token error, including Meta's permission codes such as 10, 190 and 200-299, whatever the HTTP status |
 | `4` | Rate-limited (HTTP 429, or a Meta throttling code such as 130429 or 131048), after any [retries](#retries) |
