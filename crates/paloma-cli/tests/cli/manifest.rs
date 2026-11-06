@@ -1510,3 +1510,78 @@ async fn apply_writes_nothing_for_any_document_when_one_edit_is_refused() {
             .all(|r| r.method.as_str() == "GET")
     );
 }
+
+/// A shorthand template is checked like `template create` only when it would be sent for
+/// review: an in-sync template is never rechecked, so a manifest that worked keeps working.
+#[tokio::test(flavor = "multi_thread")]
+async fn template_shorthand_is_checked_only_when_it_would_be_submitted() {
+    let home = TempDir::new().unwrap();
+    let live = |body: &str| {
+        json!({ "data": [{ "id": "tpl-9", "name": "notice", "language": "en_US",
+            "status": "APPROVED", "category": "UTILITY",
+            "components": [{ "type": "BODY", "text": body }] }] })
+    };
+    let graph = MockServer::start().await;
+    Mock::given(method("GET"))
+        .and(path(format!("/v26.0/{WABA}/message_templates")))
+        .respond_with(ResponseTemplate::new(200).set_body_json(live("Hi {{1}}")))
+        .mount(&graph)
+        .await;
+    // In sync, with no example: fine, as before.
+    let same = shorthand_manifest(&home, "UTILITY", "Hi {{1}}");
+    paloma(Some(&graph), &home)
+        .args(["diff", "-f"])
+        .arg(&same)
+        .assert()
+        .code(0);
+    // A changed body would go to review without an example for {{1}}: refused up front.
+    let changed = shorthand_manifest(&home, "UTILITY", "Bye {{1}}");
+    paloma(Some(&graph), &home)
+        .args(["diff", "-f"])
+        .arg(&changed)
+        .assert()
+        .code(5)
+        .stderr(predicate::str::contains(
+            "example has 0 value(s) for 1 variable(s)",
+        ));
+
+    // A new template is checked too, and the hint names what a manifest can do.
+    let empty = MockServer::start().await;
+    Mock::given(method("GET"))
+        .and(path(format!("/v26.0/{WABA}/message_templates")))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({ "data": [] })))
+        .mount(&empty)
+        .await;
+    let named = shorthand_manifest(&home, "UTILITY", "Hi {{first_name}}");
+    paloma(Some(&empty), &home)
+        .args(["diff", "-f"])
+        .arg(&named)
+        .assert()
+        .code(5)
+        .stderr(
+            predicate::str::contains("isn't positional")
+                .and(predicate::str::contains("--parameter-format").not()),
+        );
+}
+
+/// A phone-scoped document with no phone number id anywhere fails before any request,
+/// naming where to set one, instead of reading an empty-id path.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_phone_scoped_document_without_a_phone_number_id_fails_before_reading() {
+    let graph = MockServer::start().await;
+    let home = TempDir::new().unwrap();
+    let file = home.path().join("calling.yaml");
+    std::fs::write(
+        &file,
+        "apiVersion: paloma/v1\nkind: Calling\nspec:\n  status: ENABLED\n",
+    )
+    .unwrap();
+    paloma(Some(&graph), &home)
+        .env_remove("PALOMA_PHONE_NUMBER_ID")
+        .args(["diff", "-f"])
+        .arg(&file)
+        .assert()
+        .code(3)
+        .stderr(predicate::str::contains("no phone number id"));
+    assert!(graph.received_requests().await.unwrap().is_empty());
+}

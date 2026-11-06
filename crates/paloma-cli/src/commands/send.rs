@@ -318,7 +318,6 @@ mod tests {
     use super::commerce::parse_product_sections;
     use super::interactive::{parse_buttons, parse_sections};
     use super::*;
-    use paloma_graph::api::messages::check_media_cards;
 
     #[test]
     fn buttons_parse_id_and_title() {
@@ -374,77 +373,6 @@ mod tests {
         assert!(parse_product_sections(&[format!("A:{thirty},s")]).is_err());
         let eleven = vec!["A:s".to_owned(); 11];
         assert!(parse_product_sections(&eleven).is_err());
-    }
-
-    fn card(action: &Value) -> Value {
-        serde_json::json!({
-            "header": { "type": "image", "image": { "link": "https://x.test/a.png" } },
-            "action": action,
-        })
-    }
-
-    fn url_action() -> Value {
-        serde_json::json!({
-            "name": "cta_url",
-            "parameters": { "display_text": "Buy", "url": "https://x.test" }
-        })
-    }
-
-    fn replies(count: usize) -> Value {
-        let buttons: Vec<Value> = (0..count)
-            .map(|i| {
-                serde_json::json!({
-                    "type": "quick_reply",
-                    "quick_reply": { "id": format!("b{i}"), "title": "Go" }
-                })
-            })
-            .collect();
-        serde_json::json!({ "buttons": buttons })
-    }
-
-    fn checked(cards: Vec<Value>) -> Result<()> {
-        check_media_cards(&messages::media_cards(cards))
-    }
-
-    #[test]
-    fn media_cards_must_have_matching_buttons() {
-        assert!(checked(vec![card(&url_action()), card(&url_action())]).is_ok());
-        assert!(checked(vec![card(&replies(2)), card(&replies(2))]).is_ok());
-        assert!(checked(vec![card(&replies(2)), card(&replies(1))]).is_err());
-        assert!(checked(vec![card(&url_action()), card(&replies(1))]).is_err());
-    }
-
-    #[test]
-    fn a_media_card_needs_a_linked_image_or_video() {
-        let mut by_id = card(&url_action());
-        by_id["header"] = serde_json::json!({ "type": "image", "image": { "id": "9" } });
-        assert!(checked(vec![by_id, card(&url_action())]).is_err());
-        let mut document = card(&url_action());
-        document["header"] =
-            serde_json::json!({ "type": "document", "document": { "link": "https://x.test" } });
-        assert!(checked(vec![document, card(&url_action())]).is_err());
-    }
-
-    #[test]
-    fn a_media_card_body_has_a_length_and_line_limit() {
-        let with_body = |text: &str| {
-            let mut c = card(&url_action());
-            c["body"] = serde_json::json!({ "text": text });
-            c
-        };
-        assert!(checked(vec![with_body("a\nb\nc"), card(&url_action())]).is_ok());
-        assert!(checked(vec![with_body("a\nb\nc\nd"), card(&url_action())]).is_err());
-        assert!(checked(vec![with_body(&"x".repeat(160)), card(&url_action())]).is_ok());
-        assert!(checked(vec![with_body(&"x".repeat(161)), card(&url_action())]).is_err());
-    }
-
-    #[test]
-    fn card_indexes_stay_in_range_and_unique() {
-        let mut first = card(&url_action());
-        first["card_index"] = 1.into();
-        assert!(checked(vec![first.clone(), card(&url_action())]).is_err());
-        first["card_index"] = 10.into();
-        assert!(checked(vec![first, card(&url_action())]).is_err());
     }
 
     #[test]

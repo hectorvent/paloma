@@ -72,6 +72,9 @@ pub async fn plan(cx: Cx<'_>, spec: &Value) -> Result<KindPlan> {
             .get("category")
             .and_then(Value::as_str)
             .unwrap_or("");
+        if shorthand {
+            check_shorthand(&create_body, &name)?;
+        }
         return Ok(KindPlan {
             changes: vec![format!("create {name}/{language} (category {category})")],
             preview: Some(create_body.clone()),
@@ -99,6 +102,9 @@ pub async fn plan(cx: Cx<'_>, spec: &Value) -> Result<KindPlan> {
         edit_body.insert("category".into(), desired["category"].clone());
     }
     if content_changed {
+        if shorthand {
+            check_shorthand(&create_body, &name)?;
+        }
         // An edit replaces every component, so a shorthand edit must carry the live
         // non-BODY components forward or it would delete them.
         let components = if shorthand {
@@ -148,6 +154,26 @@ fn edit_refusal(
     })
 }
 
+/// The checks `template create --body --example` runs, for a shorthand about to be
+/// submitted for review (a create, or an edit of its body). A template that's already in
+/// sync is never rechecked, so a manifest that worked before keeps working.
+fn check_shorthand(create_body: &Value, name: &str) -> Result<()> {
+    paloma_core::validate::template_name(name)?;
+    let body = create_body
+        .pointer("/components/0/text")
+        .and_then(Value::as_str)
+        .unwrap_or_default();
+    paloma_core::validate::template_text(body, paloma_core::limits::MAX_TEMPLATE_BODY, "body")?;
+    let example: Vec<String> = create_body
+        .pointer("/components/0/example/body_text/0")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .map(|v| v.as_str().map_or_else(|| v.to_string(), str::to_owned))
+        .collect();
+    templates::examples(body, &example, false, "example").map(|_| ())
+}
+
 /// The create body: from `components`, or from the `body`/`example` shorthand.
 fn create_body(spec: &Value, name: &str, language: &str) -> Result<Value> {
     let category = spec.get("category").and_then(Value::as_str).unwrap_or("");
@@ -170,11 +196,6 @@ fn create_body(spec: &Value, name: &str, language: &str) -> Result<Value> {
             .collect(),
         _ => Vec::new(),
     };
-    // The same checks as `template create --body --example`, so a manifest can't submit
-    // a template review would reject for its name, length or examples.
-    paloma_core::validate::template_name(name)?;
-    paloma_core::validate::template_text(text, paloma_core::limits::MAX_TEMPLATE_BODY, "body")?;
-    templates::examples(text, &example, false, "example")?;
     Ok(templates::inline_body(
         name, category, language, text, &example,
     ))

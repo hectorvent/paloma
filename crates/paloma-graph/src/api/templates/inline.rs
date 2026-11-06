@@ -126,7 +126,12 @@ pub fn examples(text: &str, given: &[String], named: bool, flag: &str) -> Result
     for variable in &variables {
         let Ok(number) = variable.parse::<usize>() else {
             return Err(Error::validation(format!(
-                "variable {{{{{variable}}}}} isn't positional; pass --parameter-format named"
+                "variable {{{{{variable}}}}} isn't positional{}",
+                if flag.starts_with("--") {
+                    "; pass --parameter-format named"
+                } else {
+                    "; number the variables {{1}}, {{2}}, ... in order"
+                }
             )));
         };
         numbers.push(number);

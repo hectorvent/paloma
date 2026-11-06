@@ -1841,4 +1841,32 @@ fn template_category_is_a_closed_set_in_any_case() {
         String::from_utf8_lossy(&out.stderr)
     );
     assert_eq!(stdout_json(&out)["body"]["category"], "UTILITY");
+    // `template list` takes the same closed set and sends Meta's spelling.
+    paloma(None, &home)
+        .args(["template", "list", "--category", "utlity", "--dry-run"])
+        .assert()
+        .code(2);
+    let out = paloma(None, &home)
+        .args([
+            "template",
+            "list",
+            "--category",
+            "utility",
+            "--dry-run",
+            "-o",
+            "json",
+        ])
+        .output()
+        .unwrap();
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert!(
+        stdout_json(&out)["url"]
+            .as_str()
+            .unwrap()
+            .contains("category=UTILITY")
+    );
 }
