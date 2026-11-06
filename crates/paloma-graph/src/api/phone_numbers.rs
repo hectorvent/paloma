@@ -186,3 +186,10 @@ pub fn administration(phone: &str, edge: &str, body: Option<Value>) -> Request {
 pub fn update(phone: &str, body: Value) -> Request {
     Request::post(phone).json(body)
 }
+
+/// The Official Business Account status of a phone-number response.
+pub fn oba_status(response: &Value) -> Option<&str> {
+    response
+        .pointer("/official_business_account/oba_status")
+        .and_then(Value::as_str)
+}

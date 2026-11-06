@@ -13,9 +13,7 @@ pub fn template() -> Value {
 
 async fn current(cx: Cx<'_>) -> Result<Value> {
     let phone = cx.scope.require_phone_number_id()?;
-    let mut cur = read(cx, &commerce::get(phone))
-        .await?
-        .pointer("/data/0")
+    let mut cur = commerce::first(&read(cx, &commerce::get(phone)).await?)
         .cloned()
         .unwrap_or_else(|| json!({}));
     if let Some(m) = cur.as_object_mut() {

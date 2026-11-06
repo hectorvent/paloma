@@ -53,9 +53,9 @@ impl CommerceCommand {
         match self {
             Self::Get => {
                 if let Some(resp) = app.send(&commerce::get(&phone)).await? {
-                    let id = resp
-                        .json()?
-                        .pointer("/data/0/id")
+                    let body = resp.json()?;
+                    let id = commerce::first(&body)
+                        .and_then(|s| s.get("id"))
                         .and_then(serde_json::Value::as_str)
                         .map(str::to_owned);
                     app.out.emit(

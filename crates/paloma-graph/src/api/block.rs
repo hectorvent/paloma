@@ -39,6 +39,18 @@ pub fn list(phone_number_id: &str, limit: Option<u32>, after: Option<&str>) -> R
         .query_opt("after", after)
 }
 
+/// Where a block or unblock response lists the users it acted on.
+pub const ADDED_USERS: &str = "/block_users/added_users";
+pub const REMOVED_USERS: &str = "/block_users/removed_users";
+
+/// How many users a block or unblock response says failed.
+pub fn failed_count(response: &Value) -> usize {
+    response
+        .pointer("/block_users/failed_users")
+        .and_then(Value::as_array)
+        .map_or(0, Vec::len)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -113,9 +113,8 @@ impl Hours {
                 let Some(response) = app.send(&calling::get(&phone, false)).await? else {
                     return Ok(());
                 };
-                let hours = response
-                    .json()?
-                    .pointer("/calling/call_hours")
+                let body = response.json()?;
+                let hours = calling::call_hours(&body)
                     .cloned()
                     .unwrap_or_else(|| json!({}));
                 let status = hours
@@ -142,7 +141,7 @@ impl Hours {
                 let phone = app.ctx()?.require_phone_number_id()?.to_owned();
                 // Meta requires the schedule even when disabling, and deletes holidays left out.
                 let current = app.fetch(&calling::get(&phone, false)).await?.json()?;
-                let Some(hours) = current.pointer("/calling/call_hours").cloned() else {
+                let Some(hours) = calling::call_hours(&current).cloned() else {
                     app.out.info("call hours aren't set on this number");
                     return Ok(());
                 };

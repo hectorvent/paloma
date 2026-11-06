@@ -26,3 +26,8 @@ pub fn set_photo(phone_number_id: &str, handle: &str) -> Request {
     fields.insert("profile_picture_handle".into(), handle.into());
     set(phone_number_id, fields)
 }
+
+/// The one settings object a `GET` returns, which Graph wraps in `data[0]`.
+pub fn first(response: &Value) -> Option<&Value> {
+    response.pointer("/data/0")
+}

@@ -112,3 +112,8 @@ pub fn pricing(account: &str, query: &Query, filters: &PricingFilters) -> Reques
     append(&mut fields, "dimensions", &filters.dimensions);
     Request::get(account).query("fields", fields)
 }
+
+/// Where a messaging analytics response keeps its data points.
+pub const DATA_POINTS: &str = "/analytics/data_points";
+/// Where a pricing analytics response keeps its groups.
+pub const PRICING_DATA: &str = "/pricing_analytics/data";

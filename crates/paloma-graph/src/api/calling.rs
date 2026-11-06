@@ -317,6 +317,18 @@ pub fn disable_hours(phone_number_id: &str, mut current: Value) -> Request {
     set(phone_number_id, json!({ "call_hours": current }))
 }
 
+/// The `call_hours` object of a calling settings response.
+pub fn call_hours(response: &Value) -> Option<&Value> {
+    response.pointer("/calling/call_hours")
+}
+
+/// Whether a person can be called, from a `call_permissions` response.
+pub fn permission_status(response: &Value) -> Option<&str> {
+    response
+        .pointer("/permission/status")
+        .and_then(Value::as_str)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

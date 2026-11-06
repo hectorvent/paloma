@@ -181,8 +181,8 @@ impl Analytics {
                     out = out.table("/data", PRICING_COLUMNS);
                 }
             } else {
-                points(out.data.pointer("/analytics/data_points"))?;
-                out = out.table("/analytics/data_points", MESSAGE_COLUMNS);
+                points(out.data.pointer(analytics::DATA_POINTS))?;
+                out = out.table(analytics::DATA_POINTS, MESSAGE_COLUMNS);
             }
             app.out.emit(&out);
         }
@@ -203,7 +203,7 @@ fn points(value: Option<&Value>) -> Result<&Vec<Value>> {
 
 fn pricing_rows(value: &Value) -> Result<Vec<Value>> {
     let groups = value
-        .pointer("/pricing_analytics/data")
+        .pointer(analytics::PRICING_DATA)
         .and_then(Value::as_array)
         .ok_or_else(|| {
             Error::other("Graph returned malformed pricing_analytics.data; expected an array")

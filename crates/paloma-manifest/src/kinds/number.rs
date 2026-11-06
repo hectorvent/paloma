@@ -172,7 +172,7 @@ mod tests {
     #[test]
     fn a_spec_keeps_only_writable_fields_and_refuses_unknown_ones() {
         let spec =
-            json!({ "search_visibility": "NON_VISIBLE", "verified_name": "Acme", "pin": 825194 });
+            json!({ "search_visibility": "NON_VISIBLE", "verified_name": "Acme", "pin": "825194" });
         let fields = desired(&spec).unwrap();
         assert_eq!(fields.get("search_visibility"), Some(&json!("HIDDEN")));
         assert_eq!(fields.get("pin"), Some(&json!("825194")));

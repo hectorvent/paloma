@@ -125,9 +125,7 @@ impl ProfileCommand {
                 if let Some(resp) = app.send(&profile::get(&phone)).await? {
                     let out = Output::response(&resp)?;
                     // Graph wraps the single profile in `data[0]`; unwrap it for table/yaml.
-                    let data = out
-                        .data
-                        .pointer("/data/0")
+                    let data = profile::first(&out.data)
                         .cloned()
                         .unwrap_or_else(|| out.data.clone());
                     app.out.emit(&Output { data, ..out });

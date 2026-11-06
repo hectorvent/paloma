@@ -164,11 +164,7 @@ impl ObaCommand {
                 let phone = app.ctx()?.require_phone_number_id()?.to_owned();
                 app.send_and_emit(
                     &phone_numbers::get(&phone, "official_business_account"),
-                    |v| {
-                        v.pointer("/official_business_account/oba_status")
-                            .and_then(Value::as_str)
-                            .map(str::to_owned)
-                    },
+                    |v| phone_numbers::oba_status(v).map(str::to_owned),
                 )
                 .await
             }

@@ -156,12 +156,10 @@ async fn token_details(app: &App) -> Result<()> {
     }
     let token = ctx.require_token()?;
     let resp = app.fetch(&tokens::debug(token.expose_secret())).await?;
-    let data = resp
-        .json()?
-        .get("data")
+    let data = tokens::details(&resp.json()?)
         .cloned()
         .ok_or_else(|| Error::other("the Graph API returned no token details"))?;
-    if data.get("is_valid") != Some(&Value::Bool(true)) {
+    if !tokens::is_valid(&data) {
         return Err(Error::auth("the access token is not valid"));
     }
     app.out.emit(

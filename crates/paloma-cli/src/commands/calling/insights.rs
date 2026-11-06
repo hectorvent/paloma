@@ -131,9 +131,7 @@ pub async fn permission(app: &App, user: &str) -> Result<()> {
     validate::recipient(user)?;
     let phone = app.ctx()?.require_phone_number_id()?.to_owned();
     app.send_and_emit(&calling::permissions(&phone, user), |v: &Value| {
-        v.pointer("/permission/status")
-            .and_then(Value::as_str)
-            .map(str::to_owned)
+        calling::permission_status(v).map(str::to_owned)
     })
     .await
 }

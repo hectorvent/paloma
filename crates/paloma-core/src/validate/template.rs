@@ -62,7 +62,7 @@ pub fn template_analytics_time(value: &str, what: &str, date_only: bool) -> Resu
     template_date_to_unix(value).ok_or_else(invalid)
 }
 
-/// Template analytics `--start` and `--end`. Unlike [`analytics_range`], they may be equal:
+/// Template analytics `--start` and `--end`. Unlike [`analytics_range`](super::analytics_range), they may be equal:
 /// Meta moves both back to 00:00 of their day and reports whole days, so one day is a real
 /// range. Its 90-day lookback is Meta's to enforce.
 pub fn template_analytics_range(start: &str, end: &str, date_only: bool) -> Result<()> {

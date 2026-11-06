@@ -35,7 +35,7 @@ pub struct LibraryTemplate {
     pub body_inputs: Option<Value>,
 }
 
-/// The create payload for a [`LibraryTemplate`], for [`create`]. Meta's page writes
+/// The create payload for a [`LibraryTemplate`], for [`create`](super::create). Meta's page writes
 /// `library_template_button_inputs` as a quoted string that isn't valid JSON, but types it
 /// as an array of objects, as its reference does, so that's what is sent. The same page says
 /// the category must be `UTILITY` when creating from the library.
