@@ -11,3 +11,6 @@ pub mod template;
 pub mod webhook;
 
 pub mod phone_settings;
+
+#[cfg(test)]
+mod plan_tests;

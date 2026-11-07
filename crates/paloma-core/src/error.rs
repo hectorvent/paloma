@@ -182,7 +182,10 @@ mod tests {
         let failed = Error::failed("prompt failed: closed", std::io::Error::other("closed"));
         assert_eq!(failed.exit_code().code(), 1);
         assert_eq!(failed.to_string(), "prompt failed: closed");
-        assert!(std::error::Error::source(&failed).is_some(), "the cause is kept");
+        assert!(
+            std::error::Error::source(&failed).is_some(),
+            "the cause is kept"
+        );
         assert_eq!(Error::RateLimited("x".into()).exit_code().code(), 4);
         assert_eq!(Error::policy("x").exit_code().code(), 6);
         assert_eq!(Error::usage("x").exit_code().code(), 2);

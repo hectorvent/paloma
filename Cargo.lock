@@ -1602,9 +1602,12 @@ version = "0.1.0"
 dependencies = [
  "paloma-core",
  "paloma-graph",
+ "secrecy",
  "serde",
  "serde_json",
  "serde_norway",
+ "tokio",
+ "wiremock",
 ]
 
 [[package]]
