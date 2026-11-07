@@ -104,12 +104,16 @@ A new command that can't follow one says why in its doc comment.
 - **Groups aren't commands.** `paloma webhook fields` lists its verbs; reading is
   `webhook fields get`. A sub-resource is a nested group: `number pin set`, never a
   hyphenated verb like `number set-pin`.
-- **Arguments.** The resource's own id is positional; every other reference is a flag.
+- **Arguments.** The resource's own id is positional; in a nested group the parent's id
+  comes first (`group members remove <GROUP_ID> <USER>...`, `group pin create <GROUP_ID>
+  <MESSAGE_ID>`). Every other reference is a flag (`template compare <ID> --with <ID>`).
   The recipient of a send is `<TO>`; any other person is `<USER>`.
 - **Booleans** are `--x`/`--no-x` pairs, never `--x <true|false>`.
 - **Lists** are a singular flag that repeats and also takes commas (`--id 1 --id 2`, or
   `--id 1,2`), shown as `<NAME,...>`.
-- **Files.** `-f, --file <FILE>` reads one; `-O, --out <OUT>` writes one.
+- **Files.** `-f, --file <FILE>` reads one; `-O, --out <OUT>` writes one. A file that is
+  itself the content being uploaded is positional instead (`media upload <FILE>`,
+  `profile photo set <FILE>`).
 - **Time.** `--start`/`--end <TIME>` take UNIX seconds or `YYYY-MM-DD`; durations are
   humantime (`--ttl 10m`).
 - **Paging.** Every paged read flattens `listing::Pagination` (`--limit`, `--all`,
@@ -136,7 +140,21 @@ Known exceptions, each for a reason; don't add more without one:
   hand: block lists carry no `paging.next`, and Meta nests groups under `data.groups`.
 - **`--fields`** stays plural and comma-separated: it is Graph's own parameter, passed
   through as written.
-- **Names that keep Meta's word**: `number oba apply` (Meta calls it applying for OBA),
+- **Lists whose values can hold a comma** repeat but don't split on commas: URLs
+  (`profile set --website`, `template create --url-example`), free text
+  (`send template --body-var`/`--var`, `template create --example`, `automation set
+  --prompt`/`--command`, `flow migrate --name`) and specs with their own separators
+  (`--button`, `--section`).
+- **Meta's own units stay whole numbers named for the unit**, not humantime durations,
+  because Meta takes only a short range in that unit: `template compare --days` (7, 30,
+  60 or 90), `group pin create --days` (1 to 30), `calling voicemail set --ring-seconds`
+  (0 to 30) and `template preview --code-expiration-minutes` (1 to 90).
+- **`number username list`** takes no paging flags: Meta returns the reserved usernames
+  as one object with no cursor.
+- **Lists of people take `add`/`remove`** rather than `create`/`delete`: `block add|remove`
+  and `group members remove`. Join requests take `approve`/`reject`.
+- **Names that keep Meta's word**: `number add` and `media upload` (Meta adds a number
+  and uploads media), `number oba apply` (Meta calls it applying for OBA),
   and `send call-permission` beside `calling permission`, because one sends a message and
   the other reads a setting.
 
