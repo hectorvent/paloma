@@ -157,7 +157,9 @@ paloma webhook version set v26.0 --dry-run -o json
 | `--verify-token-stdin` | Read that token from stdin (requires `--reverify`). Otherwise uses `PALOMA_VERIFY_TOKEN`, or prompts |
 
 `set` resubmits the same fields through the requested version, so the subscribed set doesn't
-change. Already on that version, it writes nothing. Afterward it reads the subscription back
+change. It reads the current subscription first, even under `--dry-run`, so a dry run still
+needs the app secret and a network connection, and looks the app id up unless you set it.
+Already on that version, it writes nothing. Afterward it reads the subscription back
 and exits `1` if Meta still reports another version, because Meta doesn't document this route
 for changing versions; if that happens, use the App Dashboard. Payloads can differ between
 versions, so check your endpoint handles the new one first.

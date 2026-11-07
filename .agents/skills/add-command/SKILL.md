@@ -43,13 +43,16 @@ Payload shaping (JSON bodies, `MESSAGING_PRODUCT`, multipart) lives here. New mo
 Order is the contract:
 
 1. **Validate** with `paloma_core::validate` (exit 5) before touching context.
-2. **Resolve ids** lazily: `app.ctx()?.require_phone_number_id()?` /
-   `require_waba_id()?`.
-3. **Destructive?** `app.confirm_or_abort("delete … ")?` first.
+2. **Resolve ids** lazily: `app.phone()?` / `app.waba()?`.
+3. **Destructive?** `if !app.confirm_or_abort("delete …")? { return Ok(()); }` first. If
+   a lookup has to run before you can confirm, call `app.ensure_can_confirm("delete …")?`
+   before the lookup.
 4. **Send**:
    - single write: `app.send_and_emit(&req, field_id)` (or `no_id` when there's no id
-     to print for `-q`).
-   - list: `if let Some(resp) = app.send(&req).await? { app.out.emit(&Output::response(&resp)?.table("/data", &[..])) }`
+     to print for `-q`, or `fixed_id(id)` when you already know the id acted on).
+   - paged list: flatten `listing::Pagination` into the args and call `listing::list`.
+   - single response you need to adjust before printing:
+     `if let Some(out) = app.send_output(&req).await? { app.out.emit(&out.table(..)) }`.
    - read needed to build the write: `app.fetch(&req)` (runs under `--dry-run`).
    - several writes: `app.print_dry_run(&[..])` under `app.is_dry_run()`.
 5. Diagnostics via `app.out.info/note/warn` (stderr). Never `println!`.
@@ -62,7 +65,7 @@ Return the right `paloma_core::Error` variant: `Validation` (5), `Auth` (3),
 Use the `paloma(Some(&graph), &home)` helper and `MockServer`; model on
 `send_text_posts_with_bearer_and_quiet_prints_wamid`. Assert:
 
-- the exact request (`method`, `path("/v26.0/…")`, `body_json(..)`, `.expect(1)`),
+- the exact request (`method`, `path(format!("/{V}/…"))`, with `V` from `common`, `body_json(..)`, `.expect(1)`),
 - exit code and what is on stdout vs stderr (`-q` prints only the id),
 - a `--dry-run` case prints the request and sends nothing, when the verb writes,
 - validation failures exit 5 without a request.

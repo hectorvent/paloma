@@ -92,6 +92,7 @@ pub struct Get {
 
 #[derive(Debug, Args)]
 pub struct Create {
+    /// Flow name.
     #[arg(long)]
     name: String,
     /// Flow category; repeat or comma-separate.
@@ -122,6 +123,7 @@ pub struct Create {
 pub struct Update {
     /// Flow id.
     flow_id: String,
+    /// New Flow name.
     #[arg(long)]
     name: Option<String>,
     #[arg(
@@ -132,6 +134,7 @@ pub struct Update {
         ignore_case = true
     )]
     categories: Vec<Category>,
+    /// Data-exchange endpoint URL.
     #[arg(long)]
     endpoint_uri: Option<String>,
     /// Upload a new Flow JSON.

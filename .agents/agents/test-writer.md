@@ -26,8 +26,8 @@ the expected body is the real one.
 ## What to cover, per verb
 
 1. **Happy path** (`#[tokio::test(flavor = "multi_thread")]`): `Mock::given(method(..))
-   .and(path(format!("/v26.0/{PHONE}/…")))` plus `body_json(json!({..}))` for writes and
-   `.expect(1)`; assert success and stdout. For writes that return an id, also `-q`
+   .and(path(format!("/{V}/{PHONE}/…")))` (`V` is `common::V`) plus
+   `body_json(json!({..}))` for writes and `.expect(1)`; assert success and stdout. For writes that return an id, also `-q`
    and assert stdout is exactly `"<id>\n"`.
 2. **`--dry-run`** for writes: `paloma(None, &home)`, `-o json`, stderr contains
    "dry-run: no request sent", stdout is the request (snapshot it).

@@ -65,15 +65,20 @@ prints JSON lines, whatever `-o` says, unless `-q` selects only primary ids.
 
 **Requests are data.** Endpoint builders in `paloma_graph::api` are pure and return a
 `Request`. Use `app.send(&req)` (honors `--dry-run`), `app.fetch(&req)` (a read needed to
-build the real request; runs even under `--dry-run`), or `app.send_and_emit(&req, id_fn)`.
+build the real request; runs even under `--dry-run`), `app.send_output(&req)` (as `send`,
+with the response as an `Output` to adjust before emitting), or
+`app.send_and_emit(&req, id_fn)`. `id_fn` is `app::field_id`, `app::no_id`, or
+`app::fixed_id(id)` when the command already knows the id it acted on.
 Multi-request commands print all of them under dry-run with `app.print_dry_run(&[..])`.
 
 **Fail before spending an API call.** Validate with `paloma_core::validate` (exit 5)
-before `app.ctx()`. Prefer clap `ValueEnum`s for closed sets (bad values exit 2 with
+before resolving ids. Prefer clap `ValueEnum`s for closed sets (bad values exit 2 with
 suggestions).
 
-**Destructive actions confirm** with `app.confirm_or_abort(what)`: passes under `--yes`
-or `--dry-run`, refuses without a TTY.
+**Destructive actions confirm** with `if !app.confirm_or_abort(what)? { return Ok(()); }`:
+passes under `--yes` or `--dry-run`, refuses without a TTY, and returns `false` when the
+user says no. A command that must spend a lookup before it can confirm calls
+`app.ensure_can_confirm(what)` first, so a run that could never confirm fails early.
 
 **Secrets never touch argv, config or logs.** Tokens live in the keyring
 (`paloma_config::secrets`), service `paloma`, account `paloma/<profile>`. `--token` is
@@ -82,8 +87,8 @@ secrets a command needs go through `commands::util::read_secret` (env, stdin or 
 prompt; there is no flag for the value). Secrets are `SecretString`s; `Request::describe`
 never includes them.
 
-**Lazy context.** `ctx.require_phone_number_id()` / `require_waba_id()` at the point of
-use; the keyring is read only when a request is sent, or a listener starts.
+**Lazy context.** `app.phone()?` / `app.waba()?` at the point of use; the keyring is read
+only when a request is sent, or a listener starts.
 
 **Docs explain why, not what.** Each module opens with a short `//!` on the constraint
 it exists to satisfy. Match that; don't narrate code.
@@ -108,7 +113,7 @@ A new command that can't follow one says why in its doc comment.
 - **Time.** `--start`/`--end <TIME>` take UNIX seconds or `YYYY-MM-DD`; durations are
   humantime (`--ttl 10m`).
 - **Paging.** Every paged read flattens `listing::Pagination` (`--limit`, `--all`,
-  `--after`) and goes through `listing::list`.
+  `--after`) and goes through `listing::list`, unless it says why not (see the exceptions).
 - **`-q`.** A create prints the new id, a list prints one row id per line, and a bulk
   write prints the ids it acted on.
 - **Confirmation.** Anything that deletes, disables, or overwrites what Meta holds
@@ -119,12 +124,16 @@ A new command that can't follow one says why in its doc comment.
 Known exceptions, each for a reason; don't add more without one:
 
 - **Read-only views are noun leaves**: `account limits`, `account health`,
-  `number quality`, `number health`, `template namespace`, `calling permission`. Each
-  shows one computed view, not a resource you could list, create or change.
+  `number quality`, `number health`, `template namespace`, `calling permission`, and the
+  reports `account analytics`, `account reach`, `calling analytics`, `template analytics`,
+  `template compare`, `template preview`, `message history`, `flow assets` and
+  `account billing-currency status`. Each shows one computed view or report, not a
+  resource you could list, create or change.
 - **Not every list pages by cursor.** `template analytics` takes only `--after`, because
   Meta pages the data points, not resources. `welcome-sequence list` takes only `--limit`,
   because Meta documents no cursor there. `template migrate --page` is Meta's batch
-  number, not a cursor.
+  number, not a cursor. `block list` and `group list` take the usual flags but page by
+  hand: block lists carry no `paging.next`, and Meta nests groups under `data.groups`.
 - **`--fields`** stays plural and comma-separated: it is Graph's own parameter, passed
   through as written.
 - **Names that keep Meta's word**: `number oba apply` (Meta calls it applying for OBA),

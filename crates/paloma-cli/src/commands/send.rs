@@ -142,8 +142,10 @@ pub struct Text {
 pub struct Location {
     /// Recipient (E.164 number or business-scoped user ID).
     to: String,
+    /// Latitude in decimal degrees.
     #[arg(long, allow_hyphen_values = true)]
     lat: f64,
+    /// Longitude in decimal degrees.
     #[arg(long, allow_hyphen_values = true)]
     long: f64,
     /// Place name.

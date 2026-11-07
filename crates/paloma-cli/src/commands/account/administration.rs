@@ -73,6 +73,7 @@ impl Reach {
 
 #[derive(Debug, Args)]
 pub struct Users {
+    /// Business that owns or has access to the WABA; Meta requires it for assigned users.
     #[arg(long, required_unless_present = "system", conflicts_with = "system")]
     business_id: Option<String>,
     /// List WABA system users instead of assigned users.

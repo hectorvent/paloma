@@ -27,16 +27,19 @@ pub struct Set {
     /// Short "about" text.
     #[arg(long)]
     about: Option<String>,
+    /// Contact email address.
     #[arg(long)]
     email: Option<String>,
     /// Website URL; repeat for up to two.
     #[arg(long = "website", value_name = "URL")]
     websites: Vec<String>,
+    /// Business address.
     #[arg(long)]
     address: Option<String>,
     /// Business category.
     #[arg(long, ignore_case = true)]
     vertical: Option<Vertical>,
+    /// Longer business description.
     #[arg(long)]
     description: Option<String>,
 }

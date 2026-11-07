@@ -42,7 +42,8 @@ Most flags also read an environment variable: `PALOMA_PROFILE`, `PALOMA_TOKEN`,
 `--dry-run` never **writes**. Commands that must read live state to build the real
 request still read it: `apply --dry-run` compares against live config, and
 `webhook fields set --dry-run`, `media upload --handle --dry-run` and
-`profile photo --dry-run` look up the app id unless you set it, and `template get --status` and
+`profile photo --dry-run` look up the app id unless you set it, `webhook version set --dry-run`
+reads the app's current subscription, and `template get --status` and
 `template watch` read the template, since reading is all they do. `webhook listen --dry-run` only notes
 the bind address; it does not open a socket or read verification secrets. Other commands
 print requests or a multi-step plan without sending them; command pages describe any

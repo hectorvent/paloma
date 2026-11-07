@@ -87,6 +87,7 @@ impl JoinApproval {
 pub struct Create {
     /// Group subject.
     subject: String,
+    /// Group description.
     #[arg(long)]
     description: Option<String>,
     /// Whether joining needs approval. Meta defaults to auto-approve.
@@ -104,8 +105,10 @@ pub struct List {
 pub struct Update {
     /// Group id.
     group_id: String,
+    /// New group subject.
     #[arg(long)]
     subject: Option<String>,
+    /// New group description.
     #[arg(long)]
     description: Option<String>,
     /// A square JPEG of at most 5 MB and at least 192 x 192.

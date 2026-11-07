@@ -65,7 +65,8 @@ a `BREAKING CHANGE: <what users must change>` footer.
 for what's in use):
 
 - command group: `send` `template` `media` `message` `number` `profile` `calling`
-  `webhook` `flow` `block` `auth` `config` `link` `manifest` `account` `qr`
+  `webhook` `flow` `block` `auth` `config` `link` `manifest` `account` `qr` `group`
+  `commerce` `automation`
 - crate, for cross-command internals: `core` `config` `graph` `manifest` `cli`
 - repo: `deps` `ci` `build` `xtask` `release`
 

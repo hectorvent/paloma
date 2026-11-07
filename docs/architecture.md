@@ -72,9 +72,10 @@ flags, shared paging and `-q` ids.
 2. Add an `Args` struct (or inline fields) and a variant to the group's `Subcommand`
    enum; doc comments become `--help` text.
 3. If it calls a new Graph node, add a pure builder to `paloma_graph::api::<resource>`.
-4. In `run`: validate locally first, then `app.ctx()?.require_…()`, then
+4. In `run`: validate locally first, then `app.phone()?` / `app.waba()?`, then
    `app.send_and_emit(&request, primary_id)` (or `app.send` / `app.fetch` for
-   multi-step flows). Destructive writes call `app.confirm_or_abort(..)` first.
+   multi-step flows). Destructive writes call `app.confirm_or_abort(..)` first and return
+   when it gives `false`.
 5. Add a contract test in `crates/paloma-cli/tests/cli/<group>.rs` and a docs page.
 
 ## Adding a manifest kind

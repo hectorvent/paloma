@@ -10,6 +10,7 @@ use std::path::PathBuf;
 
 #[derive(Debug, Args)]
 pub struct Migrate {
+    /// The WABA to copy Flows from. The active WABA receives them.
     #[arg(long)]
     source_waba_id: String,
     /// Flow name to copy; repeat it for several. Omit it to copy all, up to Meta's
