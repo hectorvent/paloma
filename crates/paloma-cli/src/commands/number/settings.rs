@@ -46,22 +46,22 @@ impl SettingsCommand {
         {
             validate::data_localization_region(region)?;
         }
-        let phone = app.ctx()?.require_phone_number_id()?.to_owned();
+        let phone = app.phone()?;
         let a = match self {
             Self::Get => {
                 return app
-                    .send_and_emit(&phone_numbers::settings(&phone), no_id)
+                    .send_and_emit(&phone_numbers::settings(phone), no_id)
                     .await;
             }
             Self::Set(a) => a,
         };
         let req = if a.identity_check || a.no_identity_check {
-            phone_numbers::set_identity_check(&phone, a.identity_check)
+            phone_numbers::set_identity_check(phone, a.identity_check)
         } else {
             app.out.note(
                 "local storage changes require a deregistered number; register it again afterward",
             );
-            phone_numbers::set_storage(&phone, !a.no_storage, a.storage_region.as_deref())
+            phone_numbers::set_storage(phone, !a.no_storage, a.storage_region.as_deref())
         };
         if !app.confirm_or_abort(&format!("change settings for number {phone}"))? {
             return Ok(());

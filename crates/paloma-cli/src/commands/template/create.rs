@@ -39,23 +39,22 @@ pub(super) async fn create(app: &App, a: Create) -> Result<()> {
         (None, Some(name)) => templates::inline_template(&inline_template(name, &a)?),
         (None, None) => unreachable!("clap enforces --file or --name"),
     };
-    let waba = app.ctx()?.require_waba_id()?.to_owned();
-    app.send_and_emit(&templates::create(&waba, body), field_id)
+    let waba = app.waba()?;
+    app.send_and_emit(&templates::create(waba, body), field_id)
         .await
 }
 
 pub(super) async fn update(app: &App, a: Update) -> Result<()> {
     validate::not_blank(&a.name, "template name")?;
     let body = read_json(&a.file)?;
-    let waba = app.ctx()?.require_waba_id()?.to_owned();
+    let waba = app.waba()?;
     // Refuse before the lookup when the confirmation could never pass.
     app.ensure_can_confirm("change a template")?;
     let id = if app.dry_run() {
         "<template-id>".to_owned()
     } else {
-        let t =
-            paloma_graph::lookup::find_one(app.client()?, &waba, &a.name, a.language.as_deref())
-                .await?;
+        let t = paloma_graph::lookup::find_one(app.client()?, waba, &a.name, a.language.as_deref())
+            .await?;
         field_id(&t).ok_or_else(|| Error::other("template has no id"))?
     };
     if !app.confirm_or_abort(&format!(
@@ -65,7 +64,7 @@ pub(super) async fn update(app: &App, a: Update) -> Result<()> {
     ))? {
         return Ok(());
     }
-    app.send_and_emit(&templates::edit(&id, body), |_| Some(id.clone()))
+    app.send_and_emit(&templates::edit(&id, body), crate::app::fixed_id(&id))
         .await
 }
 
@@ -155,9 +154,9 @@ pub(super) async fn preview(app: &App, a: &Preview) -> Result<()> {
     for language in &a.language {
         validate::not_blank(language, "--language entry")?;
     }
-    let waba = app.ctx()?.require_waba_id()?.to_owned();
+    let waba = app.waba()?;
     let page = |after: Option<&str>| {
-        templates::auth_previews(&waba, a.security_recommendation, a.code_expiration, after)
+        templates::auth_previews(waba, a.security_recommendation, a.code_expiration, after)
     };
     if app.dry_run() {
         return app.print_dry_run(&[page(None)]);
@@ -223,14 +222,14 @@ pub(super) async fn upsert(app: &App, file: &std::path::Path) -> Result<()> {
             "upsert doesn't support the `{property}` property"
         )));
     }
-    let waba = app.ctx()?.require_waba_id()?.to_owned();
+    let waba = app.waba()?;
     let count = languages.len();
     if !app.confirm_or_abort(&format!(
         "create or replace authentication template '{name}' in {count} language(s)"
     ))? {
         return Ok(());
     }
-    if let Some(resp) = app.send(&templates::upsert(&waba, body)).await? {
+    if let Some(resp) = app.send(&templates::upsert(waba, body)).await? {
         let out = Output::response(&resp)?.table("/data", UPSERT_COLUMNS);
         let id = out.data.pointer("/data/0").and_then(field_id);
         app.out.emit(&out.id(id));

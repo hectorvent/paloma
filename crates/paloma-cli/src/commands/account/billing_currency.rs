@@ -40,7 +40,7 @@ impl BillingCurrency {
                 if let Some(id) = &extended_credit_id {
                     validate::graph_node_id(id, "extended credit id")?;
                 }
-                let waba = app.ctx()?.require_waba_id()?.to_owned();
+                let waba = app.waba()?;
                 if !app
                     .confirm_or_abort(&format!("clone Messaging account {waba} into {currency}"))?
                 {
@@ -48,7 +48,7 @@ impl BillingCurrency {
                 }
                 app.send_and_emit(
                     &account::start_currency_migration(
-                        &waba,
+                        waba,
                         &currency,
                         extended_credit_id.as_deref(),
                     ),

@@ -94,7 +94,7 @@ pub(super) async fn analytics(app: &App, a: &Analytics) -> Result<()> {
     for metric in &a.metrics {
         validate::not_blank(metric, "--metric")?;
     }
-    let waba = app.ctx()?.require_waba_id()?.to_owned();
+    let waba = app.waba()?;
     let query = AnalyticsQuery {
         start: &a.start,
         end: &a.end,
@@ -105,17 +105,16 @@ pub(super) async fn analytics(app: &App, a: &Analytics) -> Result<()> {
     let (req, columns) = if a.groups.is_empty() {
         let product_type = a.product_type.as_ref().map(enum_name);
         (
-            templates::analytics(&waba, &a.ids, product_type.as_deref(), &query, after),
+            templates::analytics(waba, &a.ids, product_type.as_deref(), &query, after),
             ANALYTICS_COLUMNS,
         )
     } else {
         (
-            templates::group_analytics(&waba, &a.groups, &query, after),
+            templates::group_analytics(waba, &a.groups, &query, after),
             GROUP_ANALYTICS_COLUMNS,
         )
     };
-    if let Some(resp) = app.send(&req).await? {
-        let out = Output::response(&resp)?;
+    if let Some(out) = app.send_output(&req).await? {
         if let Some(next) = paging::next_cursor(&out.data) {
             app.out
                 .note(format!("more results exist: page with --after {next}"));

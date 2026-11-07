@@ -168,13 +168,13 @@ impl AutomationCommand {
                 app.send_and_emit(&automation::bot(&bot_id), field_id).await
             }
             Self::Get => {
-                let phone = app.ctx()?.require_phone_number_id()?.to_owned();
-                app.send_and_emit(&automation::get(&phone), field_id).await
+                let phone = app.phone()?;
+                app.send_and_emit(&automation::get(phone), field_id).await
             }
             Self::Set(args) => {
                 let body = args.body()?;
-                let phone = app.ctx()?.require_phone_number_id()?.to_owned();
-                app.send_and_emit(&automation::set(&phone, body), no_id)
+                let phone = app.phone()?;
+                app.send_and_emit(&automation::set(phone, body), no_id)
                     .await
             }
         }

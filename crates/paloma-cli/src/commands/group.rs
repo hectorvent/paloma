@@ -217,10 +217,9 @@ async fn send_partial(
     failed_key: &str,
     requested: &[String],
 ) -> Result<()> {
-    let Some(response) = app.send(req).await? else {
+    let Some(output) = app.send_output(req).await? else {
         return Ok(());
     };
-    let output = Output::response(&response)?;
     let failed = output
         .data
         .get(failed_key)
@@ -301,8 +300,8 @@ impl GroupCommand {
             Self::Create(a) => a.run(app).await,
             Self::List(a) => {
                 validate::page_size(a.page.limit, Some(limits::MAX_GROUPS_PAGE))?;
-                let phone = app.ctx()?.require_phone_number_id()?.to_owned();
-                list(app, &phone, a).await
+                let phone = app.phone()?;
+                list(app, phone, a).await
             }
             Self::Get { group_id, fields } => {
                 validate::group_id(&group_id)?;
@@ -318,8 +317,7 @@ impl GroupCommand {
                 ))? {
                     return Ok(());
                 }
-                let id = group_id.clone();
-                app.send_and_emit(&groups::delete(&group_id), move |_| Some(id.clone()))
+                app.send_and_emit(&groups::delete(&group_id), crate::app::fixed_id(&group_id))
                     .await
             }
             Self::Invite(command) => command.run(app).await,
@@ -351,17 +349,16 @@ impl Create {
     pub async fn run(self, app: &App) -> Result<()> {
         check_subject(&self.subject)?;
         check_description(self.description.as_deref())?;
-        let phone = app.ctx()?.require_phone_number_id()?.to_owned();
+        let phone = app.phone()?;
         let req = groups::create(
-            &phone,
+            phone,
             &self.subject,
             self.description.as_deref(),
             self.join_approval.map(JoinApproval::api),
         );
-        let Some(response) = app.send(&req).await? else {
+        let Some(output) = app.send_output(&req).await? else {
             return Ok(());
         };
-        let output = Output::response(&response)?;
         let id = output
             .data
             .get("request_id")
@@ -402,8 +399,7 @@ impl Update {
                 self.description.as_deref(),
             ),
         };
-        let group_id = self.group_id.clone();
-        app.send_and_emit(&req, move |_| Some(group_id.clone()))
+        app.send_and_emit(&req, crate::app::fixed_id(&self.group_id))
             .await
     }
 }

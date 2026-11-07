@@ -213,7 +213,7 @@ impl TemplateCommand {
                 for field in &fields {
                     validate::not_blank(field, "--fields entry")?;
                 }
-                let waba = app.ctx()?.require_waba_id()?.to_owned();
+                let waba = app.waba()?;
                 let columns = list_columns(&fields);
                 let filter = ListFilter {
                     name: a.name,
@@ -226,7 +226,7 @@ impl TemplateCommand {
                 list(
                     app,
                     &a.page,
-                    |after| templates::list(&waba, &filter, after),
+                    |after| templates::list(waba, &filter, after),
                     Rows { columns, id: "id" },
                 )
                 .await
@@ -257,8 +257,8 @@ impl TemplateCommand {
             Self::Update(a) => create::update(app, a).await,
             Self::Delete(a) => delete(app, a).await,
             Self::Namespace => {
-                let waba = app.ctx()?.require_waba_id()?.to_owned();
-                app.send_and_emit(&templates::namespace(&waba), |data| {
+                let waba = app.waba()?;
+                app.send_and_emit(&templates::namespace(waba), |data| {
                     data.get("message_template_namespace")
                         .and_then(Value::as_str)
                         .map(str::to_owned)
@@ -268,17 +268,17 @@ impl TemplateCommand {
             Self::Archive(a) => archive(app, &a).await,
             Self::Unarchive(a) => {
                 validate::template_ids_within(&a.ids, limits::MAX_TEMPLATE_ARCHIVE_IDS)?;
-                let waba = app.ctx()?.require_waba_id()?.to_owned();
+                let waba = app.waba()?;
                 send_bulk(
                     app,
-                    &templates::unarchive(&waba, &a.ids),
+                    &templates::unarchive(waba, &a.ids),
                     "/unarchived_templates",
                 )
                 .await
             }
             Self::Unpause { id } => {
                 validate::template_id(&id)?;
-                app.send_and_emit(&templates::unpause(&id), |_| Some(id.clone()))
+                app.send_and_emit(&templates::unpause(&id), crate::app::fixed_id(&id))
                     .await
             }
             Self::Library { command } => library(app, command).await,
@@ -294,7 +294,7 @@ impl TemplateCommand {
 
 async fn archive(app: &App, a: &Ids) -> Result<()> {
     validate::template_ids_within(&a.ids, limits::MAX_TEMPLATE_ARCHIVE_IDS)?;
-    let waba = app.ctx()?.require_waba_id()?.to_owned();
+    let waba = app.waba()?;
     let what = format!(
         "archive {} template(s) by id ({}), which Meta deletes after 28 days unless unarchived",
         a.ids.len(),
@@ -305,7 +305,7 @@ async fn archive(app: &App, a: &Ids) -> Result<()> {
     }
     send_bulk(
         app,
-        &templates::archive(&waba, &a.ids),
+        &templates::archive(waba, &a.ids),
         "/archived_templates",
     )
     .await
@@ -314,10 +314,9 @@ async fn archive(app: &App, a: &Ids) -> Result<()> {
 /// Send a bulk write that answers 200 even when some templates fail. Those are still a
 /// failure for a script, so the response is printed and the exit code says so.
 async fn send_bulk(app: &App, req: &paloma_graph::Request, ok: &str) -> Result<()> {
-    let Some(resp) = app.send(req).await? else {
+    let Some(out) = app.send_output(req).await? else {
         return Ok(());
     };
-    let out = Output::response(&resp)?;
     let ids = super::util::acted_on(&out.data, ok, "id");
     let out = out.id(ids);
     let failed = templates::failed_count(&out.data);
@@ -341,7 +340,7 @@ async fn migrate(app: &App, a: &Migrate) -> Result<()> {
             limits::MAX_TEMPLATE_MIGRATE_COUNT
         )));
     }
-    let waba = app.ctx()?.require_waba_id()?.to_owned();
+    let waba = app.waba()?;
     let what = format!(
         "migrate templates from WABA {} to WABA {waba}",
         a.source_waba_id
@@ -357,7 +356,7 @@ async fn migrate(app: &App, a: &Migrate) -> Result<()> {
     };
     send_bulk(
         app,
-        &templates::migrate(&waba, &migration),
+        &templates::migrate(waba, &migration),
         "/migrated_templates",
     )
     .await
@@ -390,9 +389,9 @@ fn list_columns(fields: &[String]) -> &'static [&'static str] {
 
 /// The review status of the first template named exactly `name`.
 async fn status(app: &App, name: &str) -> Result<Value> {
-    let waba = app.ctx()?.require_waba_id()?.to_owned();
+    let waba = app.waba()?;
     let missing = || Error::other(format!("no template named '{name}' on this WABA"));
-    let page = paloma_graph::lookup::find_page(app.client()?, &waba, name, None)
+    let page = paloma_graph::lookup::find_page(app.client()?, waba, name, None)
         .await?
         .ok_or_else(missing)?;
     let matches = templates::exact_matches(&page, name, None);
@@ -409,10 +408,10 @@ async fn status(app: &App, name: &str) -> Result<Value> {
 /// Show the exact matches from the first page that has any. Later pages aren't fetched, so
 /// without a language other translations of the name may be there; say so on stderr.
 async fn get(app: &App, name: &str, language: Option<&str>, quality: bool) -> Result<()> {
-    let waba = app.ctx()?.require_waba_id()?.to_owned();
+    let waba = app.waba()?;
     let fields = quality.then_some(templates::QUALITY_FIELDS);
     let lookup =
-        |after: Option<&str>| templates::lookup_fields_page(&waba, name, language, fields, after);
+        |after: Option<&str>| templates::lookup_fields_page(waba, name, language, fields, after);
     if app.dry_run() {
         return app.print_dry_run(&[lookup(None)]);
     }
@@ -458,7 +457,7 @@ async fn delete(app: &App, a: Delete) -> Result<()> {
         (Some(_), [id]) => Some(id.clone()),
         _ => None,
     };
-    let waba = app.ctx()?.require_waba_id()?.to_owned();
+    let waba = app.waba()?;
 
     let Some(name) = a.name else {
         let what = format!(
@@ -471,9 +470,10 @@ async fn delete(app: &App, a: Delete) -> Result<()> {
         }
         let ids = a.ids.join("\n");
         return app
-            .send_and_emit(&templates::delete_many(&waba, &a.ids), |_| {
-                Some(ids.clone())
-            })
+            .send_and_emit(
+                &templates::delete_many(waba, &a.ids),
+                crate::app::fixed_id(&ids),
+            )
             .await;
     };
 
@@ -491,13 +491,12 @@ async fn delete(app: &App, a: Delete) -> Result<()> {
         (None, Some(_), true) => Some("<template-id>".to_owned()),
         (None, Some(l), false) => {
             // Without an id this would delete every language, not the one confirmed.
-            let found =
-                paloma_graph::lookup::find_one(app.client()?, &waba, &name, Some(l)).await?;
+            let found = paloma_graph::lookup::find_one(app.client()?, waba, &name, Some(l)).await?;
             Some(field_id(&found).ok_or_else(|| Error::other("the template has no id"))?)
         }
     };
     let primary = id.unwrap_or_else(|| name.clone());
-    app.send_and_emit(&templates::delete(&waba, &name, hsm_id.as_deref()), |_| {
+    app.send_and_emit(&templates::delete(waba, &name, hsm_id.as_deref()), |_| {
         Some(primary.clone())
     })
     .await

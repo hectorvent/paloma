@@ -8,7 +8,7 @@ use paloma_core::{Error, Result, limits, validate};
 use paloma_graph::api::{account, webhook};
 
 use super::util::{read_json, toggle};
-use crate::{cli::Format, output::Output};
+use crate::cli::Format;
 use paloma_graph::Request;
 use serde_json::json;
 
@@ -196,24 +196,24 @@ impl AccountCommand {
                 if let Some(fields) = &fields {
                     validate::not_blank(fields, "fields")?;
                 }
-                let waba = app.ctx()?.require_waba_id()?.to_owned();
+                let waba = app.waba()?;
                 let fields = fields.as_deref().unwrap_or(account::DETAIL_FIELDS);
-                app.send_and_emit(&account::get(&waba, fields), field_id)
+                app.send_and_emit(&account::get(waba, fields), field_id)
                     .await
             }
             Self::Health => {
-                let waba = app.ctx()?.require_waba_id()?.to_owned();
-                show_health(app, &account::get(&waba, account::HEALTH_FIELDS)).await
+                let waba = app.waba()?;
+                show_health(app, &account::get(waba, account::HEALTH_FIELDS)).await
             }
             Self::Limits(args) => args.run(app).await,
             Self::Apps(AppsCommand::List(page)) => {
                 page.check(None)?;
-                let waba = app.ctx()?.require_waba_id()?.to_owned();
+                let waba = app.waba()?;
                 super::listing::list(
                     app,
                     &page,
                     |after| {
-                        webhook::subscribed_apps(&waba)
+                        webhook::subscribed_apps(waba)
                             .query_opt("after", after)
                             .query_opt("limit", page.limit)
                     },
@@ -232,7 +232,7 @@ impl AccountCommand {
 impl SetArgs {
     async fn run(self, app: &App) -> Result<()> {
         let body = self.body()?;
-        let waba = app.ctx()?.require_waba_id()?.to_owned();
+        let waba = app.waba()?;
         if body.get("is_enabled_for_insights") == Some(&serde_json::Value::Bool(true)) {
             if !app
                 .confirm_or_abort("enable template insights permanently (this cannot be undone)")?
@@ -240,7 +240,7 @@ impl SetArgs {
                 return Ok(());
             }
             return app
-                .send_and_emit(&account::enable_insights(&waba), no_id)
+                .send_and_emit(&account::enable_insights(waba), no_id)
                 .await;
         }
         if body
@@ -253,7 +253,7 @@ impl SetArgs {
         {
             return Ok(());
         }
-        app.send_and_emit(&account::set(&waba, body), no_id).await
+        app.send_and_emit(&account::set(waba, body), no_id).await
     }
 }
 
@@ -267,11 +267,11 @@ impl LimitsArgs {
                 .send_and_emit(&account::portfolio_limit(id), no_id)
                 .await;
         }
-        let waba = app.ctx()?.require_waba_id()?.to_owned();
+        let waba = app.waba()?;
         super::listing::list(
             app,
             &self.page,
-            |after| account::limits(&waba, after).query_opt("limit", self.page.limit),
+            |after| account::limits(waba, after).query_opt("limit", self.page.limit),
             Rows {
                 columns: LIMIT_COLUMNS,
                 id: "id",
@@ -284,11 +284,11 @@ impl LimitsArgs {
 impl ActivitiesArgs {
     async fn run(self, app: &App) -> Result<()> {
         self.page.check(Some(limits::MAX_ACTIVITIES_PAGE))?;
-        let waba = app.ctx()?.require_waba_id()?.to_owned();
+        let waba = app.waba()?;
         super::listing::list(
             app,
             &self.page,
-            |after| account::activities_page(&waba, after, self.page.limit),
+            |after| account::activities_page(waba, after, self.page.limit),
             Rows {
                 columns: &[
                     "event_type",
@@ -307,10 +307,9 @@ impl ActivitiesArgs {
 
 /// Only table output flattens health entities; scripting keeps the Graph response.
 pub(super) async fn show_health(app: &App, req: &Request) -> Result<()> {
-    let Some(response) = app.send(req).await? else {
+    let Some(mut output) = app.send_output(req).await? else {
         return Ok(());
     };
-    let mut output = Output::response(&response)?;
     let id = field_id(&output.data);
     if app.out.format() == Format::Table {
         output.data = json!({"rows": account::health_rows(&output.data)});

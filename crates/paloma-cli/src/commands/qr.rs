@@ -120,12 +120,12 @@ impl QrCommand {
             Self::Delete { code } => validate::qr_code(code)?,
             Self::List { page } => page.check(Some(limits::MAX_QR_PAGE))?,
         }
-        let phone = app.ctx()?.require_phone_number_id()?.to_owned();
+        let phone = app.phone()?;
         match self {
             Self::Create { message, image } => {
                 emit(
                     app,
-                    qr::create(&phone, message.value(), image.image.map(ImageFormat::api)),
+                    qr::create(phone, message.value(), image.image.map(ImageFormat::api)),
                     image,
                     true,
                 )
@@ -134,14 +134,14 @@ impl QrCommand {
             Self::Get { code, image } => {
                 emit(
                     app,
-                    qr::get(&phone, &code, image.image.map(ImageFormat::api)),
+                    qr::get(phone, &code, image.image.map(ImageFormat::api)),
                     image,
                     false,
                 )
                 .await
             }
             Self::Update { code, message } => {
-                app.send_and_emit(&qr::update(&phone, &code, message.value()), qr::code)
+                app.send_and_emit(&qr::update(phone, &code, message.value()), qr::code)
                     .await
             }
             Self::Delete { code } => {
@@ -150,14 +150,14 @@ impl QrCommand {
                 {
                     return Ok(());
                 }
-                app.send_and_emit(&qr::delete(&phone, &code), |_| Some(code.clone()))
+                app.send_and_emit(&qr::delete(phone, &code), crate::app::fixed_id(&code))
                     .await
             }
             Self::List { page } => {
                 super::listing::list(
                     app,
                     &page,
-                    |after| qr::list(&phone, page.limit, after),
+                    |after| qr::list(phone, page.limit, after),
                     Rows {
                         columns: COLUMNS,
                         id: "code",

@@ -109,8 +109,8 @@ impl Hours {
     pub async fn run(self, app: &App) -> Result<()> {
         match self {
             Self::Get => {
-                let phone = app.ctx()?.require_phone_number_id()?.to_owned();
-                let Some(response) = app.send(&calling::get(&phone, false)).await? else {
+                let phone = app.phone()?;
+                let Some(response) = app.send(&calling::get(phone, false)).await? else {
                     return Ok(());
                 };
                 let body = response.json()?;
@@ -128,19 +128,19 @@ impl Hours {
                 validate::not_blank(&a.timezone, "--timezone")?;
                 let weekly_hours = weekly(&a.open)?;
                 let holidays = holiday_schedule(&a.holidays)?;
-                let phone = app.ctx()?.require_phone_number_id()?.to_owned();
+                let phone = app.phone()?;
                 if !app.confirm_or_abort(&format!(
                     "replace the call hours of number {phone}; calls outside them can't reach you, and holidays left out are deleted"
                 ))? {
                     return Ok(());
                 }
-                let req = calling::set_hours(&phone, &a.timezone, &weekly_hours, &holidays);
+                let req = calling::set_hours(phone, &a.timezone, &weekly_hours, &holidays);
                 app.send_and_emit(&req, no_id).await
             }
             Self::Disable => {
-                let phone = app.ctx()?.require_phone_number_id()?.to_owned();
+                let phone = app.phone()?;
                 // Meta requires the schedule even when disabling, and deletes holidays left out.
-                let current = app.fetch(&calling::get(&phone, false)).await?.json()?;
+                let current = app.fetch(&calling::get(phone, false)).await?.json()?;
                 let Some(hours) = calling::call_hours(&current).cloned() else {
                     app.out.info("call hours aren't set on this number");
                     return Ok(());
@@ -156,7 +156,7 @@ impl Hours {
                 ))? {
                     return Ok(());
                 }
-                app.send_and_emit(&calling::disable_hours(&phone, hours), no_id)
+                app.send_and_emit(&calling::disable_hours(phone, hours), no_id)
                     .await
             }
         }

@@ -121,9 +121,8 @@ impl ProfileCommand {
     pub async fn run(self, app: &App) -> Result<()> {
         match self {
             Self::Get => {
-                let phone = app.ctx()?.require_phone_number_id()?.to_owned();
-                if let Some(resp) = app.send(&profile::get(&phone)).await? {
-                    let out = Output::response(&resp)?;
+                let phone = app.phone()?;
+                if let Some(out) = app.send_output(&profile::get(phone)).await? {
                     // Graph wraps the single profile in `data[0]`; unwrap it for table/yaml.
                     let data = profile::first(&out.data)
                         .cloned()
@@ -157,22 +156,21 @@ impl ProfileCommand {
                         "pass at least one field to set (see --help)",
                     ));
                 }
-                let phone = app.ctx()?.require_phone_number_id()?.to_owned();
-                app.send_and_emit(&profile::set(&phone, fields), no_id)
-                    .await
+                let phone = app.phone()?;
+                app.send_and_emit(&profile::set(phone, fields), no_id).await
             }
             Self::Photo(a) => {
                 let upload = HandleUpload::new(&a.file, a.mime, &limits::PROFILE_PHOTO_TYPES)?;
-                let phone = app.ctx()?.require_phone_number_id()?.to_owned();
+                let phone = app.phone()?;
                 let app_id = app_id(app).await?;
                 if app.dry_run() {
                     let [start, transfer] = upload.requests(&app_id);
-                    let set = profile::set_photo(&phone, "<handle-from-the-upload>");
+                    let set = profile::set_photo(phone, "<handle-from-the-upload>");
                     return app.print_dry_run(&[start, transfer, set]);
                 }
                 let (handle, _) = upload.run(app, &app_id).await?;
                 let updated = app
-                    .send_and_emit(&profile::set_photo(&phone, &handle), no_id)
+                    .send_and_emit(&profile::set_photo(phone, &handle), no_id)
                     .await;
                 if updated.is_err() {
                     app.out.warn(

@@ -3,7 +3,6 @@
 
 use crate::app::App;
 use crate::cli::Format;
-use crate::output::Output;
 use clap::{Args, ValueEnum};
 use paloma_core::{Error, Result, validate};
 use paloma_graph::api::analytics::{self, PricingFilters, Query};
@@ -149,7 +148,7 @@ impl Analytics {
             phone_numbers: self.phone_number,
             country_codes: self.country,
         };
-        let waba = app.ctx()?.require_waba_id()?;
+        let waba = app.waba()?;
         let request = if self.pricing {
             analytics::pricing(
                 waba,
@@ -172,8 +171,7 @@ impl Analytics {
                     .collect::<Vec<_>>(),
             )
         };
-        if let Some(response) = app.send(&request).await? {
-            let mut out = Output::response(&response)?;
+        if let Some(mut out) = app.send_output(&request).await? {
             if self.pricing {
                 let rows = pricing_rows(&out.data)?;
                 if app.out.format() == Format::Table {

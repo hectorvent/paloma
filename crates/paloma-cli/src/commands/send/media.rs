@@ -92,10 +92,10 @@ pub(super) async fn send_media(app: &App, kind: MediaKind, a: Media, voice: bool
         a.policy.enforce(&a.to)?;
     }
 
-    let phone = app.ctx()?.require_phone_number_id()?.to_owned();
+    let phone = app.phone()?;
     let source = match (&file, a.id, a.link) {
         (Some((path, mime)), _, _) => {
-            let upload = media_api::upload(&phone, path, mime);
+            let upload = media_api::upload(phone, path, mime);
             if app.dry_run() {
                 let payload = messages::media(
                     &a.to,
@@ -107,7 +107,7 @@ pub(super) async fn send_media(app: &App, kind: MediaKind, a: Media, voice: bool
                     addressed(payload, a.group),
                     app.ctx()?.messaging_account_id(),
                 );
-                return app.print_dry_run(&[upload, messages::send(&phone, payload)]);
+                return app.print_dry_run(&[upload, messages::send(phone, payload)]);
             }
             let uploaded: media_api::Uploaded = app.fetch(&upload).await?.parse()?;
             app.out.note(format!(

@@ -29,7 +29,7 @@ impl Migrate {
         for name in &self.names {
             validate::not_blank(name, "Flow name")?;
         }
-        let destination = app.ctx()?.require_waba_id()?.to_owned();
+        let destination = app.waba()?;
         if destination == self.source_waba_id {
             return Err(Error::validation(
                 "source and destination WABAs must differ",
@@ -41,7 +41,7 @@ impl Migrate {
         ))? {
             return Ok(());
         }
-        let request = flows::migrate(&destination, &self.source_waba_id, &self.names);
+        let request = flows::migrate(destination, &self.source_waba_id, &self.names);
         let Some(response) = app.send(&request).await? else {
             return Ok(());
         };
@@ -100,17 +100,16 @@ impl KeyCommand {
                 Some(value.to_owned())
             }
         };
-        let phone = app.ctx()?.require_phone_number_id()?.to_owned();
+        let phone = app.phone()?;
         if let Some(key) = key {
             if !app.confirm_or_abort(&format!(
                 "replace the Flow endpoint public key for number {phone}"
             ))? {
                 return Ok(());
             }
-            app.send_and_emit(&flows::set_key(&phone, &key), no_id)
-                .await
+            app.send_and_emit(&flows::set_key(phone, &key), no_id).await
         } else {
-            app.send_and_emit(&flows::get_key(&phone), no_id).await
+            app.send_and_emit(&flows::get_key(phone), no_id).await
         }
     }
 }

@@ -3,7 +3,6 @@
 
 use super::util::{read_file, read_json, read_stdin, split_rows};
 use crate::app::App;
-use crate::output::Output;
 use clap::{ArgGroup, Args, Subcommand, ValueEnum};
 use paloma_core::compliance::{NoTracking, SendPolicy, enforce_session_window};
 use paloma_core::limits::{self, MAX_LIST_ROWS, MAX_REPLY_BUTTONS};
@@ -305,8 +304,7 @@ async fn dispatch(app: &App, payload: Value) -> Result<()> {
     let ctx = app.ctx()?;
     let phone = ctx.require_phone_number_id()?.to_owned();
     let payload = messages::with_messaging_account(payload, ctx.messaging_account_id());
-    if let Some(resp) = app.send(&messages::send(&phone, payload)).await? {
-        let out = Output::response(&resp)?;
+    if let Some(out) = app.send_output(&messages::send(&phone, payload)).await? {
         let id = messages::message_id(&out.data);
         app.out.emit(&out.id(id));
     }

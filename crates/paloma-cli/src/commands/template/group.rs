@@ -82,8 +82,8 @@ pub(super) async fn group(app: &App, command: GroupCommand) -> Result<()> {
             name_ok(&a.name)?;
             a.description.as_deref().map_or(Ok(()), description_ok)?;
             let ids = integer_ids(&a.templates)?;
-            let waba = app.ctx()?.require_waba_id()?.to_owned();
-            let req = templates::group_create(&waba, &a.name, a.description.as_deref(), &ids);
+            let waba = app.waba()?;
+            let req = templates::group_create(waba, &a.name, a.description.as_deref(), &ids);
             app.send_and_emit(&req, field_id).await
         }
         GroupCommand::Get { id } => {
@@ -113,7 +113,7 @@ pub(super) async fn group(app: &App, command: GroupCommand) -> Result<()> {
             if !app.confirm_or_abort(&format!("delete template group {id}"))? {
                 return Ok(());
             }
-            app.send_and_emit(&templates::group_delete(&id), |_| Some(id.clone()))
+            app.send_and_emit(&templates::group_delete(&id), crate::app::fixed_id(&id))
                 .await
         }
     }

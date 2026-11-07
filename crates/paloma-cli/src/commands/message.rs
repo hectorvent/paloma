@@ -49,8 +49,8 @@ impl MessageCommand {
             Self::History(h) => return history(app, &h.message_id).await,
         };
         validate::not_blank(id, "message id")?;
-        let phone = app.ctx()?.require_phone_number_id()?.to_owned();
-        app.send_and_emit(&messages::send(&phone, payload), no_id)
+        let phone = app.phone()?;
+        app.send_and_emit(&messages::send(phone, payload), no_id)
             .await
     }
 }
@@ -59,8 +59,8 @@ impl MessageCommand {
 async fn history(app: &App, wamid: &str) -> Result<()> {
     let wamid = wamid.trim();
     validate::not_blank(wamid, "message id")?;
-    let phone = app.ctx()?.require_phone_number_id()?.to_owned();
-    let lookup = |after: Option<&str>| message_history::lookup(&phone, wamid, after);
+    let phone = app.phone()?;
+    let lookup = |after: Option<&str>| message_history::lookup(phone, wamid, after);
     if app.dry_run() {
         return app.print_dry_run(&[lookup(None), message_history::events("<history-id>", None)]);
     }

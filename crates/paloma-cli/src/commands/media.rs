@@ -81,11 +81,11 @@ impl MediaCommand {
                         "a voicemail announcement must be audio/ogg with the Opus codec, not {mime}"
                     )));
                 }
-                let phone = app.ctx()?.require_phone_number_id()?.to_owned();
+                let phone = app.phone()?;
                 let request = if a.voicemail_announcement {
-                    media::upload_voicemail_announcement(&phone, &path, &mime)
+                    media::upload_voicemail_announcement(phone, &path, &mime)
                 } else {
-                    media::upload(&phone, &path, &mime)
+                    media::upload(phone, &path, &mime)
                 };
                 app.send_and_emit(&request, field_id).await
             }

@@ -85,6 +85,16 @@ impl App {
     }
 
     /// The resolved context. Resolution warnings are printed once, here.
+    /// The phone number id the command acts on, or the auth error naming how to set one.
+    pub fn phone(&self) -> Result<&str> {
+        self.ctx()?.require_phone_number_id()
+    }
+
+    /// The WABA id the command acts on, or the auth error naming how to set one.
+    pub fn waba(&self) -> Result<&str> {
+        self.ctx()?.require_waba_id()
+    }
+
     pub fn ctx(&self) -> Result<&Arc<Context>> {
         if let Some(c) = self.ctx.get() {
             return Ok(c);
@@ -128,6 +138,14 @@ impl App {
             return Ok(None);
         }
         self.fetch(req).await.map(Some)
+    }
+
+    /// [`Self::send`], with the response as an [`Output`] ready to adjust and emit.
+    pub async fn send_output(&self, req: &Request) -> Result<Option<Output>> {
+        match self.send(req).await? {
+            Some(response) => Output::response(&response).map(Some),
+            None => Ok(None),
+        }
     }
 
     /// Print what would be sent. Several requests render as a JSON array.
@@ -213,4 +231,11 @@ pub fn field_id(v: &serde_json::Value) -> Option<String> {
 /// No primary id.
 pub fn no_id(_: &serde_json::Value) -> Option<String> {
     None
+}
+
+/// The `-q` id when the command already knows it (the id it acted on), whatever the
+/// response says.
+pub fn fixed_id(id: &str) -> impl Fn(&serde_json::Value) -> Option<String> + use<> {
+    let id = id.to_owned();
+    move |_| Some(id.clone())
 }

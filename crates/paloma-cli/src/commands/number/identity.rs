@@ -2,7 +2,6 @@
 //! business, so writes are explicit and confirmed rather than folded into registration.
 
 use crate::app::{App, no_id};
-use crate::output::Output;
 use clap::Subcommand;
 use paloma_core::{Error, Result, validate};
 use paloma_graph::api::phone_numbers;
@@ -30,10 +29,10 @@ impl UsernameCommand {
         if let Self::Set { username, .. } = &self {
             validate::business_username(username)?;
         }
-        let phone = app.ctx()?.require_phone_number_id()?.to_owned();
+        let phone = app.phone()?;
         match self {
             Self::Get => {
-                app.send_and_emit(&phone_numbers::username(&phone), |v| {
+                app.send_and_emit(&phone_numbers::username(phone), |v| {
                     v.get("username")
                         .and_then(|v| v.as_str())
                         .map(str::to_owned)
@@ -41,8 +40,10 @@ impl UsernameCommand {
                 .await
             }
             Self::List => {
-                if let Some(resp) = app.send(&phone_numbers::reserved_usernames(&phone)).await? {
-                    let out = Output::response(&resp)?;
+                if let Some(out) = app
+                    .send_output(&phone_numbers::reserved_usernames(phone))
+                    .await?
+                {
                     let ids =
                         super::super::util::acted_on(&out.data, "/data/0/username_suggestions", "");
                     app.out
@@ -66,7 +67,7 @@ impl UsernameCommand {
                 }
                 app.out.note("username changes are limited to 2 per rolling 14 days (10 when reserved); deleting does not reset the limit");
                 app.send_and_emit(
-                    &phone_numbers::set_username(&phone, &username, force_transfer),
+                    &phone_numbers::set_username(phone, &username, force_transfer),
                     no_id,
                 )
                 .await
@@ -75,7 +76,7 @@ impl UsernameCommand {
                 if !app.confirm_or_abort(&format!("delete username from number {phone}"))? {
                     return Ok(());
                 }
-                app.send_and_emit(&phone_numbers::delete_username(&phone), no_id)
+                app.send_and_emit(&phone_numbers::delete_username(phone), no_id)
                     .await
             }
         }
@@ -107,18 +108,17 @@ impl ContactsCommand {
                 "contact book requires one portfolio-scoped BSUID, such as US.123456",
             ));
         }
-        let phone = app.ctx()?.require_phone_number_id()?.to_owned();
+        let phone = app.phone()?;
         if delete
             && !app
                 .confirm_or_abort("delete contact-book entry for the entire business portfolio")?
         {
             return Ok(());
         }
-        let req = phone_numbers::contact(&phone, &bsuid, delete);
-        let Some(response) = app.send(&req).await? else {
+        let req = phone_numbers::contact(phone, &bsuid, delete);
+        let Some(output) = app.send_output(&req).await? else {
             return Ok(());
         };
-        let output = Output::response(&response)?;
         // Graph answers 200 either way; deleting nothing still leaves the entry gone.
         if delete && output.data.get("deleted") == Some(&serde_json::Value::Bool(false)) {
             app.out

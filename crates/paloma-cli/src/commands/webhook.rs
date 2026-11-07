@@ -124,14 +124,14 @@ impl WebhookCommand {
                     .map(|_| verify_token.read(app))
                     .transpose()?;
                 let request = if number {
-                    let phone = app.ctx()?.require_phone_number_id()?;
+                    let phone = app.phone()?;
                     webhook::number_callback(
                         phone,
                         callback_url.as_deref().unwrap_or(""),
                         token.as_ref().map(ExposeSecret::expose_secret),
                     )
                 } else {
-                    let waba = app.ctx()?.require_waba_id()?;
+                    let waba = app.waba()?;
                     match (&callback_url, &token) {
                         (Some(url), Some(token)) => {
                             webhook::subscribe(waba, url, token.expose_secret())
@@ -149,11 +149,11 @@ impl WebhookCommand {
                 app.send_and_emit(&request, no_id).await
             }
             Self::Unsubscribe => {
-                let waba = app.ctx()?.require_waba_id()?.to_owned();
+                let waba = app.waba()?;
                 if !app.confirm_or_abort(&format!("unsubscribe this app from WABA {waba}"))? {
                     return Ok(());
                 }
-                app.send_and_emit(&webhook::unsubscribe(&waba), no_id).await
+                app.send_and_emit(&webhook::unsubscribe(waba), no_id).await
             }
             Self::Fields(f) => f.run(app).await,
             Self::Version(v) => v.run(app).await,

@@ -103,8 +103,8 @@ pub(super) async fn library(app: &App, command: LibraryCommand) -> Result<()> {
                 button_inputs,
                 body_inputs,
             });
-            let waba = app.ctx()?.require_waba_id()?.to_owned();
-            app.send_and_emit(&templates::create(&waba, body), field_id)
+            let waba = app.waba()?;
+            app.send_and_emit(&templates::create(waba, body), field_id)
                 .await
         }
     }

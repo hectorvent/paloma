@@ -161,9 +161,9 @@ impl ObaCommand {
             Self::Get => {
                 // Status is a field on the number: a live read of the edge returns
                 // "nonexisting field", and Meta's guide uses this form.
-                let phone = app.ctx()?.require_phone_number_id()?.to_owned();
+                let phone = app.phone()?;
                 app.send_and_emit(
-                    &phone_numbers::get(&phone, "official_business_account"),
+                    &phone_numbers::get(phone, "official_business_account"),
                     |v| phone_numbers::oba_status(v).map(str::to_owned),
                 )
                 .await
@@ -190,12 +190,12 @@ impl ComplianceCommand {
     }
 }
 async fn submit(app: &App, edge: &str, body: Option<Value>) -> Result<()> {
-    let phone = app.ctx()?.require_phone_number_id()?.to_owned();
+    let phone = app.phone()?;
     if body.is_some()
         && !app.confirm_or_abort(&format!("submit {edge} information for number {phone}"))?
     {
         return Ok(());
     }
-    app.send_and_emit(&phone_numbers::administration(&phone, edge, body), no_id)
+    app.send_and_emit(&phone_numbers::administration(phone, edge, body), no_id)
         .await
 }

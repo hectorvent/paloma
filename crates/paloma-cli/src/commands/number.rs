@@ -245,20 +245,20 @@ impl NumberCommand {
                     validate::data_localization_region(region)?;
                 }
                 let pin = a.pin.read(app)?;
-                let phone = app.ctx()?.require_phone_number_id()?.to_owned();
+                let phone = app.phone()?;
                 let req = phone_numbers::register(
-                    &phone,
+                    phone,
                     pin.expose_secret(),
                     a.data_localization_region.as_deref(),
                 );
                 app.send_and_emit(&req, no_id).await
             }
             Self::Deregister => {
-                let phone = app.ctx()?.require_phone_number_id()?.to_owned();
+                let phone = app.phone()?;
                 if !app.confirm_or_abort(&format!("deregister number {phone}"))? {
                     return Ok(());
                 }
-                app.send_and_emit(&phone_numbers::deregister(&phone), no_id)
+                app.send_and_emit(&phone_numbers::deregister(phone), no_id)
                     .await
             }
             Self::Oba(command) => command.run(app).await,
@@ -274,17 +274,17 @@ impl NumberCommand {
             } => add(app, &phone_number, &cc, &name).await,
             Self::Name(NameCommand::Set { name }) => {
                 validate::not_blank(&name, "display name")?;
-                let phone = app.ctx()?.require_phone_number_id()?.to_owned();
+                let phone = app.phone()?;
                 if !app
                     .confirm_or_abort(&format!("submit a display-name change for number {phone}"))?
                 {
                     return Ok(());
                 }
-                app.send_and_emit(&phone_numbers::set_name(&phone, &name), no_id)
+                app.send_and_emit(&phone_numbers::set_name(phone, &name), no_id)
                     .await
             }
             Self::Visibility(VisibilityCommand::Set { visibility }) => {
-                let phone = app.ctx()?.require_phone_number_id()?.to_owned();
+                let phone = app.phone()?;
                 if !app.confirm_or_abort(&format!("change search visibility for number {phone}"))? {
                     return Ok(());
                 }
@@ -292,18 +292,18 @@ impl NumberCommand {
                     SearchVisibility::Visible => "VISIBLE",
                     SearchVisibility::Hidden => "HIDDEN",
                 };
-                app.send_and_emit(&phone_numbers::search_visibility(&phone, value), no_id)
+                app.send_and_emit(&phone_numbers::search_visibility(phone, value), no_id)
                     .await
             }
             Self::Pin(PinCommand::Set(input)) => {
                 let pin = input.read(app)?;
-                let phone = app.ctx()?.require_phone_number_id()?.to_owned();
+                let phone = app.phone()?;
                 if !app.confirm_or_abort(&format!(
                     "replace the two-step verification PIN of number {phone}; the old PIN stops working"
                 ))? {
                     return Ok(());
                 }
-                app.send_and_emit(&phone_numbers::set_pin(&phone, pin.expose_secret()), no_id)
+                app.send_and_emit(&phone_numbers::set_pin(phone, pin.expose_secret()), no_id)
                     .await
             }
         }
@@ -316,14 +316,14 @@ fn target(app: &App, explicit: Option<String>) -> Result<String> {
             validate::numeric_id(&id, "phone number id")?;
             Ok(id)
         }
-        None => Ok(app.ctx()?.require_phone_number_id()?.to_owned()),
+        None => Ok(app.phone()?.to_owned()),
     }
 }
 
 impl ListArgs {
     pub async fn run(self, app: &App) -> Result<()> {
         validate::page_size(self.page.limit, Some(MAX_PHONE_NUMBERS_PAGE))?;
-        let waba = app.ctx()?.require_waba_id()?.to_owned();
+        let waba = app.waba()?;
         let filter = ListFilter {
             account_mode: self.account_mode.map(Into::into),
             oldest_first: matches!(self.sort, Some(Sort::LastOnboardedAsc)),
@@ -332,7 +332,7 @@ impl ListArgs {
         super::listing::list(
             app,
             &self.page,
-            |after| phone_numbers::list(&waba, &filter, after),
+            |after| phone_numbers::list(waba, &filter, after),
             Rows {
                 columns: LIST_COLUMNS,
                 id: "id",
@@ -347,7 +347,7 @@ impl Verification {
         match self {
             Self::Request { method, language } => {
                 validate::not_blank(&language, "language")?;
-                let phone = app.ctx()?.require_phone_number_id()?.to_owned();
+                let phone = app.phone()?;
                 if !app.confirm_or_abort(&format!(
                     "send a verification SMS or voice call to number {phone}"
                 ))? {
@@ -358,7 +358,7 @@ impl Verification {
                     CodeMethod::Voice => "VOICE",
                 };
                 app.send_and_emit(
-                    &phone_numbers::request_code(&phone, method, &language),
+                    &phone_numbers::request_code(phone, method, &language),
                     no_id,
                 )
                 .await
@@ -377,9 +377,9 @@ impl Verification {
                     code_stdin,
                 )?;
                 validate::verification_code(code.expose_secret())?;
-                let phone = app.ctx()?.require_phone_number_id()?.to_owned();
+                let phone = app.phone()?;
                 app.send_and_emit(
-                    &phone_numbers::verify_code(&phone, code.expose_secret()),
+                    &phone_numbers::verify_code(phone, code.expose_secret()),
                     no_id,
                 )
                 .await
@@ -398,7 +398,7 @@ async fn add(app: &App, phone_number: &str, cc: &str, name: &str) -> Result<()> 
         ));
     }
     validate::not_blank(name, "display name")?;
-    let waba = app.ctx()?.require_waba_id()?.to_owned();
-    app.send_and_emit(&phone_numbers::add(&waba, cc, phone_number, name), field_id)
+    let waba = app.waba()?;
+    app.send_and_emit(&phone_numbers::add(waba, cc, phone_number, name), field_id)
         .await
 }

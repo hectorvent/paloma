@@ -51,8 +51,8 @@ impl Reach {
         self.countries
             .iter()
             .try_for_each(|c| validate::country_code(c))?;
-        let waba = app.ctx()?.require_waba_id()?.to_owned();
-        let req = account::reach_estimate(&waba, &self.countries, self.interval.api());
+        let waba = app.waba()?;
+        let req = account::reach_estimate(waba, &self.countries, self.interval.api());
         let Some(response) = app.send(&req).await? else {
             return Ok(());
         };
@@ -90,10 +90,10 @@ impl Users {
             self.page.limit,
             Some(paloma_core::limits::MAX_ASSIGNED_USERS_PAGE),
         )?;
-        let waba = app.ctx()?.require_waba_id()?.to_owned();
+        let waba = app.waba()?;
         let page = |after: Option<&str>| {
             account::users(
-                &waba,
+                waba,
                 self.system,
                 self.business_id.as_deref(),
                 self.page.limit,
@@ -196,10 +196,9 @@ fn content(path: &Path) -> Result<Value> {
 }
 /// Meta documents a bare array here; `data` is accepted too, since other edges wrap lists.
 async fn list_sequences(app: &App, req: &paloma_graph::Request) -> Result<()> {
-    let Some(response) = app.send(req).await? else {
+    let Some(mut output) = app.send_output(req).await? else {
         return Ok(());
     };
-    let mut output = Output::response(&response)?;
     let rows = if output.data.is_array() { "" } else { "/data" };
     let ids = output
         .data
@@ -223,29 +222,29 @@ impl WelcomeSequence {
         let req = match self {
             Self::List { limit } => {
                 validate::page_size(limit, None)?;
-                let waba = app.ctx()?.require_waba_id()?.to_owned();
-                let req = account::welcome_sequences(&waba, None, limit);
+                let waba = app.waba()?;
+                let req = account::welcome_sequences(waba, None, limit);
                 return list_sequences(app, &req).await;
             }
             Self::Get { id } => {
                 validate::numeric_id(&id, "sequence id")?;
-                let waba = app.ctx()?.require_waba_id()?.to_owned();
-                let req = account::welcome_sequences(&waba, Some(&id), None);
+                let waba = app.waba()?;
+                let req = account::welcome_sequences(waba, Some(&id), None);
                 return list_sequences(app, &req).await;
             }
             Self::Delete { id } => {
                 validate::numeric_id(&id, "sequence id")?;
-                let waba = app.ctx()?.require_waba_id()?.to_owned();
+                let waba = app.waba()?;
                 if !app.confirm_or_abort(IN_ADS)? {
                     return Ok(());
                 }
-                account::delete_welcome_sequence(&waba, &id)
+                account::delete_welcome_sequence(waba, &id)
             }
             Self::Create { name, file } => {
                 validate::not_blank(&name, "sequence name")?;
                 let sequence = content(&file)?;
-                let waba = app.ctx()?.require_waba_id()?.to_owned();
-                account::create_welcome_sequence(&waba, &name, &sequence)
+                let waba = app.waba()?;
+                account::create_welcome_sequence(waba, &name, &sequence)
             }
             Self::Update { id, name, file } => {
                 validate::numeric_id(&id, "sequence id")?;
@@ -256,11 +255,11 @@ impl WelcomeSequence {
                     validate::not_blank(name, "sequence name")?;
                 }
                 let sequence = file.as_deref().map(content).transpose()?;
-                let waba = app.ctx()?.require_waba_id()?.to_owned();
+                let waba = app.waba()?;
                 if !app.confirm_or_abort(IN_ADS)? {
                     return Ok(());
                 }
-                account::update_welcome_sequence(&waba, &id, name.as_deref(), sequence.as_ref())
+                account::update_welcome_sequence(waba, &id, name.as_deref(), sequence.as_ref())
             }
         };
         app.send_and_emit(&req, |v| {

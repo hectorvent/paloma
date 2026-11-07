@@ -116,7 +116,7 @@ impl Analytics {
             phone_numbers: self.phone_number,
             country_codes: self.country,
         };
-        let waba = app.ctx()?.require_waba_id()?;
+        let waba = app.waba()?;
         let request = analytics::calls(waba, &query, &filters);
         if let Some(response) = app.send(&request).await? {
             app.out
@@ -129,8 +129,8 @@ impl Analytics {
 /// Read whether this person can be called or asked for permission.
 pub async fn permission(app: &App, user: &str) -> Result<()> {
     validate::recipient(user)?;
-    let phone = app.ctx()?.require_phone_number_id()?.to_owned();
-    app.send_and_emit(&calling::permissions(&phone, user), |v: &Value| {
+    let phone = app.phone()?;
+    app.send_and_emit(&calling::permissions(phone, user), |v: &Value| {
         calling::permission_status(v).map(str::to_owned)
     })
     .await

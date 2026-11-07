@@ -155,12 +155,12 @@ impl FlowCommand {
             Self::Key(a) => a.run(app).await,
             Self::List(a) => {
                 a.page.check(None)?;
-                let waba = app.ctx()?.require_waba_id()?.to_owned();
+                let waba = app.waba()?;
                 let fields = a.fields.clone();
                 list(
                     app,
                     &a.page,
-                    |after| flows::list(&waba, fields.as_deref(), a.page.limit, after),
+                    |after| flows::list(waba, fields.as_deref(), a.page.limit, after),
                     Rows {
                         columns: LIST_COLUMNS,
                         id: "id",
@@ -261,8 +261,8 @@ impl Create {
         if self.publish {
             body.insert("publish".into(), true.into());
         }
-        let waba = app.ctx()?.require_waba_id()?.to_owned();
-        write(app, &[flows::create(&waba, Value::Object(body))]).await
+        let waba = app.waba()?;
+        write(app, &[flows::create(waba, Value::Object(body))]).await
     }
 }
 

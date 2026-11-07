@@ -49,10 +49,10 @@ impl CommerceCommand {
                 "pass --cart, --no-cart, --catalog or --no-catalog",
             ));
         }
-        let phone = app.ctx()?.require_phone_number_id()?.to_owned();
+        let phone = app.phone()?;
         match self {
             Self::Get => {
-                if let Some(resp) = app.send(&commerce::get(&phone)).await? {
+                if let Some(resp) = app.send(&commerce::get(phone)).await? {
                     let body = resp.json()?;
                     let id = commerce::first(&body)
                         .and_then(|s| s.get("id"))
@@ -73,7 +73,7 @@ impl CommerceCommand {
                     return Ok(());
                 }
                 app.send_and_emit(
-                    &commerce::set(&phone, a.cart_enabled(), a.catalog_visible()),
+                    &commerce::set(phone, a.cart_enabled(), a.catalog_visible()),
                     no_id,
                 )
                 .await

@@ -182,15 +182,14 @@ impl CallingCommand {
             Self::Permission { user } => return insights::permission(app, &user).await,
             Self::Analytics(args) => return args.run(app).await,
             Self::Get { sip_credentials } => {
-                let phone = app.ctx()?.require_phone_number_id()?.to_owned();
+                let phone = app.phone()?;
                 return app
-                    .send_and_emit(&calling::get(&phone, sip_credentials), no_id)
+                    .send_and_emit(&calling::get(phone, sip_credentials), no_id)
                     .await;
             }
             other => other,
         };
-        let phone =
-            |app: &App| -> Result<String> { Ok(app.ctx()?.require_phone_number_id()?.to_owned()) };
+        let phone = |app: &App| -> Result<String> { Ok(app.phone()?.to_owned()) };
         // Turning a feature off, or emptying a list, changes what callers get.
         let confirm = match &command {
             Self::Disable => Some(calling::DISABLE_CONFIRM),
@@ -254,13 +253,13 @@ async fn set(app: &App, a: Set) -> Result<()> {
                 "--file must hold a JSON object (the `calling` settings)",
             ));
         }
-        let phone = app.ctx()?.require_phone_number_id()?.to_owned();
+        let phone = app.phone()?;
         if let Some(what) = calling::confirm_for(&v)
             && !app.confirm_or_abort(what)?
         {
             return Ok(());
         }
-        return app.send_and_emit(&calling::set(&phone, v), no_id).await;
+        return app.send_and_emit(&calling::set(phone, v), no_id).await;
     }
     let icon_countries = if a.icon_countries.is_empty() && !a.icon_everywhere {
         None
@@ -288,11 +287,11 @@ async fn set(app: &App, a: Set) -> Result<()> {
              --icon-everywhere, --srtp, --file",
         ));
     }
-    let phone = app.ctx()?.require_phone_number_id()?.to_owned();
+    let phone = app.phone()?;
     if settings.turns_off() && !app.confirm_or_abort(calling::DISABLE_CONFIRM)? {
         return Ok(());
     }
-    app.send_and_emit(&calling::set_settings(&phone, &settings), no_id)
+    app.send_and_emit(&calling::set_settings(phone, &settings), no_id)
         .await
 }
 
