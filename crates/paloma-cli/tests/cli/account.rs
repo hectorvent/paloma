@@ -1390,9 +1390,7 @@ async fn account_reach_serializes_the_targeting_and_lists_estimates() {
         "account",
         "reach",
         "--country",
-        "IN",
-        "--country",
-        "BR",
+        "IN,BR",
         "--interval",
         "L7D",
     ];

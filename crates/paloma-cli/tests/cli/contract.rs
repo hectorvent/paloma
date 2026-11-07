@@ -230,8 +230,8 @@ async fn new_disruptive_commands_refuse_without_confirmation_and_preview_offline
         vec!["calling", "voicemail", "disable"],
         vec!["calling", "codecs", "clear"],
         vec!["block", "add", "15551234567"],
-        vec!["calling", "set", "--status", "DISABLED"],
         vec!["commerce", "set", "--no-cart"],
+        vec!["group", "pin", "delete", GROUP, "wamid.1"],
         vec!["flow", "migrate", "--source-waba-id", "333"],
     ] {
         paloma(Some(&graph), &home)

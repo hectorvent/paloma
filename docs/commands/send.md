@@ -336,9 +336,9 @@ paloma send contact 15551234567 --file contacts.json
 |------|---------|
 | `--name` | Full name, shown on the message (Meta's `formatted_name`) |
 | `--first-name`, `--last-name` | The name's parts. Give at least one: Meta's docs mark them optional, but the API rejects a contact with `--name` alone (exit 5 here, before any call) |
-| `--phone` | Phone number; repeatable |
+| `--phone` | Phone number; repeat it or use commas |
 | `--wa-id` | WhatsApp id of the first `--phone`, so it needs `--phone`. It adds the **Message** and **Save contact** buttons; without it the message shows an **Invite to WhatsApp** button |
-| `--email` | Email address; repeatable |
+| `--email` | Email address; repeat it or use commas |
 | `--file` | JSON file holding the Cloud API contacts array, or an object with a `contacts` array, up to 257 contacts. Use it for addresses, birthdays, organizations, URLs and phone or email types |
 
 Blank values, or a file with no contacts or too many, exit 5 before any request. See
@@ -507,12 +507,12 @@ Paloma exits 5 before any API call unless each card follows Meta's rules:
 | URL button label, quick-reply title | At most 20 characters |
 | Quick-reply ID | At most 256 characters |
 
-**Product cards** come from `--products`, with one card per SKU, and need a catalog. Meta
+**Product cards** come from `--product`, with one card per SKU (repeat it or use commas), and need a catalog. Meta
 requires every card to use the same one, so there is one `--catalog-id`.
 
 ```bash
 paloma send interactive carousel 15551234567 --body "Our favorites" \
-      --products abc123,def456,ghi789 --catalog-id 123456789
+      --product abc123,def456,ghi789 --catalog-id 123456789
 ```
 
 See Meta's

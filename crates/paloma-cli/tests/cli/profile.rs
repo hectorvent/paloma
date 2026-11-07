@@ -27,7 +27,7 @@ async fn profile_photo_uploads_then_sets_the_handle() {
     let file = home.path().join("pic.png");
     std::fs::write(&file, "PNGDATA").unwrap();
     let out = paloma(Some(&graph), &home)
-        .args(["profile", "photo", "--app-id", "999", "-o", "json"])
+        .args(["profile", "photo", "set", "--app-id", "999", "-o", "json"])
         .arg(&file)
         .output()
         .unwrap();
@@ -61,7 +61,7 @@ async fn profile_photo_does_not_update_the_profile_when_the_upload_fails() {
     let file = home.path().join("pic.png");
     std::fs::write(&file, "PNGDATA").unwrap();
     paloma(Some(&graph), &home)
-        .args(["profile", "photo", "--app-id", "999"])
+        .args(["profile", "photo", "set", "--app-id", "999"])
         .arg(&file)
         .assert()
         .code(3)
@@ -90,7 +90,7 @@ async fn profile_photo_explains_a_failed_update_after_a_good_upload() {
     let file = home.path().join("pic.png");
     std::fs::write(&file, "PNGDATA").unwrap();
     paloma(Some(&graph), &home)
-        .args(["profile", "photo", "--app-id", "999"])
+        .args(["profile", "photo", "set", "--app-id", "999"])
         .arg(&file)
         .assert()
         .code(1)
@@ -121,7 +121,7 @@ async fn profile_photo_quiet_prints_nothing_and_raw_prints_the_update_response()
         let file = home.path().join("pic.png");
         std::fs::write(&file, "PNGDATA").unwrap();
         let out = paloma(Some(&graph), &home)
-            .args(["profile", "photo", "--app-id", "999"])
+            .args(["profile", "photo", "set", "--app-id", "999"])
             .args(flags)
             .arg(&file)
             .output()
@@ -145,7 +145,7 @@ async fn profile_photo_checks_the_file_then_the_phone_before_any_call() {
         paloma(Some(&graph), &home)
             .env_remove("PALOMA_WABA_ID")
             .env_remove("PALOMA_PHONE_NUMBER_ID")
-            .args(["profile", "photo"])
+            .args(["profile", "photo", "set"])
             .arg(&file)
             .assert()
             .code(5)
@@ -157,14 +157,14 @@ async fn profile_photo_checks_the_file_then_the_phone_before_any_call() {
     }
     let png = write("pic.png");
     paloma(Some(&graph), &home)
-        .args(["profile", "photo", "--type", "application/pdf"])
+        .args(["profile", "photo", "set", "--type", "application/pdf"])
         .arg(&png)
         .assert()
         .code(5);
     // The phone check comes before the app lookup, which would otherwise spend a read.
     paloma(Some(&graph), &home)
         .env_remove("PALOMA_PHONE_NUMBER_ID")
-        .args(["profile", "photo"])
+        .args(["profile", "photo", "set"])
         .arg(&png)
         .assert()
         .code(3)
@@ -178,7 +178,15 @@ fn profile_photo_dry_run_prints_every_step_and_honors_the_type_flag() {
     let file = home.path().join("logo.bin");
     std::fs::write(&file, "DATA").unwrap();
     let out = paloma(None, &home)
-        .args(["profile", "photo", "--app-id", "999", "--type", "image/png"])
+        .args([
+            "profile",
+            "photo",
+            "set",
+            "--app-id",
+            "999",
+            "--type",
+            "image/png",
+        ])
         .args(["--dry-run", "-o", "json"])
         .arg(&file)
         .output()

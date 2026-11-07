@@ -589,7 +589,7 @@ async fn product_carousel_makes_one_card_per_product() {
             TO,
             "--body",
             "Featured",
-            "--products",
+            "--product",
             "abc,def",
             "--catalog-id",
             "CAT",
@@ -603,19 +603,19 @@ fn product_carousel_checks_its_count_and_its_flags() {
     let many = ["s"; 11].join(",");
     for products in ["a", many.as_str(), "a,,b"] {
         let mut args = cmd.to_vec();
-        args.extend(["--products", products, "--catalog-id", "CAT"]);
+        args.extend(["--product", products, "--catalog-id", "CAT"]);
         assert_refused_locally(&args);
     }
     let mut blank_catalog = cmd.to_vec();
-    blank_catalog.extend(["--products", "a,b", "--catalog-id", " "]);
+    blank_catalog.extend(["--product", "a,b", "--catalog-id", " "]);
     assert_refused_locally(&blank_catalog);
     let home = TempDir::new().unwrap();
     for extra in [
         vec![],
-        vec!["--products", "a,b"],
+        vec!["--product", "a,b"],
         vec!["--catalog-id", "CAT"],
-        vec!["--products", "a,b", "--catalog-id", "C", "--card-file", "x"],
-        vec!["--products", "a,b", "--catalog-id", "C", "--footer", "F"],
+        vec!["--product", "a,b", "--catalog-id", "C", "--card-file", "x"],
+        vec!["--product", "a,b", "--catalog-id", "C", "--footer", "F"],
     ] {
         paloma(None, &home).args(cmd).args(extra).assert().code(2);
     }

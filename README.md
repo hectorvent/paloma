@@ -291,10 +291,10 @@ error: text body is 5000 chars; max is 4096        # exit 5
 | `flow` | list · get · create · update · publish · deprecate · delete · assets · migrate · key |
 | `webhook` | get · subscribe · unsubscribe · fields · version · listen · verify-url · simulate |
 | `number` | list · get · quality · health · add · register · deregister · verification · name · visibility · pin · username · contacts · settings · oba · compliance |
-| `profile` | get · set · photo |
+| `profile` | get · set · photo set |
 | `account` | get · set · limits · health · activity · apps · users · billing-currency · analytics · reach · welcome-sequence |
 | `block` | add · remove · list |
-| `group` | create · list · get · update · delete · invite · members · requests · pin · unpin |
+| `group` | create · list · get · update · delete · invite · members · requests · pin |
 | `qr` | create · list · get · update · delete |
 | `automation` | get · set · bot get |
 | `commerce` | get · set |

@@ -54,13 +54,13 @@ async fn group_writes_send_exact_bodies() {
             json!({"messaging_product":"whatsapp","join_requests":["req1"]}),
         ),
         (
-            vec!["group", "pin", GROUP, "wamid.1", "--days", "7"],
+            vec!["group", "pin", "create", GROUP, "wamid.1", "--days", "7"],
             "POST",
             format!("/{V}/111/messages"),
             json!({"messaging_product":"whatsapp","recipient_type":"group","to":GROUP,"type":"pin","pin":{"type":"pin","message_id":"wamid.1","expiration_days":7}}),
         ),
         (
-            vec!["group", "unpin", GROUP, "wamid.1"],
+            vec!["group", "pin", "delete", GROUP, "wamid.1", "--yes"],
             "POST",
             format!("/{V}/111/messages"),
             json!({"messaging_product":"whatsapp","recipient_type":"group","to":GROUP,"type":"pin","pin":{"type":"unpin","message_id":"wamid.1"}}),
@@ -239,8 +239,8 @@ async fn group_rejects_bad_input_before_context_or_network() {
         vec!["group", "update", GROUP],
         vec!["group", "update", GROUP, "--photo", not_a_jpeg.as_str()],
         vec!["group", "list", "--limit", "1025"],
-        vec!["group", "pin", GROUP, "wamid.1", "--days", "31"],
-        vec!["group", "pin", GROUP, "wamid.1", "--days", "0"],
+        vec!["group", "pin", "create", GROUP, "wamid.1", "--days", "31"],
+        vec!["group", "pin", "create", GROUP, "wamid.1", "--days", "0"],
         vec![
             "group", "members", "remove", GROUP, "1", "2", "3", "4", "5", "6", "7", "8", "9",
             "--yes",

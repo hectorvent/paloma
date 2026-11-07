@@ -34,11 +34,21 @@ pub struct Set {
     /// Timezone, such as America/Santo_Domingo.
     #[arg(long)]
     timezone: String,
-    /// Weekly hours as DAY=HHMM-HHMM, such as MONDAY=0900-1700; repeatable, 2 per day at most.
-    #[arg(long = "open", required = true, value_name = "DAY=HHMM-HHMM")]
+    /// Weekly hours as DAY=HHMM-HHMM, such as MONDAY=0900-1700; repeat it or use
+    /// commas, 2 per day at most.
+    #[arg(
+        long = "open",
+        required = true,
+        value_name = "DAY=HHMM-HHMM,...",
+        value_delimiter = ','
+    )]
     open: Vec<String>,
-    /// Holiday override as YYYY-MM-DD=HHMM-HHMM; repeatable, 20 at most.
-    #[arg(long = "holiday", value_name = "DATE=HHMM-HHMM")]
+    /// Holiday override as YYYY-MM-DD=HHMM-HHMM; repeat it or use commas, 20 at most.
+    #[arg(
+        long = "holiday",
+        value_name = "DATE=HHMM-HHMM,...",
+        value_delimiter = ','
+    )]
     holidays: Vec<String>,
 }
 

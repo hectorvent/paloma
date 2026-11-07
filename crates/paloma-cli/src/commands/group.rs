@@ -47,23 +47,58 @@ pub enum GroupCommand {
     /// List, approve or reject requests to join.
     #[command(subcommand)]
     Requests(Requests),
-    /// Pin a message in a group. Meta unpins the oldest beyond three.
-    Pin {
+    /// Pin or unpin a message in a group.
+    #[command(subcommand)]
+    Pin(Pin),
+}
+
+#[derive(Debug, Subcommand)]
+pub enum Pin {
+    /// Pin a message. Meta unpins the oldest beyond three.
+    Create {
         /// Group id.
         group_id: String,
-        /// The message to pin or unpin (wamid…).
+        /// The message to pin (wamid…).
         message_id: String,
         /// How long to keep it pinned, from 1 to 30 days.
         #[arg(long)]
         days: u32,
     },
-    /// Unpin a message in a group.
-    Unpin {
+    /// Unpin a message.
+    Delete {
         /// Group id.
         group_id: String,
-        /// The message to pin or unpin (wamid…).
+        /// The message to unpin (wamid…).
         message_id: String,
     },
+}
+
+impl Pin {
+    async fn run(self, app: &App) -> Result<()> {
+        match self {
+            Self::Create {
+                group_id,
+                message_id,
+                days,
+            } => {
+                validate::group_id(&group_id)?;
+                validate::not_blank(&message_id, "message id")?;
+                validate::group_pin_days(days)?;
+                pin(app, &group_id, &message_id, Some(days)).await
+            }
+            Self::Delete {
+                group_id,
+                message_id,
+            } => {
+                validate::group_id(&group_id)?;
+                validate::not_blank(&message_id, "message id")?;
+                if !app.confirm_or_abort(&format!("unpin {message_id} in group {group_id}"))? {
+                    return Ok(());
+                }
+                pin(app, &group_id, &message_id, None).await
+            }
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, ValueEnum)]
@@ -287,8 +322,8 @@ async fn list(app: &App, phone: &str, a: List) -> Result<()> {
 }
 
 async fn pin(app: &App, group: &str, message: &str, days: Option<u32>) -> Result<()> {
+    let phone = app.phone()?.to_owned();
     let ctx = app.ctx()?;
-    let phone = ctx.require_phone_number_id()?.to_owned();
     let payload = messages::with_messaging_account(
         groups::pin_payload(group, message, days),
         ctx.messaging_account_id(),
@@ -326,24 +361,7 @@ impl GroupCommand {
             Self::Invite(command) => command.run(app).await,
             Self::Members(command) => command.run(app).await,
             Self::Requests(command) => command.run(app).await,
-            Self::Pin {
-                group_id,
-                message_id,
-                days,
-            } => {
-                validate::group_id(&group_id)?;
-                validate::not_blank(&message_id, "message id")?;
-                validate::group_pin_days(days)?;
-                pin(app, &group_id, &message_id, Some(days)).await
-            }
-            Self::Unpin {
-                group_id,
-                message_id,
-            } => {
-                validate::group_id(&group_id)?;
-                validate::not_blank(&message_id, "message id")?;
-                pin(app, &group_id, &message_id, None).await
-            }
+            Self::Pin(command) => command.run(app).await,
         }
     }
 }

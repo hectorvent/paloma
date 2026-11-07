@@ -11,6 +11,7 @@ pub struct Compare {
     /// Template id.
     pub(super) id: String,
     /// The template id to compare it with, on the same WABA.
+    #[arg(long = "with", value_name = "TEMPLATE_ID")]
     pub(super) other_id: String,
     /// Days to look back from now: 7, 30, 60 or 90.
     #[arg(long, value_parser = compare_window, value_name = "DAYS")]

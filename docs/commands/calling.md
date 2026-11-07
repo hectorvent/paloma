@@ -32,32 +32,32 @@ paloma calling disable              # confirms; --yes to skip
 
 ## `paloma calling set`
 
-Update part of the config. For settings without a flag, such as `video`, use the `--file`
-escape hatch with a full `calling` object. Enum values are case-insensitive. Like the
-matching commands, it confirms when it turns calling off (`--status DISABLED`), and a
-`--file` that turns calling, SIP or voicemail off or empties the codecs confirms too.
+Update part of the config. Turn calling itself on or off with `calling enable` and
+`calling disable`. For settings without a flag, such as `video`, use the `--file` escape
+hatch with a full `calling` object. Enum values are case-insensitive. Like the matching
+commands, a `--file` that turns calling, SIP or voicemail off or empties the codecs confirms
+first.
 
 | Flag | Values |
 |------|--------|
-| `--status` | `ENABLED` \| `DISABLED` |
 | `--call-icon` | `DEFAULT` \| `DISABLE_ALL` |
-| `--callback-permission` | `ENABLED` \| `DISABLED` |
-| `--icon-countries <CC,...>` | Show the call button only to people whose phone numbers are from these countries |
+| `--callback-permission`, `--no-callback-permission` | Let people grant callback permission by calling you, or stop it |
+| `--icon-country <CC,...>` | Show the call button only to people whose phone numbers are from these countries |
 | `--icon-everywhere` | Show the call button in every country again |
 | `--srtp` | `DTLS` (Meta's default) \| `SDES`, the SRTP key exchange for SIP calls |
 | `--file <json>` | A full `calling` object (mutually exclusive with the flags above) |
 
 ```bash
 paloma calling set --call-icon DISABLE_ALL
-paloma calling set --status ENABLED --callback-permission ENABLED
-paloma calling set --icon-countries DO,US
+paloma calling set --callback-permission
+paloma calling set --icon-country DO,US
 paloma calling set --srtp SDES
 
 # other settings through the escape hatch
 paloma calling set --file calling.json
 ```
 
-`--icon-countries` takes two-letter codes, repeated or comma-separated, and a bad code exits `5`
+`--icon-country` takes two-letter codes, repeated or comma-separated, and a bad code exits `5`
 before any request. It goes by the country of the person's phone number, not where they are.
 Meta doesn't return `srtp_key_exchange_protocol` in `calling get` until it's been set.
 
@@ -67,8 +67,8 @@ Partial updates are merged server-side, so you only send the fields you change.
 ## `paloma calling sip`
 
 Configure the SIP server(s) calls are routed to. `set` does a full replace of the
-server list; `--server` takes `host` or `host:port` (port defaults to 5061) and
-repeats. `--enable-calling` flips `calling.status` to ENABLED in the same request.
+server list; `--server` takes `host` or `host:port` (port defaults to 5061), and you can
+repeat it or use commas. `--enable-calling` flips `calling.status` to ENABLED in the same request.
 
 ```bash
 paloma calling sip set --server pbx.acme.com:5061 --enable-calling
@@ -124,7 +124,7 @@ paloma calling hours disable --yes
 
 `set` replaces the whole schedule and confirms first. People can't call outside these hours, and
 any holiday you leave out is deleted, because that's how Meta applies the setting. Each `--open`
-is `DAY=HHMM-HHMM` in 24-hour time, with at most 2 non-overlapping periods per day. Each `--holiday`
+is `DAY=HHMM-HHMM` in 24-hour time (repeat it or use commas), with at most 2 non-overlapping periods per day. Each `--holiday`
 is `YYYY-MM-DD=HHMM-HHMM`, at most 20 in total. Bad schedules exit `5` before any request.
 
 `disable` accepts calls at any time. It reads the current schedule first and sends it back, even

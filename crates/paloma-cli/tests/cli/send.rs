@@ -1293,7 +1293,7 @@ fn the_new_send_verbs_honor_the_window_guardrail() {
             TO,
             "--body",
             "B",
-            "--products",
+            "--product",
             "a,b",
             "--catalog-id",
             "C",

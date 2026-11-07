@@ -18,8 +18,15 @@ pub enum ProfileCommand {
     Get,
     /// Update profile fields.
     Set(Set),
+    /// Change the profile photo.
+    #[command(subcommand)]
+    Photo(PhotoCommand),
+}
+
+#[derive(Debug, Subcommand)]
+pub enum PhotoCommand {
     /// Upload an image and make it the profile photo.
-    Photo(Photo),
+    Set(Photo),
 }
 
 #[derive(Debug, Args)]
@@ -162,7 +169,7 @@ impl ProfileCommand {
                 let phone = app.phone()?;
                 app.send_and_emit(&profile::set(phone, fields), no_id).await
             }
-            Self::Photo(a) => {
+            Self::Photo(PhotoCommand::Set(a)) => {
                 let upload = HandleUpload::new(&a.file, a.mime, &limits::PROFILE_PHOTO_TYPES)?;
                 let phone = app.phone()?;
                 let app_id = app_id(app).await?;

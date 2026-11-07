@@ -123,10 +123,10 @@ wire_enum!(
     VoicemailTrigger { Reject => "REJECT", Timeout => "TIMEOUT" }
 );
 
-/// Top-level calling settings; `None` leaves a setting as it is.
+/// Top-level calling settings; `None` leaves a setting as it is. Calling's own `status`
+/// isn't here: [`set_status`] owns it, behind `calling enable` and `calling disable`.
 #[derive(Debug, Default)]
 pub struct Settings {
-    pub status: Option<Toggle>,
     pub call_icon_visibility: Option<CallIcon>,
     pub callback_permission_status: Option<Toggle>,
     /// `Some(empty)` shows the call button in every country again.
@@ -135,11 +135,6 @@ pub struct Settings {
 }
 
 impl Settings {
-    /// Whether these settings turn calling off, which [`DISABLE_CONFIRM`] guards.
-    pub fn turns_off(&self) -> bool {
-        self.status == Some(Toggle::Disabled)
-    }
-
     pub fn is_empty(&self) -> bool {
         self.body().as_object().is_none_or(Map::is_empty)
     }
@@ -151,7 +146,6 @@ impl Settings {
                 m.insert(key.into(), v.into());
             }
         };
-        put("status", self.status.map(Toggle::as_str));
         put(
             "call_icon_visibility",
             self.call_icon_visibility.map(CallIcon::as_str),
@@ -340,13 +334,16 @@ mod tests {
     #[test]
     fn settings_send_only_what_is_set() {
         let settings = Settings {
-            status: Some(Toggle::Enabled),
+            callback_permission_status: Some(Toggle::Enabled),
             icon_countries: Some(vec!["US".into()]),
             ..Settings::default()
         };
         assert_eq!(
             calling(&set_settings("1", &settings)),
-            json!({ "status": "ENABLED", "call_icons": { "restrict_to_user_countries": ["US"] } })
+            json!({
+                "callback_permission_status": "ENABLED",
+                "call_icons": { "restrict_to_user_countries": ["US"] }
+            })
         );
         assert!(Settings::default().is_empty());
         let everywhere = Settings {

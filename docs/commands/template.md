@@ -284,7 +284,7 @@ requires when creating from the library.
 has the lower block rate, and each one's top reason for being blocked.
 
 ```bash
-paloma template compare 5289179717853347 1533406637136032 --days 30
+paloma template compare 5289179717853347 --with 1533406637136032 --days 30
 ```
 
 `--days` is the window back from now, and must be 7, 30, 60 or 90. Each template must have been
@@ -318,14 +318,14 @@ in each language. `--auth` is required, because those are the only previews Meta
 
 ```bash
 paloma template preview --auth --language en_US,es_ES \
-      --security-recommendation --code-expiration 10
+      --security-recommendation --code-expiration-minutes 10
 ```
 
 | Flag | Description |
 |------|-------------|
 | `--language <a,b>` | Keep only these language codes. Paloma filters the result itself, and warns about a code that has no preview |
 | `--security-recommendation` | Include the security recommendation in the body |
-| `--code-expiration <minutes>` | Include the expiration footer, from 1 to 90 minutes |
+| `--code-expiration-minutes <minutes>` | Include the expiration footer, from 1 to 90 minutes |
 
 ## `paloma template upsert`
 

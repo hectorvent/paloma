@@ -22,15 +22,25 @@ pub struct Contact {
     /// The contact's last name.
     #[arg(long, requires = "name")]
     pub(super) last_name: Option<String>,
-    /// A phone number for the contact; repeatable.
-    #[arg(long = "phone", value_name = "NUMBER", requires = "name")]
+    /// A phone number for the contact; repeat it or use commas.
+    #[arg(
+        long = "phone",
+        value_name = "NUMBER,...",
+        value_delimiter = ',',
+        requires = "name"
+    )]
     pub(super) phones: Vec<String>,
     /// WhatsApp id of the first --phone. It adds the Message and Save contact buttons;
     /// without it the message shows an Invite to WhatsApp button.
     #[arg(long, requires = "phones")]
     pub(super) wa_id: Option<String>,
-    /// An email address for the contact; repeatable.
-    #[arg(long = "email", value_name = "ADDRESS", requires = "name")]
+    /// An email address for the contact; repeat it or use commas.
+    #[arg(
+        long = "email",
+        value_name = "ADDRESS,...",
+        value_delimiter = ',',
+        requires = "name"
+    )]
     pub(super) emails: Vec<String>,
     #[command(flatten)]
     pub(super) reply: Reply,

@@ -11,7 +11,7 @@ use paloma_core::limits::{DEFAULT_SIP_PORT, MAX_VOICEMAIL_TIMEOUT_SECONDS};
 use paloma_core::{Error, Result, validate};
 use paloma_graph::api::calling;
 
-use super::util::read_json;
+use super::util::{read_json, toggle};
 use crate::app::{App, no_id};
 
 #[derive(Debug, Subcommand)]
@@ -70,7 +70,6 @@ macro_rules! cli_enum {
     };
 }
 
-cli_enum!(Toggle => Toggle { Enabled, Disabled });
 cli_enum!(CallIcon => CallIcon { Default, DisableAll });
 cli_enum!(pub Codec => Codec { Pcma, Pcmu });
 cli_enum!(
@@ -86,17 +85,18 @@ cli_enum!(VoicemailTrigger => VoicemailTrigger {
 
 #[derive(Debug, Args)]
 pub struct Set {
-    /// Calling status.
-    #[arg(long, value_enum, ignore_case = true)]
-    status: Option<Toggle>,
     /// Call button visibility.
     #[arg(long, value_enum, ignore_case = true)]
     call_icon: Option<CallIcon>,
-    /// Whether users can grant callback permission.
-    #[arg(long, value_enum, ignore_case = true)]
-    callback_permission: Option<Toggle>,
-    /// Show the call button only to people with phone numbers from these countries.
-    #[arg(long, value_name = "CC", value_delimiter = ',')]
+    /// Let people grant callback permission by calling you.
+    #[arg(long, overrides_with = "no_callback_permission")]
+    callback_permission: bool,
+    /// Stop people granting callback permission by calling you.
+    #[arg(long, overrides_with = "callback_permission")]
+    no_callback_permission: bool,
+    /// Show the call button only to people with phone numbers from these countries;
+    /// repeat it or use commas.
+    #[arg(long = "icon-country", value_name = "CC,...", value_delimiter = ',')]
     icon_countries: Vec<String>,
     /// Show the call button in every country again.
     #[arg(long, conflicts_with = "icon_countries")]
@@ -104,9 +104,10 @@ pub struct Set {
     /// SRTP key exchange protocol for SIP calls.
     #[arg(long, value_enum, ignore_case = true)]
     srtp: Option<Srtp>,
-    /// A full `calling` object (JSON) for settings without a flag (video, ...).
+    /// A full `calling` object (JSON) for settings without a flag (status, video, ...).
     #[arg(short = 'f', long, conflicts_with_all = [
-        "status", "call_icon", "callback_permission", "icon_countries", "icon_everywhere", "srtp",
+        "call_icon", "callback_permission", "no_callback_permission", "icon_countries",
+        "icon_everywhere", "srtp",
     ])]
     file: Option<PathBuf>,
 }
@@ -149,8 +150,13 @@ pub enum Sip {
 
 #[derive(Debug, Args)]
 pub struct SipSet {
-    /// SIP server as host[:port] (default port 5061); repeatable.
-    #[arg(long = "server", value_name = "HOST[:PORT]", required = true)]
+    /// SIP server as host[:port] (default port 5061); repeat it or use commas.
+    #[arg(
+        long = "server",
+        value_name = "HOST[:PORT],...",
+        value_delimiter = ',',
+        required = true
+    )]
     servers: Vec<String>,
     /// `tgrp` request-URI user parameter.
     #[arg(long)]
@@ -275,22 +281,26 @@ async fn set(app: &App, a: Set) -> Result<()> {
         )
     };
     let settings = calling::Settings {
-        status: a.status.map(Into::into),
         call_icon_visibility: a.call_icon.map(Into::into),
-        callback_permission_status: a.callback_permission.map(Into::into),
+        callback_permission_status: toggle(a.callback_permission, a.no_callback_permission).map(
+            |on| {
+                if on {
+                    calling::Toggle::Enabled
+                } else {
+                    calling::Toggle::Disabled
+                }
+            },
+        ),
         icon_countries,
         srtp_key_exchange_protocol: a.srtp.map(Into::into),
     };
     if settings.is_empty() {
         return Err(Error::validation(
-            "pass at least one of --status, --call-icon, --callback-permission, --icon-countries, \
+            "pass at least one of --call-icon, --[no-]callback-permission, --icon-country, \
              --icon-everywhere, --srtp, --file",
         ));
     }
     let phone = app.phone()?;
-    if settings.turns_off() && !app.confirm_or_abort(calling::DISABLE_CONFIRM)? {
-        return Ok(());
-    }
     app.send_and_emit(&calling::set_settings(phone, &settings), no_id)
         .await
 }

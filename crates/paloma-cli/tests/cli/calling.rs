@@ -266,7 +266,7 @@ async fn calling_set_restricts_icons_and_sets_srtp() {
         .args([
             "calling",
             "set",
-            "--icon-countries",
+            "--icon-country",
             "do, US",
             "--srtp",
             "sdes",
@@ -279,11 +279,83 @@ async fn calling_set_restricts_icons_and_sets_srtp() {
         .success();
 }
 
+#[tokio::test]
+async fn calling_set_pairs_callback_permission_and_leaves_status_to_enable() {
+    let graph = MockServer::start().await;
+    let home = TempDir::new().unwrap();
+    for (flag, value) in [
+        ("--callback-permission", "ENABLED"),
+        ("--no-callback-permission", "DISABLED"),
+    ] {
+        Mock::given(method("POST"))
+            .and(path(format!("/{V}/{PHONE}/settings")))
+            .and(body_json(json!({
+                "messaging_product":"whatsapp",
+                "calling":{"callback_permission_status":value},
+            })))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({"success":true})))
+            .expect(1)
+            .mount(&graph)
+            .await;
+        paloma(Some(&graph), &home)
+            .args(["calling", "set", flag])
+            .assert()
+            .success();
+    }
+    for args in [
+        &["calling", "set", "--status", "ENABLED"][..],
+        &["calling", "set", "--callback-permission", "ENABLED"],
+    ] {
+        paloma(Some(&graph), &home)
+            .args(args)
+            .assert()
+            .code(2)
+            .stdout("");
+    }
+}
+
+#[tokio::test]
+async fn calling_sip_set_splits_servers_on_commas() {
+    let graph = MockServer::start().await;
+    let home = TempDir::new().unwrap();
+    Mock::given(method("POST"))
+        .and(path(format!("/{V}/{PHONE}/settings")))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({"success":true})))
+        .expect(1)
+        .mount(&graph)
+        .await;
+    paloma(Some(&graph), &home)
+        .args([
+            "calling",
+            "sip",
+            "set",
+            "--server",
+            "a.example.com,b.example.com:5060",
+        ])
+        .assert()
+        .success();
+    let body: Value =
+        serde_json::from_slice(&graph.received_requests().await.unwrap()[0].body).unwrap();
+    let hosts: Vec<_> = body["calling"]["sip"]["servers"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|s| (s["hostname"].clone(), s["port"].clone()))
+        .collect();
+    assert_eq!(
+        hosts,
+        [
+            (json!("a.example.com"), json!(5061)),
+            (json!("b.example.com"), json!(5060)),
+        ]
+    );
+}
+
 #[test]
 fn calling_settings_refuse_bad_input_before_context() {
     let home = TempDir::new().unwrap();
     let cases: [&[&str]; 5] = [
-        &["set", "--icon-countries", "USA"],
+        &["set", "--icon-country", "USA"],
         &[
             "voicemail",
             "set",

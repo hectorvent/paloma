@@ -39,22 +39,52 @@ pub struct Analytics {
     #[arg(long = "phone", value_delimiter = ',', value_name = "E164,...")]
     phone_number: Vec<String>,
     /// Uppercase two-letter country code; repeat or comma-separate.
-    #[arg(long, value_delimiter = ',')]
+    #[arg(long, value_delimiter = ',', value_name = "CC,...")]
     country: Vec<String>,
     /// Messaging-only message class; repeat or comma-separate.
-    #[arg(long, value_enum, value_delimiter = ',', conflicts_with = "pricing")]
+    #[arg(
+        long,
+        value_enum,
+        value_delimiter = ',',
+        value_name = "PRODUCT_TYPE,...",
+        conflicts_with = "pricing"
+    )]
     product_type: Vec<ProductType>,
     /// Pricing-only metrics; omitted means all available metrics.
-    #[arg(long, value_enum, value_delimiter = ',', requires = "pricing")]
+    #[arg(
+        long,
+        value_enum,
+        value_delimiter = ',',
+        value_name = "METRIC,...",
+        requires = "pricing"
+    )]
     metric: Vec<Metric>,
     /// Pricing-only charge type; repeat or comma-separate.
-    #[arg(long, value_enum, value_delimiter = ',', requires = "pricing")]
+    #[arg(
+        long,
+        value_enum,
+        value_delimiter = ',',
+        value_name = "PRICING_TYPE,...",
+        requires = "pricing"
+    )]
     pricing_type: Vec<PricingType>,
     /// Pricing-only category; repeat or comma-separate.
-    #[arg(long, value_enum, value_delimiter = ',', requires = "pricing")]
+    #[arg(
+        long,
+        value_enum,
+        value_delimiter = ',',
+        value_name = "PRICING_CATEGORY,...",
+        requires = "pricing"
+    )]
     pricing_category: Vec<PricingCategory>,
     /// Pricing-only breakdown; repeat or comma-separate.
-    #[arg(long, value_enum, value_delimiter = ',', requires = "pricing")]
+    #[arg(
+        long,
+        value_enum,
+        value_delimiter = ',',
+        value_name = "DIMENSION,...",
+        requires = "pricing"
+    )]
     dimension: Vec<Dimension>,
 }
 

@@ -1218,12 +1218,15 @@ async fn template_compare_sends_a_window_in_unix_seconds() {
         .await;
     let home = TempDir::new().unwrap();
     paloma(Some(&graph), &home)
-        .args(["template", "compare", "1", "2", "--days", "30"])
+        .args(["template", "compare", "1", "--with", "2", "--days", "30"])
         .assert()
         .success()
         .stdout(predicate::str::contains("BLOCK_RATE").and(predicate::str::contains("2,1")));
 
-    let dry = dry_run_request(&home, &["template", "compare", "1", "2", "--days", "7"]);
+    let dry = dry_run_request(
+        &home,
+        &["template", "compare", "1", "--with", "2", "--days", "7"],
+    );
     let url = dry["url"].as_str().unwrap();
     assert!(
         url.starts_with(&format!("{GRAPH}/1/compare?template_ids=%5B2%5D&start=")),
@@ -1244,13 +1247,18 @@ async fn template_compare_sends_a_window_in_unix_seconds() {
 fn template_compare_rejects_other_windows_and_ids_before_a_request() {
     let home = TempDir::new().unwrap();
     paloma(None, &home)
-        .args(["template", "compare", "1", "2", "--days", "14"])
+        .args(["template", "compare", "1", "--with", "2", "--days", "14"])
         .assert()
         .code(2);
     paloma(None, &home)
-        .args(["template", "compare", "1", "x", "--days", "7"])
+        .args(["template", "compare", "1", "--with", "x", "--days", "7"])
         .assert()
         .code(5);
+    // The other template is a reference, so it's a flag, not a second positional.
+    paloma(None, &home)
+        .args(["template", "compare", "1", "2", "--days", "7"])
+        .assert()
+        .code(2);
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -1346,7 +1354,7 @@ async fn template_preview_needs_auth_sends_otp_and_narrows_languages_itself() {
             "preview",
             "--auth",
             "--security-recommendation",
-            "--code-expiration",
+            "--code-expiration-minutes",
             "10",
             "--language",
             "es_ES,fr",
@@ -1372,7 +1380,13 @@ async fn template_preview_needs_auth_sends_otp_and_narrows_languages_itself() {
         .assert()
         .code(2);
     paloma(None, &home)
-        .args(["template", "preview", "--auth", "--code-expiration", "91"])
+        .args([
+            "template",
+            "preview",
+            "--auth",
+            "--code-expiration-minutes",
+            "91",
+        ])
         .assert()
         .code(5);
 }

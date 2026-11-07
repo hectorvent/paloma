@@ -87,15 +87,16 @@ For groups created with `--join-approval approval-required`. `reject` confirms f
 rejected can ask again. As
 with `members remove`, if Meta can't process every request, the command exits `1`.
 
-## `paloma group pin` and `unpin`
+## `paloma group pin`
 
 ```bash
-paloma group pin "$GROUP_ID" "$MESSAGE_ID" --days 7
-paloma group unpin "$GROUP_ID" "$MESSAGE_ID"
+paloma group pin create "$GROUP_ID" "$MESSAGE_ID" --days 7
+paloma group pin delete "$GROUP_ID" "$MESSAGE_ID" --yes
 ```
 
 `--days` is 1 to 30. Up to 3 messages can be pinned, and Meta unpins the oldest when a fourth is
-pinned. `-q` prints the message id.
+pinned. `delete` unpins and confirms first. Both send a `pin` message, and `-q` prints its
+message id.
 
 ## Exit codes worth knowing
 

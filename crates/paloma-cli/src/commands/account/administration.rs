@@ -38,8 +38,13 @@ impl ReachInterval {
 
 #[derive(Debug, Args)]
 pub struct Reach {
-    /// Destination country as an ISO 3166-1 alpha-2 code; repeatable.
-    #[arg(long = "country", required = true, value_name = "CC")]
+    /// Destination country as an ISO 3166-1 alpha-2 code; repeat it or use commas.
+    #[arg(
+        long = "country",
+        required = true,
+        value_name = "CC,...",
+        value_delimiter = ','
+    )]
     countries: Vec<String>,
     /// How much history the estimate draws on.
     #[arg(long, value_enum)]

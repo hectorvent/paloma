@@ -93,9 +93,9 @@ pub struct InteractiveCarousel {
     /// JSON file with the media cards: an array, or {"cards": [...]}.
     #[arg(long, value_name = "PATH")]
     pub(super) card_file: Option<PathBuf>,
-    /// Product retailer ids (SKUs), one card each, separated by commas.
+    /// Product retailer id (SKU), one card each; repeat it or use commas.
     #[arg(
-        long,
+        long = "product",
         value_name = "SKU,...",
         value_delimiter = ',',
         requires = "catalog_id"
@@ -289,7 +289,7 @@ impl Interactive {
                         let products: Vec<String> =
                             a.products.iter().map(|p| p.trim().to_owned()).collect();
                         for product in &products {
-                            validate::not_blank(product, "--products")?;
+                            validate::not_blank(product, "--product")?;
                         }
                         messages::product_cards(catalog_id, &products)
                     }

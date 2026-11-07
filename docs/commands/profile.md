@@ -44,16 +44,16 @@ Paloma checks these limits before any API call and exits 5 if one is exceeded:
 
 See Meta's [business profile fields](https://developers.facebook.com/documentation/business-messaging/whatsapp/reference/whatsapp-business-phone-number/whatsapp-business-profile-api).
 
-## `paloma profile photo`
+## `paloma profile photo set`
 
 Upload a JPEG or PNG and make it the profile photo.
 
 ```
-paloma profile photo <file> [--type <mime>]
+paloma profile photo set <file> [--type <mime>]
 ```
 
 ```bash
-paloma profile photo ./logo.png --app-id 1234567890
+paloma profile photo set ./logo.png --app-id 1234567890
 ```
 
 This takes two steps: a [handle upload](media.md#upload-handles), then a profile update with

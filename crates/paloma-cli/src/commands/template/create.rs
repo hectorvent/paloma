@@ -22,14 +22,14 @@ pub struct Preview {
     /// Preview authentication templates, the only kind Meta previews.
     #[arg(id = "auth", long = "auth")]
     pub(super) _auth: bool,
-    /// Keep only these language codes, comma-separated.
+    /// Keep only these language codes; repeat it or use commas.
     #[arg(long, value_delimiter = ',', value_name = "CODE,...")]
     pub(super) language: Vec<String>,
     /// Include the security recommendation in the body.
     #[arg(long)]
     pub(super) security_recommendation: bool,
     /// Include the code expiration footer, with this many minutes (1 to 90).
-    #[arg(long, value_name = "MINUTES")]
+    #[arg(long = "code-expiration-minutes", value_name = "MINUTES")]
     pub(super) code_expiration: Option<u32>,
 }
 
@@ -146,7 +146,7 @@ pub(super) async fn preview(app: &App, a: &Preview) -> Result<()> {
         && !limits::TEMPLATE_PREVIEW_CODE_EXPIRATION.contains(&minutes)
     {
         return Err(Error::validation(format!(
-            "--code-expiration must be {} to {}",
+            "--code-expiration-minutes must be {} to {}",
             limits::TEMPLATE_PREVIEW_CODE_EXPIRATION.start(),
             limits::TEMPLATE_PREVIEW_CODE_EXPIRATION.end()
         )));

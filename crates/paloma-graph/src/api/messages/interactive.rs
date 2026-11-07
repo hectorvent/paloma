@@ -372,7 +372,7 @@ pub fn check_media_cards(cards: &[Value]) -> Result<()> {
         }
         if card.get("type").and_then(Value::as_str) == Some("product") {
             return Err(invalid(
-                "is a product card; use --products and --catalog-id instead",
+                "is a product card; use --product and --catalog-id instead",
             ));
         }
         // Meta's syntax and examples use this one value on every media card.

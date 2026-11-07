@@ -47,22 +47,23 @@ pub struct Analytics {
     /// End boundary: UNIX seconds or YYYY-MM-DD; must be later than --start.
     #[arg(long, value_name = "TIME")]
     end: String,
+    /// Reporting interval.
     #[arg(long, value_enum, default_value = "day")]
     granularity: Granularity,
     /// Only this business phone number, in E.164 (not its id); repeat it or use commas.
     #[arg(long = "phone", value_delimiter = ',', value_name = "E164,...")]
     phone_number: Vec<String>,
     /// Uppercase two-letter country code; repeat or comma-separate.
-    #[arg(long, value_delimiter = ',')]
+    #[arg(long, value_delimiter = ',', value_name = "CC,...")]
     country: Vec<String>,
     /// Call direction; repeat or comma-separate.
-    #[arg(long, value_enum, value_delimiter = ',')]
+    #[arg(long, value_enum, value_delimiter = ',', value_name = "DIRECTION,...")]
     direction: Vec<Direction>,
     /// Break results down; repeat or comma-separate.
-    #[arg(long, value_enum, value_delimiter = ',')]
+    #[arg(long, value_enum, value_delimiter = ',', value_name = "DIMENSION,...")]
     dimension: Vec<Dimension>,
     /// Metrics to return, all of them when omitted; repeat or comma-separate.
-    #[arg(long, value_enum, value_delimiter = ',')]
+    #[arg(long, value_enum, value_delimiter = ',', value_name = "METRIC,...")]
     metric: Vec<Metric>,
 }
 
