@@ -87,7 +87,7 @@ async fn write(app: &App, req: &paloma_graph::Request, ok: &str) -> Result<()> {
 /// single page can only say that more may exist.
 async fn list(app: &App, phone: &str, a: &ListArgs) -> Result<()> {
     let page = |after: Option<&str>| block::list(phone, a.page.limit, after);
-    if app.dry_run() {
+    if app.is_dry_run() {
         return app.print_dry_run(&[page(a.page.after.as_deref())]);
     }
     if a.page.all {

@@ -90,7 +90,7 @@ impl FormPart {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Body {
     Empty,
     Json(Value),

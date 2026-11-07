@@ -96,7 +96,7 @@ pub(super) async fn send_media(app: &App, kind: MediaKind, a: Media, voice: bool
     let source = match (&file, a.id, a.link) {
         (Some((path, mime)), _, _) => {
             let upload = media_api::upload(phone, path, mime);
-            if app.dry_run() {
+            if app.is_dry_run() {
                 let payload = messages::media(
                     &a.to,
                     kind,

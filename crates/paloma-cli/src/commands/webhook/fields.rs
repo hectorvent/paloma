@@ -34,7 +34,7 @@ impl Fields {
     pub(super) async fn run(self, app: &App) -> Result<()> {
         match self.command {
             FieldsCommand::List => {
-                if app.out.quiet() {
+                if app.out.is_quiet() {
                     app.out
                         .stdout(&format!("{}\n", AVAILABLE_FIELDS.join("\n")));
                 } else {

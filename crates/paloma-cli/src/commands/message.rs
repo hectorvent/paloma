@@ -61,7 +61,7 @@ async fn history(app: &App, wamid: &str) -> Result<()> {
     validate::not_blank(wamid, "message id")?;
     let phone = app.phone()?;
     let lookup = |after: Option<&str>| message_history::lookup(phone, wamid, after);
-    if app.dry_run() {
+    if app.is_dry_run() {
         return app.print_dry_run(&[lookup(None), message_history::events("<history-id>", None)]);
     }
     let client = app.client()?;

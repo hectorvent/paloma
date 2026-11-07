@@ -42,7 +42,7 @@ impl App {
         }
     }
 
-    pub fn dry_run(&self) -> bool {
+    pub fn is_dry_run(&self) -> bool {
         self.globals.dry_run
     }
 
@@ -84,7 +84,6 @@ impl App {
         }
     }
 
-    /// The resolved context. Resolution warnings are printed once, here.
     /// The phone number id the command acts on, or the auth error naming how to set one.
     pub fn phone(&self) -> Result<&str> {
         self.ctx()?.require_phone_number_id()
@@ -95,7 +94,13 @@ impl App {
         self.ctx()?.require_waba_id()
     }
 
-    pub fn ctx(&self) -> Result<&Arc<Context>> {
+    /// The resolved context. Resolution warnings are printed once, the first time.
+    pub fn ctx(&self) -> Result<&Context> {
+        self.shared_ctx().map(Arc::as_ref)
+    }
+
+    /// The context as the client shares it for credentials.
+    fn shared_ctx(&self) -> Result<&Arc<Context>> {
         if let Some(c) = self.ctx.get() {
             return Ok(c);
         }
@@ -116,7 +121,7 @@ impl App {
         if let Some(c) = self.client.get() {
             return Ok(c);
         }
-        let ctx = self.ctx()?;
+        let ctx = self.shared_ctx()?;
         let mut config = ClientConfig::new(&self.globals.graph_url, ctx.api_version());
         config.timeout = self.globals.timeout;
         let out = self.out.clone();
@@ -133,7 +138,7 @@ impl App {
 
     /// Execute a request, or under `--dry-run` print it and return `None`.
     pub async fn send(&self, req: &Request) -> Result<Option<Response>> {
-        if self.dry_run() {
+        if self.is_dry_run() {
             self.print_dry_run(std::slice::from_ref(req))?;
             return Ok(None);
         }
@@ -189,20 +194,20 @@ impl App {
     /// Confirm a destructive action: `true` under `--yes`; refuses without a terminal.
     pub fn confirm(&self, what: &str) -> Result<bool> {
         self.ensure_can_confirm(what)?;
-        if self.globals.yes || self.dry_run() {
+        if self.globals.yes || self.is_dry_run() {
             return Ok(true);
         }
         dialoguer::Confirm::new()
             .with_prompt(format!("{what}?"))
             .default(false)
             .interact()
-            .map_err(|e| Error::other(format!("prompt failed: {e}")))
+            .map_err(|e| Error::failed(format!("prompt failed: {e}"), e))
     }
 
     /// Fail if a confirmation could never pass, for commands that would otherwise spend a
     /// call before reaching [`Self::confirm`].
     pub fn ensure_can_confirm(&self, what: &str) -> Result<()> {
-        if self.globals.yes || self.dry_run() || interactive() {
+        if self.globals.yes || self.is_dry_run() || interactive() {
             return Ok(());
         }
         Err(Error::validation(format!(

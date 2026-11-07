@@ -76,12 +76,12 @@ impl Response {
             return Ok(Value::Object(serde_json::Map::new()));
         }
         serde_json::from_str(&self.text)
-            .map_err(|e| Error::other(format!("could not parse Graph API response: {e}")))
+            .map_err(|e| Error::failed(format!("could not parse Graph API response: {e}"), e))
     }
 
     pub fn parse<T: DeserializeOwned>(&self) -> Result<T> {
         serde_json::from_str(&self.text)
-            .map_err(|e| Error::other(format!("could not parse Graph API response: {e}")))
+            .map_err(|e| Error::failed(format!("could not parse Graph API response: {e}"), e))
     }
 }
 
@@ -109,7 +109,7 @@ impl Client {
             .user_agent(&config.user_agent)
             .connect_timeout(Duration::from_secs(15))
             .build()
-            .map_err(|e| Error::other(format!("cannot initialise HTTP client: {e}")))?;
+            .map_err(|e| Error::failed(format!("cannot initialise HTTP client: {e}"), e))?;
         Ok(Self {
             http,
             config: Arc::new(config),
@@ -131,7 +131,7 @@ impl Client {
 
     /// Send the request; non-2xx responses become the mapped [`Error`].
     pub async fn execute(&self, req: &Request) -> Result<Response> {
-        let resp = self.send(req, Some(self.config.timeout)).await?;
+        let resp = self.send(req).await?;
         let status = resp.status().as_u16();
         if !(200..300).contains(&status) {
             // The status alone decides the exit code, so an unreadable body can't lose it.
@@ -155,7 +155,7 @@ impl Client {
     }
 
     async fn download_to(&self, req: &Request, dest: &Path, create_new: bool) -> Result<u64> {
-        let resp = self.send(req, Some(self.config.timeout)).await?;
+        let resp = self.send(req).await?;
         let status = resp.status().as_u16();
         if !(200..300).contains(&status) {
             let text = resp.text().await.unwrap_or_default();
@@ -197,10 +197,10 @@ impl Client {
 
     /// Send the request, repeating it when [`retry::delay`] says that's safe. The last
     /// response is returned as it is, so callers map a final failure as usual.
-    async fn send(&self, req: &Request, timeout: Option<Duration>) -> Result<reqwest::Response> {
+    async fn send(&self, req: &Request) -> Result<reqwest::Response> {
         let mut attempt = 1;
         loop {
-            let result = self.builder(req, timeout).await?.send().await;
+            let result = self.builder(req).await?.send().await;
             let (failure, reason) = match &result {
                 Ok(resp) => {
                     let status = resp.status().as_u16();
@@ -238,11 +238,7 @@ impl Client {
         }
     }
 
-    async fn builder(
-        &self,
-        req: &Request,
-        timeout: Option<Duration>,
-    ) -> Result<reqwest::RequestBuilder> {
+    async fn builder(&self, req: &Request) -> Result<reqwest::RequestBuilder> {
         if matches!(req.target, Target::Placeholder(_)) {
             return Err(Error::validation("a dry-run placeholder cannot be sent"));
         }
@@ -271,9 +267,7 @@ impl Client {
         for (name, value) in &req.headers {
             builder = builder.header(name.as_str(), value.as_str());
         }
-        if let Some(t) = timeout {
-            builder = builder.timeout(t);
-        }
+        builder = builder.timeout(self.config.timeout);
         builder = match &req.body {
             Body::Empty => builder,
             Body::Json(v) => {

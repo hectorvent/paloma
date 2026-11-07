@@ -174,7 +174,7 @@ fn image_path(code: &str, format: ImageFormat) -> PathBuf {
 }
 
 async fn emit(app: &App, request: Request, image: ImageArgs, created: bool) -> Result<()> {
-    if app.dry_run() {
+    if app.is_dry_run() {
         let mut requests = vec![request];
         if image.image.is_some() {
             requests.push(Request::get_placeholder(

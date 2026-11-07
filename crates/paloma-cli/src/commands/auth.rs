@@ -150,7 +150,7 @@ pub fn store_login(
 /// `auth status --scopes -q` can gate a script the way `auth status -q` does.
 async fn token_details(app: &App) -> Result<()> {
     let ctx = app.ctx()?;
-    if app.dry_run() {
+    if app.is_dry_run() {
         // A placeholder, so a dry run never reads the keyring.
         return app.print_dry_run(&[tokens::debug("<active-token>")]);
     }

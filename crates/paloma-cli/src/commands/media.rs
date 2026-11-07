@@ -61,7 +61,7 @@ impl MediaCommand {
             Self::Upload(a) if a.handle => {
                 let upload = HandleUpload::new(&a.file, a.mime, &limits::RESUMABLE_UPLOAD_TYPES)?;
                 let app_id = app_id(app).await?;
-                if app.dry_run() {
+                if app.is_dry_run() {
                     return app.print_dry_run(&upload.requests(&app_id));
                 }
                 let (handle, response) = upload.run(app, &app_id).await?;
@@ -102,7 +102,7 @@ impl MediaCommand {
             }
             Self::Download(a) => {
                 let lookup = media::get(&a.media_id);
-                if app.dry_run() {
+                if app.is_dry_run() {
                     return app.print_dry_run(&[
                         lookup,
                         Request::get_placeholder("<url from the media lookup>"),

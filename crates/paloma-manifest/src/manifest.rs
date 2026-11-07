@@ -8,7 +8,7 @@ use crate::Kind;
 
 pub const API_VERSION: &str = "paloma/v1";
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Manifest {
     pub kind: Kind,
     pub metadata: Value,

@@ -61,7 +61,7 @@ impl VerifyUrlArgs {
         let token = self.verify_token.read(app)?;
         let safe_url = redact_url(url.as_str());
         let challenge = callback::challenge()?;
-        if app.dry_run() {
+        if app.is_dry_run() {
             app.out.note("dry-run: no request sent");
             app.out.emit(&Output::new(json!({
                 "method": "GET",
@@ -131,7 +131,7 @@ impl SimulateArgs {
             }
         };
         let safe_url = redact_url(url.as_str());
-        if app.dry_run() {
+        if app.is_dry_run() {
             app.out.note("dry-run: no request sent");
             let mut headers = json!({ "Content-Type": "application/json" });
             if self.signature != SignatureMode::Missing {

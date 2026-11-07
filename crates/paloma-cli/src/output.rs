@@ -101,7 +101,7 @@ impl Printer {
         self.format
     }
 
-    pub fn quiet(&self) -> bool {
+    pub fn is_quiet(&self) -> bool {
         self.quiet
     }
 

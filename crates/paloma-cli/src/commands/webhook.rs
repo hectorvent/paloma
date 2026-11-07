@@ -91,7 +91,7 @@ impl WebhookCommand {
                     webhook::subscribed_apps(&waba),
                     webhook::configuration(&phone),
                 );
-                if app.dry_run() {
+                if app.is_dry_run() {
                     return app.print_dry_run(&[apps_req, cfg_req]);
                 }
                 let apps = app.fetch(&apps_req).await?.json()?;

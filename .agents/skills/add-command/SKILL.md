@@ -51,7 +51,7 @@ Order is the contract:
      to print for `-q`).
    - list: `if let Some(resp) = app.send(&req).await? { app.out.emit(&Output::response(&resp)?.table("/data", &[..])) }`
    - read needed to build the write: `app.fetch(&req)` (runs under `--dry-run`).
-   - several writes: `app.print_dry_run(&[..])` under `app.dry_run()`.
+   - several writes: `app.print_dry_run(&[..])` under `app.is_dry_run()`.
 5. Diagnostics via `app.out.info/note/warn` (stderr). Never `println!`.
 
 Return the right `paloma_core::Error` variant: `Validation` (5), `Auth` (3),

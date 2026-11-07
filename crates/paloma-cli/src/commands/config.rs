@@ -137,7 +137,7 @@ impl Configure {
         let token = dialoguer::Password::new()
             .with_prompt("Access token")
             .interact()
-            .map_err(|e| Error::other(format!("prompt failed: {e}")))?;
+            .map_err(|e| Error::failed(format!("prompt failed: {e}"), e))?;
         let phone = prompt(
             "Sender phone number id",
             app.globals.phone_number_id.as_deref(),
@@ -174,6 +174,6 @@ fn prompt(label: &str, default: Option<&str>) -> Result<Option<String>> {
     }
     let v = input
         .interact_text()
-        .map_err(|e| Error::other(format!("prompt failed: {e}")))?;
+        .map_err(|e| Error::failed(format!("prompt failed: {e}"), e))?;
     Ok(Some(v.trim().to_owned()).filter(|v| !v.is_empty()))
 }

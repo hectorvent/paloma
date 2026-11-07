@@ -134,7 +134,7 @@ impl Apply {
                 app.out.info(format!("{label} unchanged"));
                 continue;
             }
-            if app.dry_run() {
+            if app.is_dry_run() {
                 app.out.info(format!("{label} would configure:"));
                 print_changes(app, plan);
                 if let Some(p) = &plan.preview {

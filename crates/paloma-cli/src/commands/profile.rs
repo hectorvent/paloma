@@ -163,7 +163,7 @@ impl ProfileCommand {
                 let upload = HandleUpload::new(&a.file, a.mime, &limits::PROFILE_PHOTO_TYPES)?;
                 let phone = app.phone()?;
                 let app_id = app_id(app).await?;
-                if app.dry_run() {
+                if app.is_dry_run() {
                     let [start, transfer] = upload.requests(&app_id);
                     let set = profile::set_photo(phone, "<handle-from-the-upload>");
                     return app.print_dry_run(&[start, transfer, set]);

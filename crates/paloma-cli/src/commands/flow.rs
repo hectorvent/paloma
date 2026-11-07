@@ -206,7 +206,7 @@ impl FlowCommand {
 /// (the write happens), so the response still prints, but listed errors exit 5 rather
 /// than pretending success.
 async fn write(app: &App, reqs: &[Request]) -> Result<()> {
-    if app.dry_run() {
+    if app.is_dry_run() {
         return app.print_dry_run(reqs);
     }
     let mut bodies = Vec::new();
@@ -301,7 +301,7 @@ impl Assets {
         let Some(out) = self.out else {
             return app.send_and_emit(&req, crate::app::no_id).await;
         };
-        if app.dry_run() {
+        if app.is_dry_run() {
             return app.print_dry_run(&[
                 req,
                 Request::get_url("<download_url of the FLOW_JSON asset>"),

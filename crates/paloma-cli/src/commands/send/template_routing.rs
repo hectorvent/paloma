@@ -32,7 +32,7 @@ pub(super) async fn send(
     let account = ctx.messaging_account_id().or(ctx.waba_id()).ok_or_else(|| {
         Error::auth("automatic template routing needs --messaging-account-id or --waba-id; set one on the profile, or select --via cloud|marketing to skip category lookup")
     })?;
-    if app.dry_run() {
+    if app.is_dry_run() {
         app.out.note("automatic routing: the POST endpoint depends on the category lookup; use --via cloud or --via marketing for a fixed endpoint preview");
         return app.print_dry_run(&[
             templates::routing_lookup_page(account, name, language, None),

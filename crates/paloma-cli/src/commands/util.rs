@@ -105,7 +105,7 @@ pub fn read_secret(
         dialoguer::Password::new()
             .with_prompt(source.what)
             .interact()
-            .map_err(|e| Error::other(format!("prompt failed: {e}")))?
+            .map_err(|e| Error::failed(format!("prompt failed: {e}"), e))?
     } else {
         let message = format!(
             "no {} given: pipe it with {}, or set {}",

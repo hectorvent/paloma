@@ -71,7 +71,7 @@ impl BillingCurrency {
                     return Ok(());
                 }
                 let request = account::complete_currency_migration(&migration_id);
-                if app.dry_run() {
+                if app.is_dry_run() {
                     return app.print_dry_run(&[
                         account::currency_migration_status(&migration_id),
                         request,

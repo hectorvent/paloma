@@ -47,7 +47,7 @@ pub async fn list(
     rows: Rows,
 ) -> Result<()> {
     let after = paging.after.clone();
-    if app.dry_run() {
+    if app.is_dry_run() {
         return app.print_dry_run(&[page(after.as_deref())]);
     }
     let out = if paging.all {

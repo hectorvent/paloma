@@ -55,7 +55,7 @@ and nothing touches the keyring until a request is actually sent, or a listener 
 | Context precedence (flag/env → profile → keyring) | `paloma_config::resolve::Context::resolve` |
 | Secret storage | `paloma_config::secrets::SecretStore` (keyring; `MemoryStore` in tests) |
 | Output (`--output`, `--quiet`, stdout vs stderr) | `paloma_cli::output::Printer` |
-| `--dry-run`, confirmations | `paloma_cli::app::App::{send, fetch, confirm}`. Webhook endpoint probes aren't Graph calls, so they check `app.dry_run()` themselves |
+| `--dry-run`, confirmations | `paloma_cli::app::App::{send, fetch, confirm}`. Webhook endpoint probes aren't Graph calls, so they check `app.is_dry_run()` themselves |
 | Cloud API limits | `paloma_core::limits` |
 | 24-hour window | `paloma_core::compliance` (`WindowTracker` seam for future tracking) |
 | Paging | `paloma_graph::paging` |
@@ -88,6 +88,11 @@ module under `kinds/` with `template()` (camelCase writable fields), `export()` 
 One current-thread tokio runtime, built in `main`. The CLI is I/O-bound and runs one
 request at a time, so a thread pool would only cost startup time. The same runtime hosts
 `webhook listen` (axum, HTTP/1 only).
+
+Blocking calls on that runtime (reading a `--file`, stdin, a keyring lookup, a prompt) are
+fine: nothing else runs concurrently, so they can't stall another task. The exception is
+the `webhook listen` request path, which must stay non-blocking so it keeps accepting
+deliveries; keep file and keyring work out of its handler.
 
 ## Release build
 

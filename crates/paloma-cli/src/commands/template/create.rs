@@ -50,7 +50,7 @@ pub(super) async fn update(app: &App, a: Update) -> Result<()> {
     let waba = app.waba()?;
     // Refuse before the lookup when the confirmation could never pass.
     app.ensure_can_confirm("change a template")?;
-    let id = if app.dry_run() {
+    let id = if app.is_dry_run() {
         "<template-id>".to_owned()
     } else {
         let t = paloma_graph::lookup::find_one(app.client()?, waba, &a.name, a.language.as_deref())
@@ -158,7 +158,7 @@ pub(super) async fn preview(app: &App, a: &Preview) -> Result<()> {
     let page = |after: Option<&str>| {
         templates::auth_previews(waba, a.security_recommendation, a.code_expiration, after)
     };
-    if app.dry_run() {
+    if app.is_dry_run() {
         return app.print_dry_run(&[page(None)]);
     }
     let mut merged = paging::collect_all(app.client()?, None, page).await?;

@@ -46,7 +46,7 @@ Each cross-cutting concern lives in exactly one place, and that is load-bearing:
   `paloma_config::resolve::Context::resolve`. clap merges flag and env (`env = "PALOMA_…"`).
 - **All stdout** goes through `paloma_cli::output::Printer`. Never `println!`.
 - **`--dry-run`** is enforced by `App::send`; commands build a `Request` and hand it over.
-  Webhook endpoint probes aren't Graph calls, so they check `app.dry_run()` themselves.
+  Webhook endpoint probes aren't Graph calls, so they check `app.is_dry_run()` themselves.
 - **Cloud API limits** are named constants in `paloma_core::limits`.
 
 ## Conventions that matter

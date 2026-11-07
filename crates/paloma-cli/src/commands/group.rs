@@ -237,7 +237,7 @@ async fn send_partial(
 
 async fn list(app: &App, phone: &str, a: List) -> Result<()> {
     let page = |after: Option<&str>| groups::list(phone, a.page.limit, after);
-    if app.dry_run() {
+    if app.is_dry_run() {
         return app.print_dry_run(&[page(a.page.after.as_deref())]);
     }
     let mut output = if a.page.all {

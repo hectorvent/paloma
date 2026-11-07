@@ -412,7 +412,7 @@ async fn get(app: &App, name: &str, language: Option<&str>, quality: bool) -> Re
     let fields = quality.then_some(templates::QUALITY_FIELDS);
     let lookup =
         |after: Option<&str>| templates::lookup_fields_page(waba, name, language, fields, after);
-    if app.dry_run() {
+    if app.is_dry_run() {
         return app.print_dry_run(&[lookup(None)]);
     }
     let not_found = || {
@@ -485,7 +485,7 @@ async fn delete(app: &App, a: Delete) -> Result<()> {
     if !app.confirm_or_abort(&format!("delete template '{name}' ({scope})"))? {
         return Ok(());
     }
-    let hsm_id = match (&id, &a.language, app.dry_run()) {
+    let hsm_id = match (&id, &a.language, app.is_dry_run()) {
         (Some(id), _, _) => Some(id.clone()),
         (None, None, _) => None,
         (None, Some(_), true) => Some("<template-id>".to_owned()),

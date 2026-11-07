@@ -48,7 +48,7 @@ struct Listener {
 
 pub async fn run(args: ListenArgs, app: &App) -> Result<()> {
     let addr = SocketAddr::new(args.host, args.port);
-    if app.dry_run() {
+    if app.is_dry_run() {
         app.out.note(format!(
             "dry-run: a listener has nothing to send, so nothing was bound; would listen on http://{addr}"
         ));
@@ -207,7 +207,7 @@ impl Listener {
 
     /// `--quiet` narrows each event to its message and status ids, as it does for a send.
     fn print(&self, line: &str) -> io::Result<()> {
-        if !self.out.quiet() {
+        if !self.out.is_quiet() {
             return self.out.stream_line(line);
         }
         let event = serde_json::from_str(line).unwrap_or_default();
