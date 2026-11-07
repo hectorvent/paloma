@@ -271,17 +271,22 @@ fn block_dry_run_prints_user_id() {
 }
 
 #[test]
-fn block_refuses_a_parent_bsuid_and_a_malformed_user_before_resolving_context() {
+fn block_takes_a_parent_bsuid_as_user_id_and_refuses_a_malformed_user() {
     let home = TempDir::new().unwrap();
     for verb in ["add", "remove"] {
-        paloma(None, &home)
-            .env_remove("PALOMA_PHONE_NUMBER_ID")
-            .env("PALOMA_GRAPH_URL", "http://127.0.0.1:9")
-            .args(["block", verb, "15551234567", PARENT_BSUID])
-            .assert()
-            .code(5)
-            .stdout(predicate::str::is_empty())
-            .stderr(predicate::str::contains("parent"));
+        let out = paloma(None, &home)
+            .args(["block", verb, PARENT_BSUID, "--dry-run", "-o", "json"])
+            .output()
+            .unwrap();
+        assert!(
+            out.status.success(),
+            "{}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+        assert_eq!(
+            stdout_json(&out)["body"]["block_users"],
+            json!([{ "user_id": PARENT_BSUID }])
+        );
         paloma(None, &home)
             .env_remove("PALOMA_PHONE_NUMBER_ID")
             .env("PALOMA_GRAPH_URL", "http://127.0.0.1:9")

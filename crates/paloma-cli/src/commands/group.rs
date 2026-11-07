@@ -171,7 +171,7 @@ pub enum Members {
     Remove {
         /// Group id.
         group_id: String,
-        /// E.164 number or WhatsApp user ID, up to 8.
+        /// E.164 number, WhatsApp user ID or business-scoped user ID (BSUID), up to 8.
         #[arg(required = true, value_name = "USER")]
         users: Vec<String>,
     },
@@ -517,7 +517,9 @@ impl Members {
                 limits::MAX_GROUP_PARTICIPANTS_PER_REQUEST
             )));
         }
-        users.iter().try_for_each(|u| validate::recipient(u))?;
+        users
+            .iter()
+            .try_for_each(|u| validate::group_participant(u))?;
         if !app.confirm_or_abort(&format!(
             "remove {} participant(s) from group {group_id}; they can't rejoin by invite link",
             users.len()

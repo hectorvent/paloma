@@ -1,5 +1,5 @@
-//! The block list takes phone numbers or business-scoped user IDs, but Meta fails a parent
-//! BSUID here. Its pages don't promise `paging.next`, so `--all` walks to an empty page.
+//! The block list takes phone numbers or business-scoped user IDs, parent ones included.
+//! Its pages don't promise `paging.next`, so `--all` walks to an empty page.
 
 use clap::{Args, Subcommand};
 use paloma_core::limits::MAX_BLOCKLIST_USERS;
@@ -18,13 +18,13 @@ const LIST_COLUMNS: &[&str] = &["wa_id", "user_id"];
 pub enum BlockCommand {
     /// Block one or more users.
     Add {
-        /// E.164 number or business-scoped user ID (BSUID). Parent BSUIDs aren't accepted.
+        /// E.164 number or business-scoped user ID (BSUID), parent BSUIDs included.
         #[arg(required = true, value_name = "USER")]
         users: Vec<String>,
     },
     /// Unblock one or more users.
     Remove {
-        /// E.164 number or business-scoped user ID (BSUID). Parent BSUIDs aren't accepted.
+        /// E.164 number or business-scoped user ID (BSUID), parent BSUIDs included.
         #[arg(required = true, value_name = "USER")]
         users: Vec<String>,
     },
@@ -42,7 +42,7 @@ impl BlockCommand {
     pub async fn run(self, app: &App) -> Result<()> {
         match &self {
             Self::Add { users } | Self::Remove { users } => {
-                users.iter().try_for_each(|u| validate::block_user(u))?;
+                users.iter().try_for_each(|u| validate::user(u))?;
             }
             Self::List(a) => validate::page_size(a.page.limit, None)?,
         }
@@ -117,8 +117,8 @@ async fn list(app: &App, phone: &str, a: &ListArgs) -> Result<()> {
     Ok(())
 }
 
-/// Each blocked user as `block remove` takes them: the phone number, or the BSUID of a user
-/// whose number isn't shared.
+/// Each blocked user as `block remove` takes them. Meta lists either `wa_id` or `user_id`,
+/// by whichever one the user was blocked with.
 fn user_ids(data: &serde_json::Value) -> Option<String> {
     let ids: Vec<&str> = data
         .get("data")

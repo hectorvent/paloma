@@ -36,10 +36,18 @@ async fn group_writes_send_exact_bodies() {
             json!({"messaging_product":"whatsapp"}),
         ),
         (
-            vec!["group", "members", "remove", GROUP, "15551234567", "--yes"],
+            vec![
+                "group",
+                "members",
+                "remove",
+                GROUP,
+                "15551234567",
+                BSUID,
+                "--yes",
+            ],
             "DELETE",
             members.clone(),
-            json!({"messaging_product":"whatsapp","participants":[{"user":"15551234567"}]}),
+            json!({"messaging_product":"whatsapp","participants":[{"user":"15551234567"},{"user_id":BSUID}]}),
         ),
         (
             vec!["group", "requests", "approve", GROUP, "req1", "req2"],
@@ -240,6 +248,7 @@ async fn group_rejects_bad_input_before_context_or_network() {
         vec!["group", "update", GROUP, "--photo", not_a_jpeg.as_str()],
         vec!["group", "list", "--limit", "1025"],
         vec!["group", "pin", "create", GROUP, "wamid.1", "--days", "31"],
+        vec!["group", "members", "remove", GROUP, PARENT_BSUID, "--yes"],
         vec!["group", "pin", "create", GROUP, "wamid.1", "--days", "0"],
         vec![
             "group", "members", "remove", GROUP, "1", "2", "3", "4", "5", "6", "7", "8", "9",

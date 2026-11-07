@@ -229,16 +229,27 @@ mod tests {
     }
 
     #[test]
-    fn block_user_takes_a_number_or_a_bsuid_but_no_parent() {
-        for ok in ["15551234567", "+15551234567", "US.13491208655302741918"] {
-            assert!(block_user(ok).is_ok(), "{ok}");
+    fn user_takes_a_number_or_any_bsuid() {
+        for ok in [
+            "15551234567",
+            "+15551234567",
+            "US.13491208655302741918",
+            "US.ENT.11815799212886844830",
+        ] {
+            assert!(user(ok).is_ok(), "{ok}");
         }
-        let err = block_user("US.ENT.11815799212886844830").unwrap_err();
+        for bad in ["", "  ", "abc", "us.123"] {
+            assert_eq!(user(bad).unwrap_err().exit_code().code(), 5, "{bad}");
+        }
+    }
+
+    #[test]
+    fn group_participant_takes_a_scoped_bsuid_but_no_parent() {
+        assert!(group_participant("US.13491208655302741918").is_ok());
+        assert!(group_participant("15551234567").is_ok());
+        let err = group_participant("US.ENT.11815799212886844830").unwrap_err();
         assert_eq!(err.exit_code().code(), 5);
         assert!(err.to_string().contains("parent"), "{err}");
-        for bad in ["", "  ", "abc", "us.123"] {
-            assert_eq!(block_user(bad).unwrap_err().exit_code().code(), 5, "{bad}");
-        }
     }
 
     #[test]

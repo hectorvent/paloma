@@ -67,10 +67,13 @@ paloma group invite reset "$GROUP_ID" --yes
 ## `paloma group members remove`
 
 ```bash
-paloma group members remove "$GROUP_ID" 15551234567 --yes
+paloma group members remove "$GROUP_ID" 15551234567 US.13491208655302741918 --yes
 ```
 
-Takes up to 8 people per request and confirms first. Someone removed can't rejoin through an
+Takes up to 8 people per request, by phone number, WhatsApp user ID or
+[BSUID](https://developers.facebook.com/documentation/business-messaging/whatsapp/business-scoped-user-ids),
+and confirms first. A BSUID is sent as `user_id`, for people whose phone number Meta doesn't
+share. Parent BSUIDs exit `5`, because Meta documents only portfolio-scoped ones here. Someone removed can't rejoin through an
 invite link. There's no command for adding people, because Meta only lets them join through the
 invite link. If Meta can't remove everyone, the response is printed, stderr warns and the command
 exits `1`.

@@ -54,15 +54,9 @@ pub fn recipient(to: &str) -> Result<()> {
     }
 }
 
-/// A user to block or unblock: like [`recipient`], except that Meta fails a parent BSUID
-/// on this endpoint.
-pub fn block_user(user: &str) -> Result<()> {
-    if bsuid(user) == Some(Bsuid::Parent) {
-        return Err(Error::validation(format!(
-            "'{user}' is a parent business-scoped user id, which can't be blocked or unblocked; \
-             use the user's phone number or their business-scoped user id"
-        )));
-    }
+/// A user to block, unblock or remove from a group: an E.164 number or a BSUID, parent
+/// BSUIDs included, named as a user rather than a recipient.
+pub fn user(user: &str) -> Result<()> {
     if is_e164(user) || bsuid(user).is_some() {
         Ok(())
     } else {
@@ -71,6 +65,18 @@ pub fn block_user(user: &str) -> Result<()> {
              (such as US.13491208655302741918)"
         )))
     }
+}
+
+/// A group participant to remove: a number, WhatsApp user ID or BSUID. Meta documents only
+/// portfolio-scoped BSUIDs here, so a parent BSUID is refused.
+pub fn group_participant(participant: &str) -> Result<()> {
+    if bsuid(participant) == Some(Bsuid::Parent) {
+        return Err(Error::validation(format!(
+            "'{participant}' is a parent business-scoped user id; remove the participant by \
+             phone number or by their business-scoped user id"
+        )));
+    }
+    user(participant)
 }
 
 /// Analytics uses phone numbers, not phone-number ids or business-scoped user ids.

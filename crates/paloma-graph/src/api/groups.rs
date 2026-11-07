@@ -101,8 +101,21 @@ pub fn reset_invite_link(group: &str) -> Request {
         .json(json!({ "messaging_product": MESSAGING_PRODUCT }))
 }
 
+/// A phone number or WhatsApp user ID goes in `user`, a business-scoped user ID in
+/// `user_id`; Meta says never to put a BSUID in `user`.
 pub fn remove_participants(group: &str, users: &[String]) -> Request {
-    let participants: Vec<Value> = users.iter().map(|u| json!({ "user": u.trim() })).collect();
+    let participants: Vec<Value> = users
+        .iter()
+        .map(|u| {
+            let u = u.trim();
+            let field = if paloma_core::validate::bsuid(u).is_some() {
+                "user_id"
+            } else {
+                "user"
+            };
+            json!({ field: u })
+        })
+        .collect();
     Request::delete(format!("{group}/participants")).json(json!({
         "messaging_product": MESSAGING_PRODUCT,
         "participants": participants,
