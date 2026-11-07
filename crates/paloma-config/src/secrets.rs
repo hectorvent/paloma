@@ -183,3 +183,25 @@ impl SecretStore for MemoryStore {
         "memory"
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_keyring_reference_names_its_account_and_plaintext_has_none() {
+        let reference = keyring_ref(&token_account("work"));
+        assert_eq!(reference, "keyring:paloma/work");
+        assert_eq!(keyring_account(&reference), Some("paloma/work"));
+        assert_eq!(keyring_account("EAAplain"), None);
+    }
+
+    #[test]
+    fn the_memory_store_sets_reads_and_deletes() {
+        let store = MemoryStore::default();
+        store.set("a", "s").unwrap();
+        assert_eq!(store.get("a").unwrap().as_deref(), Some("s"));
+        assert!(store.delete("a").unwrap());
+        assert!(!store.delete("a").unwrap());
+    }
+}

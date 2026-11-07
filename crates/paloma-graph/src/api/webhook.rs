@@ -229,3 +229,70 @@ pub fn effective_callback(config: &Value, waba_override: Option<&str>) -> Option
     .find(|v| !v.is_empty())
     .map(str::to_owned)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn callbacks_must_be_https_within_the_limit_and_errors_hide_the_query() {
+        assert!(check_callback_url("https://example.com/hook", "--callback-url").is_ok());
+        let err = check_callback_url("http://example.com/hook?verify_token=SECRET", "x")
+            .unwrap_err()
+            .to_string();
+        assert!(
+            err.contains("must be an https URL") && !err.contains("SECRET"),
+            "{err}"
+        );
+        assert!(check_callback_url(" ", "x").is_err());
+        let long = format!("https://example.com/{}", "a".repeat(300));
+        assert!(check_callback_url(&long, "x").is_err());
+    }
+
+    #[test]
+    fn the_first_subscribed_app_is_read_as_a_string_or_a_number() {
+        let as_number = json!({ "data": [{ "whatsapp_business_api_data": { "id": 42 } }] });
+        assert_eq!(subscribed_app_id(&as_number).as_deref(), Some("42"));
+        assert_eq!(subscribed_app_id(&json!({ "data": [] })), None);
+        let with_override = json!({ "data": [{ "override_callback_uri": "https://o" }] });
+        assert_eq!(
+            override_callback(&with_override).as_deref(),
+            Some("https://o")
+        );
+        assert_eq!(
+            override_callback(&json!({ "data": [{ "override_callback_uri": "" }] })),
+            None
+        );
+    }
+
+    #[test]
+    fn only_whatsapp_business_account_fields_count() {
+        let subs = json!({ "data": [
+            { "object": "page", "fields": [{ "name": "feed", "version": "v1.0" }] },
+            { "object": "whatsapp_business_account", "callback_url": "https://cb",
+              "fields": [{ "name": "messages", "version": "v26.0" }, "calls"] },
+        ] });
+        assert_eq!(subscribed_fields(&subs), ["messages", "calls"]);
+        assert_eq!(
+            field_versions(&subs),
+            [("messages".to_owned(), Some("v26.0".to_owned()))]
+        );
+        assert_eq!(app_callback_url(&subs).as_deref(), Some("https://cb"));
+    }
+
+    #[test]
+    fn the_effective_callback_prefers_the_number_then_the_waba_then_the_app() {
+        let config = |pairs: Value| json!({ "webhook_configuration": pairs });
+        let all = config(
+            json!({ "phone_number": "n", "whatsapp_business_account": "w", "application": "a" }),
+        );
+        assert_eq!(effective_callback(&all, Some("o")).as_deref(), Some("n"));
+        let app_only = config(json!({ "application": "a" }));
+        assert_eq!(
+            effective_callback(&app_only, Some("o")).as_deref(),
+            Some("o")
+        );
+        assert_eq!(effective_callback(&app_only, None).as_deref(), Some("a"));
+    }
+}

@@ -53,7 +53,7 @@ async fn webhook_can_use_default_callback_and_set_or_clear_a_number_override() {
     let graph = MockServer::start().await;
     let home = TempDir::new().unwrap();
     Mock::given(method("POST"))
-        .and(path(format!("/v26.0/{WABA}/subscribed_apps")))
+        .and(path(format!("/{V}/{WABA}/subscribed_apps")))
         .respond_with(ResponseTemplate::new(200).set_body_json(json!({"success":true})))
         .expect(1)
         .mount(&graph)
@@ -77,7 +77,7 @@ async fn webhook_can_use_default_callback_and_set_or_clear_a_number_override() {
         ),
     ] {
         Mock::given(method("POST"))
-            .and(path(format!("/v26.0/{PHONE}")))
+            .and(path(format!("/{V}/{PHONE}")))
             .and(body_json(&body))
             .respond_with(ResponseTemplate::new(200).set_body_json(json!({"success":true})))
             .expect(1)
@@ -119,7 +119,7 @@ async fn webhook_get_quiet_uses_number_override_ahead_of_waba_and_application() 
     let graph = MockServer::start().await;
     let home = TempDir::new().unwrap();
     Mock::given(method("GET"))
-        .and(path(format!("/v26.0/{WABA}/subscribed_apps")))
+        .and(path(format!("/{V}/{WABA}/subscribed_apps")))
         .respond_with(
             ResponseTemplate::new(200).set_body_json(
                 json!({"data":[{"override_callback_uri":"https://example.com/waba"}]}),
@@ -128,7 +128,7 @@ async fn webhook_get_quiet_uses_number_override_ahead_of_waba_and_application() 
         .expect(2)
         .mount(&graph)
         .await;
-    Mock::given(method("GET")).and(path(format!("/v26.0/{PHONE}")))
+    Mock::given(method("GET")).and(path(format!("/{V}/{PHONE}")))
         .and(query_param("fields", "webhook_configuration"))
         .respond_with(ResponseTemplate::new(200).set_body_json(json!({"webhook_configuration":{"phone_number":"https://example.com/number","application":"https://example.com/app"}})))
         .expect(2).mount(&graph).await;
@@ -1204,7 +1204,7 @@ async fn webhook_version_set_dry_run_targets_the_new_version_without_writing() {
         .unwrap();
     assert!(out.status.success());
     let url = stdout_json(&out)["url"].as_str().unwrap().to_owned();
-    assert!(url.contains("/v26.0/999/subscriptions"), "{url}");
+    assert!(url.contains(&format!("/{V}/999/subscriptions")), "{url}");
     assert!(url.contains("object=whatsapp_business_account"), "{url}");
     assert_eq!(
         subscription_writes(&graph.received_requests().await.unwrap()),
@@ -1223,7 +1223,7 @@ async fn webhook_version_set_resubmits_fields_through_the_target_version() {
         .mount(&graph)
         .await;
     Mock::given(method("POST"))
-        .and(path("/v26.0/999/subscriptions"))
+        .and(path(format!("/{V}/999/subscriptions")))
         .and(query_param("object", "whatsapp_business_account"))
         .and(query_param("fields", "messages,calls"))
         .respond_with(ResponseTemplate::new(200).set_body_json(json!({"success":true})))
@@ -1249,7 +1249,7 @@ async fn webhook_version_set_fails_when_meta_keeps_the_old_version() {
     let home = TempDir::new().unwrap();
     mock_subscriptions(&graph, "v21.0").await;
     Mock::given(method("POST"))
-        .and(path("/v26.0/999/subscriptions"))
+        .and(path(format!("/{V}/999/subscriptions")))
         .respond_with(ResponseTemplate::new(200).set_body_json(json!({"success":true})))
         .mount(&graph)
         .await;
@@ -1271,7 +1271,7 @@ async fn webhook_version_set_reverify_resends_the_callback_with_a_token() {
         .mount(&graph)
         .await;
     Mock::given(method("POST"))
-        .and(path("/v26.0/999/subscriptions"))
+        .and(path(format!("/{V}/999/subscriptions")))
         .and(query_param("callback_url", "https://example.com/wa"))
         .and(query_param("verify_token", "VERIFY_SENTINEL"))
         .respond_with(ResponseTemplate::new(200).set_body_json(json!({"success":true})))

@@ -18,7 +18,7 @@ async fn qr_lifecycle_uses_collection_posts_and_scoped_get_delete() {
         ),
     ] {
         Mock::given(method("POST"))
-            .and(path(format!("/v26.0/{PHONE}/message_qrdls")))
+            .and(path(format!("/{V}/{PHONE}/message_qrdls")))
             .and(body_json(body))
             .respond_with(ResponseTemplate::new(200).set_body_json(
                 json!({"code":code,"deep_link_url":"https://wa.me/message/example"}),
@@ -36,7 +36,7 @@ async fn qr_lifecycle_uses_collection_posts_and_scoped_get_delete() {
             .stderr("");
     }
     Mock::given(method("GET"))
-        .and(path(format!("/v26.0/{PHONE}/message_qrdls/{code}")))
+        .and(path(format!("/{V}/{PHONE}/message_qrdls/{code}")))
         .respond_with(
             ResponseTemplate::new(200)
                 .set_body_json(json!({"data":[{"code":code,"prefilled_message":"Hello"}]})),
@@ -51,7 +51,7 @@ async fn qr_lifecycle_uses_collection_posts_and_scoped_get_delete() {
         .stdout(format!("{code}\n"))
         .stderr("");
     Mock::given(method("DELETE"))
-        .and(path(format!("/v26.0/{PHONE}/message_qrdls/{code}")))
+        .and(path(format!("/{V}/{PHONE}/message_qrdls/{code}")))
         .respond_with(ResponseTemplate::new(200).set_body_json(json!({"success":true})))
         .expect(1)
         .mount(&graph)
@@ -63,7 +63,7 @@ async fn qr_lifecycle_uses_collection_posts_and_scoped_get_delete() {
         .stdout(format!("{code}\n"))
         .stderr("");
     Mock::given(method("GET"))
-        .and(path(format!("/v26.0/{PHONE}/message_qrdls")))
+        .and(path(format!("/{V}/{PHONE}/message_qrdls")))
         .and(query_param("limit", "25"))
         .and(query_param("after", "cursor"))
         .respond_with(
@@ -89,7 +89,7 @@ async fn qr_image_download_omits_authorization_and_preserves_graph_output() {
     let code = "4O4YGZEG3RIVE1";
     let body = json!({"code":code,"qr_image_url":format!("{}/qr.svg",cdn.uri())});
     Mock::given(method("POST"))
-        .and(path(format!("/v26.0/{PHONE}/message_qrdls")))
+        .and(path(format!("/{V}/{PHONE}/message_qrdls")))
         .and(body_json(
             json!({"prefilled_message":"Hello","generate_qr_image":"SVG"}),
         ))
@@ -192,7 +192,7 @@ async fn qr_image_refuses_a_file_created_while_the_graph_request_runs() {
     let dest = home.path().join("race.svg");
     let race_dest = dest.clone();
     Mock::given(method("POST"))
-        .and(path(format!("/v26.0/{PHONE}/message_qrdls")))
+        .and(path(format!("/{V}/{PHONE}/message_qrdls")))
         .respond_with(ResponseTemplate::new(200).set_body_json(
             json!({"code":"4O4YGZEG3RIVE1","qr_image_url":format!("{}/qr.svg",cdn.uri())}),
         ))
@@ -254,7 +254,7 @@ async fn qr_default_image_uses_a_safe_filename_without_sending_the_token() {
     let graph = MockServer::start().await;
     let home = TempDir::new().unwrap();
     Mock::given(method("GET"))
-        .and(path(format!("/v26.0/{PHONE}/message_qrdls/{QR_CODE}")))
+        .and(path(format!("/{V}/{PHONE}/message_qrdls/{QR_CODE}")))
         .respond_with(ResponseTemplate::new(200).set_body_json(
             json!({"data":[{"code":QR_CODE,"qr_image_url":format!("{}/image",graph.uri())}]}),
         ))
@@ -311,7 +311,7 @@ async fn qr_create_says_the_code_exists_when_its_response_code_is_unusable() {
     let graph = MockServer::start().await;
     let home = TempDir::new().unwrap();
     Mock::given(method("POST"))
-        .and(path("/v26.0/111/message_qrdls"))
+        .and(path(format!("/{V}/111/message_qrdls")))
         .respond_with(ResponseTemplate::new(200).set_body_json(json!({
             "code":"ABC123","prefilled_message":"hello","qr_image_url":"https://example.com/a.svg"
         })))

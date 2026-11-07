@@ -14,7 +14,7 @@ fn calling_manifest(home: &TempDir, status: &str) -> std::path::PathBuf {
 
 async fn mock_calling_settings(graph: &MockServer) {
     Mock::given(method("GET"))
-        .and(path(format!("/v26.0/{PHONE}/settings")))
+        .and(path(format!("/{V}/{PHONE}/settings")))
         .respond_with(ResponseTemplate::new(200).set_body_json(json!({
             "calling": { "status": "ENABLED", "call_icon_visibility": "DEFAULT", "callback_permission_status": "ENABLED" }
         })))
@@ -80,7 +80,7 @@ async fn apply_writes_only_drift() {
     let graph = MockServer::start().await;
     mock_calling_settings(&graph).await;
     Mock::given(method("POST"))
-        .and(path(format!("/v26.0/{PHONE}/settings")))
+        .and(path(format!("/{V}/{PHONE}/settings")))
         .and(body_json(json!({ "messaging_product": "whatsapp", "calling": { "status": "DISABLED", "call_icon_visibility": "DEFAULT" } })))
         .respond_with(ResponseTemplate::new(200).set_body_json(json!({ "success": true })))
         .expect(1)
@@ -173,7 +173,7 @@ async fn manifest_password_is_redacted_from_preview_and_drift_but_sent_unchanged
     let graph = MockServer::start().await;
     mock_calling_settings(&graph).await;
     Mock::given(method("POST"))
-        .and(path(format!("/v26.0/{PHONE}/settings")))
+        .and(path(format!("/{V}/{PHONE}/settings")))
         .and(body_json(json!({"messaging_product":"whatsapp", "calling":{
             "sip":{"servers":[{"hostname":"sip.example.test", "sip_user_password":"SIP_PASSWORD_SENTINEL"}]}
         }})))
@@ -228,7 +228,7 @@ fn template_manifest(home: &TempDir, footer: &str) -> std::path::PathBuf {
 /// to a CDN URL, and server fields the manifest never declares.
 async fn mock_live_template(graph: &MockServer) {
     Mock::given(method("GET"))
-        .and(path(format!("/v26.0/{WABA}/message_templates")))
+        .and(path(format!("/{V}/{WABA}/message_templates")))
         .and(query_param("name", "promo"))
         .respond_with(ResponseTemplate::new(200).set_body_json(json!({ "data": [{
             "id": "tpl-1", "name": "promo", "language": "en_US", "status": "APPROVED",
@@ -274,7 +274,7 @@ async fn template_apply_edits_with_the_declared_components() {
     let graph = MockServer::start().await;
     mock_live_template(&graph).await;
     Mock::given(method("POST"))
-        .and(path("/v26.0/tpl-1"))
+        .and(path(format!("/{V}/tpl-1")))
         .and(body_json(json!({
             "components": [
                 { "type": "header", "format": "image", "example": { "header_handle": ["4::upload-handle"] } },
@@ -321,7 +321,7 @@ fn live_notice(header_format: &str, status: &str) -> Value {
 
 async fn mock_notice(graph: &MockServer, header_format: &str, status: &str) {
     Mock::given(method("GET"))
-        .and(path(format!("/v26.0/{WABA}/message_templates")))
+        .and(path(format!("/{V}/{WABA}/message_templates")))
         .and(query_param("name", "notice"))
         .respond_with(ResponseTemplate::new(200).set_body_json(live_notice(header_format, status)))
         .mount(graph)
@@ -335,7 +335,7 @@ async fn template_shorthand_edit_keeps_the_other_live_components() {
     let graph = MockServer::start().await;
     mock_notice(&graph, "TEXT", "APPROVED").await;
     Mock::given(method("POST"))
-        .and(path("/v26.0/tpl-2"))
+        .and(path(format!("/{V}/tpl-2")))
         .and(body_json(json!({
             "components": [
                 { "type": "HEADER", "format": "TEXT", "text": "Order update" },
@@ -365,7 +365,7 @@ async fn template_category_change_sends_only_the_category() {
     // Media would block a shorthand edit of the components, but they aren't being edited.
     mock_notice(&graph, "IMAGE", "REJECTED").await;
     Mock::given(method("POST"))
-        .and(path("/v26.0/tpl-2"))
+        .and(path(format!("/{V}/tpl-2")))
         .and(body_json(json!({ "category": "MARKETING" })))
         .respond_with(ResponseTemplate::new(200).set_body_json(json!({ "success": true })))
         .expect(1)
@@ -419,7 +419,7 @@ async fn template_apply_in_sync_writes_nothing() {
 
 /// `promo`/`en_US` as Meta returns it, on page 2 of the plan's lookup; page 3 stays unread.
 async fn mock_live_template_on_page_two(graph: &MockServer) {
-    let p = format!("/v26.0/{WABA}/message_templates");
+    let p = format!("/{V}/{WABA}/message_templates");
     Mock::given(method("GET"))
         .and(path(&p))
         .and(query_param("after", "C2"))
@@ -485,13 +485,13 @@ async fn template_apply_drift_on_a_later_page_edits_instead_of_creating() {
     let graph = MockServer::start().await;
     mock_live_template_on_page_two(&graph).await;
     Mock::given(method("POST"))
-        .and(path(format!("/v26.0/{WABA}/message_templates")))
+        .and(path(format!("/{V}/{WABA}/message_templates")))
         .respond_with(ResponseTemplate::new(200))
         .expect(0)
         .mount(&graph)
         .await;
     Mock::given(method("POST"))
-        .and(path("/v26.0/tpl-1"))
+        .and(path(format!("/{V}/tpl-1")))
         .respond_with(ResponseTemplate::new(200).set_body_json(json!({ "success": true })))
         .expect(1)
         .mount(&graph)
@@ -515,7 +515,7 @@ async fn template_apply_still_creates_when_no_page_has_it() {
     )
     .await;
     Mock::given(method("POST"))
-        .and(path(format!("/v26.0/{WABA}/message_templates")))
+        .and(path(format!("/{V}/{WABA}/message_templates")))
         .respond_with(ResponseTemplate::new(200).set_body_json(json!({ "id": "new" })))
         .expect(1)
         .mount(&graph)
@@ -535,7 +535,7 @@ async fn webhook_manifest_stays_waba_scoped_when_the_phone_has_an_override() {
     let graph = MockServer::start().await;
     let home = TempDir::new().unwrap();
     Mock::given(method("GET"))
-        .and(path(format!("/v26.0/{WABA}/subscribed_apps")))
+        .and(path(format!("/{V}/{WABA}/subscribed_apps")))
         .respond_with(
             ResponseTemplate::new(200).set_body_json(
                 json!({"data":[{"override_callback_uri":"https://example.com/waba"}]}),
@@ -544,12 +544,12 @@ async fn webhook_manifest_stays_waba_scoped_when_the_phone_has_an_override() {
         .expect(2)
         .mount(&graph)
         .await;
-    Mock::given(method("GET")).and(path(format!("/v26.0/{PHONE}")))
+    Mock::given(method("GET")).and(path(format!("/{V}/{PHONE}")))
         .and(query_param("fields", "webhook_configuration"))
         .respond_with(ResponseTemplate::new(200).set_body_json(json!({"webhook_configuration":{"phone_number":"https://example.com/number","application":"https://example.com/app"}})))
         .expect(0).mount(&graph).await;
     Mock::given(method("GET"))
-        .and(path("/v26.0/333/subscriptions"))
+        .and(path(format!("/{V}/333/subscriptions")))
         .respond_with(ResponseTemplate::new(200).set_body_json(
             json!({"data":[{"object":"whatsapp_business_account","fields":[{"name":"messages"}]}]}),
         ))
@@ -594,7 +594,7 @@ async fn webhook_manifest_stays_waba_scoped_when_the_phone_has_an_override() {
 async fn webhook_manifest_refuses_a_new_unknown_field_but_keeps_a_subscribed_one() {
     let graph = MockServer::start().await;
     Mock::given(method("GET"))
-        .and(path("/v26.0/333/subscriptions"))
+        .and(path(format!("/{V}/333/subscriptions")))
         .respond_with(ResponseTemplate::new(200).set_body_json(json!({"data": [{
             "object": "whatsapp_business_account",
             "fields": [{"name": "messages"}, {"name": "future_meta_field"}],
@@ -645,7 +645,7 @@ fn account_manifest(home: &TempDir, spec: &str) -> std::path::PathBuf {
 
 async fn mock_account_settings(graph: &MockServer) {
     Mock::given(method("GET"))
-        .and(path(format!("/v26.0/{WABA}")))
+        .and(path(format!("/{V}/{WABA}")))
         .and(query_param("fields", "name,timezone_id"))
         .respond_with(ResponseTemplate::new(200).set_body_json(json!({
             "name": "Acme",
@@ -699,7 +699,7 @@ async fn account_manifest_apply_writes_only_on_drift() {
     let graph = MockServer::start().await;
     mock_account_settings(&graph).await;
     Mock::given(method("POST"))
-        .and(path(format!("/v26.0/{WABA}")))
+        .and(path(format!("/{V}/{WABA}")))
         .and(body_json(json!({ "name": "Acme Inc", "timezone_id": "7" })))
         .respond_with(ResponseTemplate::new(200).set_body_json(json!({ "success": true })))
         .expect(1)
@@ -789,7 +789,7 @@ fn qr_manifest(home: &TempDir, spec: &str) -> std::path::PathBuf {
 
 async fn mock_qr_get(graph: &MockServer) {
     Mock::given(method("GET"))
-        .and(path(format!("/v26.0/{PHONE}/message_qrdls/{QR_CODE}")))
+        .and(path(format!("/{V}/{PHONE}/message_qrdls/{QR_CODE}")))
         .respond_with(ResponseTemplate::new(200).set_body_json(json!({ "data": [json!({"code": QR_CODE, "prefilled_message": "Cyber Monday", "deep_link_url":"https://wa.me/message/example"})] })))
         .mount(graph)
         .await;
@@ -803,7 +803,7 @@ fn qr_spec(message: &str) -> String {
 async fn qr_code_export_emits_only_the_code_and_message_and_round_trips() {
     let graph = MockServer::start().await;
     Mock::given(method("GET"))
-        .and(path(format!("/v26.0/{PHONE}/message_qrdls")))
+        .and(path(format!("/{V}/{PHONE}/message_qrdls")))
         .respond_with(ResponseTemplate::new(200).set_body_json(json!({
             "data": [json!({"code": QR_CODE, "prefilled_message": "Cyber Monday", "deep_link_url":"https://wa.me/message/example"}), { "code": "WOMVT6TJ2BP7A1", "prefilled_message": "Hello" }],
         })))
@@ -906,7 +906,7 @@ async fn qr_code_apply_writes_only_drift_through_the_update() {
     let graph = MockServer::start().await;
     mock_qr_get(&graph).await;
     Mock::given(method("POST"))
-        .and(path(format!("/v26.0/{PHONE}/message_qrdls")))
+        .and(path(format!("/{V}/{PHONE}/message_qrdls")))
         .and(body_json(
             json!({ "code": QR_CODE, "prefilled_message": "Cyber Tuesday" }),
         ))
@@ -956,7 +956,7 @@ async fn qr_manifest_missing_live_code_never_creates_one() {
     let graph = MockServer::start().await;
     let home = TempDir::new().unwrap();
     Mock::given(method("GET"))
-        .and(path(format!("/v26.0/{PHONE}/message_qrdls/{QR_CODE}")))
+        .and(path(format!("/{V}/{PHONE}/message_qrdls/{QR_CODE}")))
         .respond_with(ResponseTemplate::new(200).set_body_json(json!({"data":[]})))
         .expect(1)
         .mount(&graph)
@@ -992,7 +992,7 @@ async fn qr_manifest_rejects_wrong_ambiguous_or_malformed_live_state() {
     ] {
         let graph = MockServer::start().await;
         Mock::given(method("GET"))
-            .and(path(format!("/v26.0/{PHONE}/message_qrdls/{QR_CODE}")))
+            .and(path(format!("/{V}/{PHONE}/message_qrdls/{QR_CODE}")))
             .respond_with(ResponseTemplate::new(200).set_body_json(body))
             .expect(2)
             .mount(&graph)
@@ -1030,7 +1030,7 @@ async fn phone_settings_manifest_exports_only_writable_fields_and_reconciles_eac
     let home = TempDir::new().unwrap();
     let current = json!({"storage_configuration":{"status":"IN_COUNTRY_STORAGE_ENABLED","data_localization_region":"IN"},"user_identity_change":{"enable_identity_key_check":true},"calling":{"sip":{"servers":[{"password":"PRIVATE_SIP_SENTINEL"}]}}});
     Mock::given(method("GET"))
-        .and(path("/v26.0/111/settings"))
+        .and(path(format!("/{V}/111/settings")))
         .respond_with(ResponseTemplate::new(200).set_body_json(current))
         .mount(&graph)
         .await;
@@ -1087,7 +1087,7 @@ async fn phone_settings_manifest_exports_only_writable_fields_and_reconciles_eac
         json!({"user_identity_change":{"enable_identity_key_check":false}}),
     ] {
         Mock::given(method("POST"))
-            .and(path("/v26.0/111/settings"))
+            .and(path(format!("/{V}/111/settings")))
             .and(body_json(body))
             .respond_with(ResponseTemplate::new(200).set_body_json(json!({"success":true})))
             .expect(1)
@@ -1123,7 +1123,7 @@ async fn phone_settings_reject_invalid_specs_before_any_read_and_confirm_identit
     }
     assert!(graph.received_requests().await.unwrap().is_empty());
     Mock::given(method("GET"))
-        .and(path("/v26.0/111/settings"))
+        .and(path(format!("/{V}/111/settings")))
         .respond_with(
             ResponseTemplate::new(200)
                 .set_body_json(json!({"user_identity_change":{"enable_identity_key_check":false}})),
@@ -1157,7 +1157,7 @@ async fn number_manifest_search_visibility_is_idempotent_and_pin_diagnostics_are
     let home = TempDir::new().unwrap();
     let file = home.path().join("number.yaml");
     Mock::given(method("GET"))
-        .and(path("/v26.0/111"))
+        .and(path(format!("/{V}/111")))
         .and(query_param("fields", "search_visibility"))
         .respond_with(
             ResponseTemplate::new(200).set_body_json(json!({"search_visibility":"VISIBLE"})),
@@ -1176,7 +1176,7 @@ async fn number_manifest_search_visibility_is_idempotent_and_pin_diagnostics_are
         .success()
         .stderr(predicate::str::contains("unchanged"));
     Mock::given(method("GET"))
-        .and(path("/v26.0/111"))
+        .and(path(format!("/{V}/111")))
         .and(query_param(
             "fields",
             "search_visibility,verified_name,new_display_name,new_name_status",
@@ -1198,7 +1198,7 @@ async fn number_manifest_search_visibility_is_idempotent_and_pin_diagnostics_are
     assert!(!String::from_utf8_lossy(&out.stdout).contains("817263"));
     assert!(!String::from_utf8_lossy(&out.stderr).contains("817263"));
     Mock::given(method("POST"))
-        .and(path("/v26.0/111"))
+        .and(path(format!("/{V}/111")))
         .and(body_json(
             json!({"pin":"817263","new_display_name":"Acme","search_visibility":"HIDDEN"}),
         ))
@@ -1222,7 +1222,7 @@ fn write_manifest(home: &TempDir, text: &str) -> std::path::PathBuf {
 
 async fn mock_phone_settings(graph: &MockServer) {
     Mock::given(method("GET"))
-        .and(path("/v26.0/111/settings"))
+        .and(path(format!("/{V}/111/settings")))
         .respond_with(ResponseTemplate::new(200).set_body_json(json!({
             "storage_configuration": {"status": "default"},
             "user_identity_change": {"enable_identity_key_check": false},
@@ -1237,7 +1237,7 @@ async fn apply_refuses_a_later_confirmation_before_writing_anything() {
     let home = TempDir::new().unwrap();
     mock_phone_settings(&graph).await;
     Mock::given(method("GET"))
-        .and(path("/v26.0/222"))
+        .and(path(format!("/{V}/222")))
         .respond_with(ResponseTemplate::new(200).set_body_json(json!({"name": "Old"})))
         .mount(&graph)
         .await;
@@ -1265,7 +1265,7 @@ async fn apply_confirms_a_commerce_manifest_that_disables_the_cart() {
     let graph = MockServer::start().await;
     let home = TempDir::new().unwrap();
     Mock::given(method("GET"))
-        .and(path("/v26.0/111/whatsapp_commerce_settings"))
+        .and(path(format!("/{V}/111/whatsapp_commerce_settings")))
         .respond_with(ResponseTemplate::new(200).set_body_json(
             json!({"data":[{"id":"9","is_cart_enabled":true,"is_catalog_visible":true}]}),
         ))
@@ -1292,13 +1292,13 @@ async fn apply_reports_what_a_failed_multi_request_plan_left_behind() {
     let home = TempDir::new().unwrap();
     mock_phone_settings(&graph).await;
     Mock::given(method("POST"))
-        .and(path("/v26.0/111/settings"))
+        .and(path(format!("/{V}/111/settings")))
         .and(body_string_contains("user_identity_change"))
         .respond_with(ResponseTemplate::new(200).set_body_json(json!({"success":true})))
         .mount(&graph)
         .await;
     Mock::given(method("POST"))
-        .and(path("/v26.0/111/settings"))
+        .and(path(format!("/{V}/111/settings")))
         .and(body_string_contains("storage_configuration"))
         .respond_with(
             ResponseTemplate::new(400)
@@ -1326,7 +1326,7 @@ async fn phone_settings_previews_each_request_and_flags_an_unreadable_identity_c
     let graph = MockServer::start().await;
     let home = TempDir::new().unwrap();
     Mock::given(method("GET"))
-        .and(path("/v26.0/111/settings"))
+        .and(path(format!("/{V}/111/settings")))
         .respond_with(
             ResponseTemplate::new(200)
                 .set_body_json(json!({"storage_configuration":{"status":"default"}})),
@@ -1358,7 +1358,7 @@ async fn number_manifest_does_not_resubmit_a_pending_display_name() {
     let graph = MockServer::start().await;
     let home = TempDir::new().unwrap();
     Mock::given(method("GET"))
-        .and(path("/v26.0/111"))
+        .and(path(format!("/{V}/111")))
         .and(query_param(
             "fields",
             "verified_name,new_display_name,new_name_status",
@@ -1394,7 +1394,7 @@ async fn qr_export_keeps_rows_that_would_fail_input_validation() {
     let graph = MockServer::start().await;
     let home = TempDir::new().unwrap();
     Mock::given(method("GET"))
-        .and(path("/v26.0/111/message_qrdls"))
+        .and(path(format!("/{V}/111/message_qrdls")))
         .respond_with(ResponseTemplate::new(200).set_body_json(json!({"data":[
             {"code":"SHORT","prefilled_message":"Hi"},
             {"code":"WOMVT6TJ2BP7A1","prefilled_message":"Hello"},
@@ -1414,7 +1414,7 @@ async fn number_manifest_round_trips_a_non_visible_number() {
     let graph = MockServer::start().await;
     let home = TempDir::new().unwrap();
     Mock::given(method("GET"))
-        .and(path("/v26.0/111"))
+        .and(path(format!("/{V}/111")))
         .respond_with(ResponseTemplate::new(200).set_body_json(
             json!({"id":"111","verified_name":"Acme","search_visibility":"NON_VISIBLE"}),
         ))
@@ -1487,7 +1487,7 @@ async fn apply_writes_nothing_for_any_document_when_one_edit_is_refused() {
     let graph = MockServer::start().await;
     mock_notice(&graph, "TEXT", "APPROVED").await;
     Mock::given(method("GET"))
-        .and(path("/v26.0/222"))
+        .and(path(format!("/{V}/222")))
         .respond_with(ResponseTemplate::new(200).set_body_json(json!({"name":"Old"})))
         .mount(&graph)
         .await;
@@ -1523,7 +1523,7 @@ async fn template_shorthand_is_checked_only_when_it_would_be_submitted() {
     };
     let graph = MockServer::start().await;
     Mock::given(method("GET"))
-        .and(path(format!("/v26.0/{WABA}/message_templates")))
+        .and(path(format!("/{V}/{WABA}/message_templates")))
         .respond_with(ResponseTemplate::new(200).set_body_json(live("Hi {{1}}")))
         .mount(&graph)
         .await;
@@ -1548,7 +1548,7 @@ async fn template_shorthand_is_checked_only_when_it_would_be_submitted() {
     // A new template is checked too, and the hint names what a manifest can do.
     let empty = MockServer::start().await;
     Mock::given(method("GET"))
-        .and(path(format!("/v26.0/{WABA}/message_templates")))
+        .and(path(format!("/{V}/{WABA}/message_templates")))
         .respond_with(ResponseTemplate::new(200).set_body_json(json!({ "data": [] })))
         .mount(&empty)
         .await;

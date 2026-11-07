@@ -5,7 +5,7 @@ use crate::common::*;
 #[tokio::test(flavor = "multi_thread")]
 async fn template_list_all_follows_paging_next_not_cursor() {
     let graph = MockServer::start().await;
-    let p = format!("/v26.0/{WABA}/message_templates");
+    let p = format!("/{V}/{WABA}/message_templates");
     Mock::given(method("GET"))
         .and(path(&p))
         .and(query_param("after", "C1"))
@@ -52,7 +52,7 @@ async fn template_list_all_follows_paging_next_not_cursor() {
 async fn template_list_sends_new_filters_and_fields_become_the_columns() {
     let graph = MockServer::start().await;
     Mock::given(method("GET"))
-        .and(path(format!("/v26.0/{WABA}/message_templates")))
+        .and(path(format!("/{V}/{WABA}/message_templates")))
         .respond_with(ResponseTemplate::new(200).set_body_json(json!({
             "data": [{ "name": "promo", "quality_score": { "score": "GREEN" }, "id": "9" }]
         })))
@@ -116,7 +116,7 @@ async fn template_list_bad_filters_fail_without_a_request() {
 
 /// Page 1 holds only a longer name, page 2 the exact one, and page 3 must stay unread.
 async fn mock_template_pages(graph: &MockServer) {
-    let p = format!("/v26.0/{WABA}/message_templates");
+    let p = format!("/{V}/{WABA}/message_templates");
     Mock::given(method("GET"))
         .and(path(&p))
         .and(query_param("after", "C2"))
@@ -148,7 +148,7 @@ async fn mock_template_pages(graph: &MockServer) {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn template_status_follows_paging_only_until_the_exact_match() {
+async fn template_get_status_follows_paging_only_until_the_exact_match() {
     let graph = MockServer::start().await;
     mock_template_pages(&graph).await;
     let home = TempDir::new().unwrap();
@@ -195,7 +195,7 @@ async fn template_get_finds_a_later_page_and_shows_only_exact_matches() {
 #[tokio::test(flavor = "multi_thread")]
 async fn template_get_and_status_exit_1_when_no_page_has_the_name() {
     let graph = MockServer::start().await;
-    let p = format!("/v26.0/{WABA}/message_templates");
+    let p = format!("/{V}/{WABA}/message_templates");
     Mock::given(method("GET"))
         .and(path(&p))
         .and(query_param("after", "C1"))
@@ -229,7 +229,7 @@ async fn template_get_and_status_exit_1_when_no_page_has_the_name() {
 async fn template_lookup_refuses_a_repeated_cursor() {
     let graph = MockServer::start().await;
     Mock::given(method("GET"))
-        .and(path(format!("/v26.0/{WABA}/message_templates")))
+        .and(path(format!("/{V}/{WABA}/message_templates")))
         .respond_with(ResponseTemplate::new(200).set_body_json(json!({
             "data": [],
             "paging": { "cursors": { "after": "SAME" }, "next": "https://graph/next" }
@@ -262,7 +262,7 @@ fn template_get_dry_run_prints_the_lookup_without_a_request() {
 
 async fn mock_template_delete(graph: &MockServer) {
     Mock::given(method("DELETE"))
-        .and(path(format!("/v26.0/{WABA}/message_templates")))
+        .and(path(format!("/{V}/{WABA}/message_templates")))
         .respond_with(ResponseTemplate::new(200).set_body_json(json!({ "success": true })))
         .expect(1)
         .mount(graph)
@@ -380,7 +380,7 @@ fn template_delete_ids_dry_run_prints_the_request() {
 async fn template_create_inline_sends_every_typed_component() {
     let graph = MockServer::start().await;
     Mock::given(method("POST"))
-        .and(path(format!("/v26.0/{WABA}/message_templates")))
+        .and(path(format!("/{V}/{WABA}/message_templates")))
         .and(body_json(json!({
             "name": "seasonal_promotion",
             "category": "UTILITY",
@@ -736,14 +736,14 @@ fn template_create_flag_combinations_are_usage_errors() {
     }
 }
 
-fn template_edit_file(home: &TempDir) -> std::path::PathBuf {
+fn template_update_file(home: &TempDir) -> std::path::PathBuf {
     let file = home.path().join("edit.json");
     std::fs::write(&file, r#"{"category":"UTILITY"}"#).unwrap();
     file
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn template_edit_without_language_sees_a_translation_on_the_last_page() {
+async fn template_update_without_language_sees_a_translation_on_the_last_page() {
     let graph = MockServer::start().await;
     mock_three_template_pages(
         &graph,
@@ -759,7 +759,7 @@ async fn template_edit_without_language_sees_a_translation_on_the_last_page() {
     let home = TempDir::new().unwrap();
     paloma(Some(&graph), &home)
         .args(["template", "update", "promo", "--yes", "--file"])
-        .arg(template_edit_file(&home))
+        .arg(template_update_file(&home))
         .assert()
         .code(5)
         .stdout(predicate::str::is_empty())
@@ -768,7 +768,7 @@ async fn template_edit_without_language_sees_a_translation_on_the_last_page() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn template_edit_without_language_reads_every_page_then_edits_the_only_match() {
+async fn template_update_without_language_reads_every_page_then_edits_the_only_match() {
     let graph = MockServer::start().await;
     mock_three_template_pages(
         &graph,
@@ -777,7 +777,7 @@ async fn template_edit_without_language_reads_every_page_then_edits_the_only_mat
     )
     .await;
     Mock::given(method("POST"))
-        .and(path("/v26.0/21"))
+        .and(path(format!("/{V}/21")))
         .and(body_json(json!({ "category": "UTILITY" })))
         .respond_with(ResponseTemplate::new(200).set_body_json(json!({ "success": true })))
         .expect(1)
@@ -786,7 +786,7 @@ async fn template_edit_without_language_reads_every_page_then_edits_the_only_mat
     let home = TempDir::new().unwrap();
     paloma(Some(&graph), &home)
         .args(["template", "update", "promo", "-q", "--yes", "--file"])
-        .arg(template_edit_file(&home))
+        .arg(template_update_file(&home))
         .assert()
         .success()
         .stdout("21\n");
@@ -802,13 +802,13 @@ async fn template_edit_without_language_reads_every_page_then_edits_the_only_mat
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn template_edit_without_language_exits_1_when_no_page_has_the_name() {
+async fn template_update_without_language_exits_1_when_no_page_has_the_name() {
     let graph = MockServer::start().await;
     mock_three_template_pages(&graph, json!([]), json!([])).await;
     let home = TempDir::new().unwrap();
     paloma(Some(&graph), &home)
         .args(["template", "update", "promo", "--yes", "--file"])
-        .arg(template_edit_file(&home))
+        .arg(template_update_file(&home))
         .assert()
         .code(1)
         .stdout(predicate::str::is_empty())
@@ -817,11 +817,11 @@ async fn template_edit_without_language_exits_1_when_no_page_has_the_name() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn template_edit_with_language_stops_at_the_match() {
+async fn template_update_with_language_stops_at_the_match() {
     let graph = MockServer::start().await;
     mock_template_pages(&graph).await;
     Mock::given(method("POST"))
-        .and(path("/v26.0/22"))
+        .and(path(format!("/{V}/22")))
         .respond_with(ResponseTemplate::new(200).set_body_json(json!({ "success": true })))
         .expect(1)
         .mount(&graph)
@@ -838,7 +838,7 @@ async fn template_edit_with_language_stops_at_the_match() {
             "--yes",
             "--file",
         ])
-        .arg(template_edit_file(&home))
+        .arg(template_update_file(&home))
         .assert()
         .success()
         .stdout("22\n");
@@ -865,7 +865,7 @@ async fn template_delete_language_finds_a_later_page_and_stops_there() {
 async fn template_delete_language_refuses_a_match_with_no_id() {
     let graph = MockServer::start().await;
     Mock::given(method("GET"))
-        .and(path(format!("/v26.0/{WABA}/message_templates")))
+        .and(path(format!("/{V}/{WABA}/message_templates")))
         .respond_with(ResponseTemplate::new(200).set_body_json(json!({
             "data": [{ "name": "promo", "language": "es" }]
         })))
@@ -955,7 +955,7 @@ async fn template_namespace_reads_the_waba_and_quiet_prints_the_namespace() {
     let graph = MockServer::start().await;
     let home = TempDir::new().unwrap();
     Mock::given(method("GET"))
-        .and(path(format!("/v26.0/{WABA}")))
+        .and(path(format!("/{V}/{WABA}")))
         .and(query_param("fields", "message_template_namespace"))
         .respond_with(
             ResponseTemplate::new(200)
@@ -984,7 +984,7 @@ async fn template_namespace_reads_the_waba_and_quiet_prints_the_namespace() {
 async fn template_get_quality_asks_for_the_quality_fields_and_lists_them() {
     let graph = MockServer::start().await;
     Mock::given(method("GET"))
-        .and(path(format!("/v26.0/{WABA}/message_templates")))
+        .and(path(format!("/{V}/{WABA}/message_templates")))
         .and(query_param("name", "sale"))
         .and(query_param(
             "fields",
@@ -1019,7 +1019,7 @@ async fn template_get_quality_asks_for_the_quality_fields_and_lists_them() {
 async fn template_archive_confirms_and_posts_the_ids() {
     let graph = MockServer::start().await;
     Mock::given(method("POST"))
-        .and(path(format!("/v26.0/{WABA}/message_templates/archive")))
+        .and(path(format!("/{V}/{WABA}/message_templates/archive")))
         .and(body_json(json!({"hsm_ids":["1","2"]})))
         .respond_with(
             ResponseTemplate::new(200)
@@ -1052,7 +1052,7 @@ async fn template_archive_confirms_and_posts_the_ids() {
 async fn template_unarchive_needs_no_confirmation_and_a_partial_failure_exits_1() {
     let graph = MockServer::start().await;
     Mock::given(method("POST"))
-        .and(path(format!("/v26.0/{WABA}/message_templates/unarchive")))
+        .and(path(format!("/{V}/{WABA}/message_templates/unarchive")))
         .and(body_json(json!({"hsm_ids":["1","2"]})))
         .respond_with(ResponseTemplate::new(200).set_body_json(json!({
             "unarchived_templates":["1"],
@@ -1092,7 +1092,7 @@ fn template_archive_validates_ids_before_any_request() {
 async fn template_unpause_posts_to_the_template_and_quiet_prints_its_id() {
     let graph = MockServer::start().await;
     Mock::given(method("POST"))
-        .and(path("/v26.0/77/unpause"))
+        .and(path(format!("/{V}/77/unpause")))
         .respond_with(ResponseTemplate::new(200).set_body_json(json!({"success":true})))
         .expect(1)
         .mount(&graph)
@@ -1113,7 +1113,7 @@ async fn template_unpause_posts_to_the_template_and_quiet_prints_its_id() {
 async fn template_library_list_has_no_waba_in_its_path_and_shows_columns() {
     let graph = MockServer::start().await;
     Mock::given(method("GET"))
-        .and(path("/v26.0/message_template_library"))
+        .and(path(format!("/{V}/message_template_library")))
         .and(query_param("search", "payments"))
         .and(query_param("topic", "PAYMENTS"))
         .respond_with(ResponseTemplate::new(200).set_body_json(json!({"data":[{
@@ -1147,7 +1147,7 @@ async fn template_library_create_sends_the_library_fields() {
     let buttons = json!([{"type":"PHONE_NUMBER", "phone_number":"+16315551010"}]);
     let inputs = json!({"add_contact_number":true});
     Mock::given(method("POST"))
-        .and(path(format!("/v26.0/{WABA}/message_templates")))
+        .and(path(format!("/{V}/{WABA}/message_templates")))
         .and(body_json(json!({
             "name":"my_delivery_update",
             "category":"UTILITY",
@@ -1208,7 +1208,7 @@ async fn template_library_create_sends_the_library_fields() {
 async fn template_compare_sends_a_window_in_unix_seconds() {
     let graph = MockServer::start().await;
     Mock::given(method("GET"))
-        .and(path("/v26.0/1/compare"))
+        .and(path(format!("/{V}/1/compare")))
         .and(query_param("template_ids", "[2]"))
         .respond_with(ResponseTemplate::new(200).set_body_json(json!({"data":[
             {"metric":"BLOCK_RATE", "type":"RELATIVE", "order_by_relative_metric":["2","1"]},
@@ -1257,7 +1257,7 @@ fn template_compare_rejects_other_windows_and_ids_before_a_request() {
 async fn template_migrate_confirms_then_posts_to_the_destination() {
     let graph = MockServer::start().await;
     Mock::given(method("POST"))
-        .and(path(format!("/v26.0/{WABA}/migrate_message_templates")))
+        .and(path(format!("/{V}/{WABA}/migrate_message_templates")))
         .and(body_json(json!({
             "source_waba_id":"333",
             "page_number":0,
@@ -1325,7 +1325,7 @@ fn template_migrate_validates_before_a_request() {
 async fn template_preview_needs_auth_sends_otp_and_narrows_languages_itself() {
     let graph = MockServer::start().await;
     Mock::given(method("GET"))
-        .and(path(format!("/v26.0/{WABA}/message_template_previews")))
+        .and(path(format!("/{V}/{WABA}/message_template_previews")))
         .and(query_param("category", "AUTHENTICATION"))
         .and(query_param("add_security_recommendation", "true"))
         .and(query_param("code_expiration_minutes", "10"))
@@ -1387,7 +1387,7 @@ async fn template_upsert_posts_the_file_and_rejects_a_single_language() {
         "components":[{"type":"BODY", "add_security_recommendation":true}],
     });
     Mock::given(method("POST"))
-        .and(path(format!("/v26.0/{WABA}/upsert_message_templates")))
+        .and(path(format!("/{V}/{WABA}/upsert_message_templates")))
         .and(body_json(&body))
         .respond_with(ResponseTemplate::new(200).set_body_json(json!({"data":[
             {"id":"95", "status":"APPROVED", "language":"en_US"},
@@ -1425,7 +1425,7 @@ async fn template_upsert_posts_the_file_and_rejects_a_single_language() {
 async fn template_group_create_sends_integer_ids() {
     let graph = MockServer::start().await;
     Mock::given(method("POST"))
-        .and(path(format!("/v26.0/{WABA}/template_groups")))
+        .and(path(format!("/{V}/{WABA}/template_groups")))
         .and(body_json(json!({
             "name":"Black Friday",
             "description":"US sale",
@@ -1480,16 +1480,16 @@ async fn template_group_create_sends_integer_ids() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn template_group_get_set_and_delete_use_the_group_node() {
+async fn template_group_get_update_and_delete_use_the_group_node() {
     let graph = MockServer::start().await;
     Mock::given(method("GET"))
-        .and(path("/v26.0/90"))
+        .and(path(format!("/{V}/90")))
         .respond_with(ResponseTemplate::new(200).set_body_json(json!({"id":"90", "name":"g"})))
         .expect(1)
         .mount(&graph)
         .await;
     Mock::given(method("POST"))
-        .and(path("/v26.0/90"))
+        .and(path(format!("/{V}/90")))
         .and(body_json(
             json!({"add_templates":[1,2], "remove_templates":[3]}),
         ))
@@ -1498,7 +1498,7 @@ async fn template_group_get_set_and_delete_use_the_group_node() {
         .mount(&graph)
         .await;
     Mock::given(method("DELETE"))
-        .and(path("/v26.0/90"))
+        .and(path(format!("/{V}/90")))
         .respond_with(ResponseTemplate::new(200).set_body_json(json!({"success":true})))
         .expect(1)
         .mount(&graph)
@@ -1533,7 +1533,7 @@ async fn template_group_get_set_and_delete_use_the_group_node() {
 async fn template_analytics_queries_templates_and_lists_the_data_points() {
     let graph = MockServer::start().await;
     Mock::given(method("GET"))
-        .and(path(format!("/v26.0/{WABA}/template_analytics")))
+        .and(path(format!("/{V}/{WABA}/template_analytics")))
         .and(query_param("granularity", "daily"))
         .and(query_param("start", "1718064000"))
         .and(query_param("end", "1718122745"))
@@ -1577,7 +1577,7 @@ async fn template_analytics_queries_templates_and_lists_the_data_points() {
 async fn template_analytics_queries_groups_in_the_accounts_timezone() {
     let graph = MockServer::start().await;
     Mock::given(method("GET"))
-        .and(path(format!("/v26.0/{WABA}/template_group_analytics")))
+        .and(path(format!("/{V}/{WABA}/template_group_analytics")))
         .and(query_param("template_group_ids", "[104]"))
         .and(query_param("start", "2026-10-01"))
         .and(query_param("end", "2026-10-02"))
@@ -1713,7 +1713,7 @@ fn template_upsert_refuses_what_metas_bulk_page_rules_out_before_the_context() {
         otp(json!({"type":"OTP", "otp_type":"COPY_CODE"})).to_string(),
     )
     .unwrap();
-    // No --yes: like `template edit`, upsert doesn't ask.
+    // No --yes needed: a dry run passes the confirmation and sends nothing.
     let file = file.to_str().unwrap();
     let request = dry_run_request(&home, &["template", "upsert", "--file", file]);
     assert_eq!(request["body"]["name"], "auth_code");

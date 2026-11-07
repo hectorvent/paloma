@@ -18,7 +18,7 @@ async fn template_components_file_preserves_payload_and_redacts_dry_runs() {
         "name":"order_ready", "language":{"code":"en_US"}, "components":components
     }});
     Mock::given(method("POST"))
-        .and(path(format!("/v26.0/{PHONE}/messages")))
+        .and(path(format!("/{V}/{PHONE}/messages")))
         .and(body_json(&expected))
         .respond_with(
             ResponseTemplate::new(200).set_body_json(json!({"messages":[{"id":"wamid.TEMPLATE"}]})),
@@ -95,7 +95,7 @@ async fn template_components_file_preserves_payload_and_redacts_dry_runs() {
 async fn template_text_flags_accept_values_starting_with_a_hyphen() {
     let graph = MockServer::start().await;
     Mock::given(method("POST"))
-        .and(path(format!("/v26.0/{PHONE}/messages")))
+        .and(path(format!("/{V}/{PHONE}/messages")))
         .and(body_json(json!({
             "messaging_product":"whatsapp", "recipient_type":"individual", "to":"15551234567",
             "type":"template", "template":{
@@ -142,7 +142,7 @@ async fn template_text_flags_accept_values_starting_with_a_hyphen() {
 async fn template_typed_flags_send_the_exact_components_in_order() {
     let graph = MockServer::start().await;
     Mock::given(method("POST"))
-        .and(path(format!("/v26.0/{PHONE}/messages")))
+        .and(path(format!("/{V}/{PHONE}/messages")))
         .and(body_json(json!({
             "messaging_product":"whatsapp", "recipient_type":"individual", "to":"15551234567",
             "type":"template", "template":{
@@ -437,7 +437,7 @@ async fn template_text_flags_send_named_or_positional_body_with_header() {
         }
         components.push(json!({"type":"body", "parameters":parameters}));
         Mock::given(method("POST"))
-            .and(path(format!("/v26.0/{PHONE}/messages")))
+            .and(path(format!("/{V}/{PHONE}/messages")))
             .and(body_json(json!({"messaging_product":"whatsapp", "recipient_type":"individual", "to":"15551234567", "type":"template", "template":{
                 "name":"order_ready", "language":{"code":"en_US"}, "components":components
             }})))
@@ -577,7 +577,7 @@ fn template_parameter_sources_conflict_as_usage_errors() {
 async fn an_authentication_template_to_a_bsuid_surfaces_metas_refusal() {
     let graph = MockServer::start().await;
     Mock::given(method("POST"))
-        .and(path(format!("/v26.0/{PHONE}/messages")))
+        .and(path(format!("/{V}/{PHONE}/messages")))
         .respond_with(ResponseTemplate::new(400).set_body_json(json!({
             "error": {
                 "message": "(#131062) Business-scoped User ID (BSUID) recipients are not supported for this message.",
@@ -615,7 +615,7 @@ async fn mock_routing_categories(graph: &MockServer, account: &str, categories: 
     let expected = u64::try_from(categories.len()).unwrap();
     let calls = std::sync::atomic::AtomicUsize::new(0);
     Mock::given(method("GET"))
-        .and(path(format!("/v26.0/{account}/message_templates")))
+        .and(path(format!("/{V}/{account}/message_templates")))
         .and(header("authorization", format!("Bearer {TOKEN}")))
         .and(query_param("name", "order"))
         .and(query_param("language", "en_US"))
@@ -650,7 +650,7 @@ async fn template_auto_routes_each_current_category_and_preserves_response_outpu
         let response =
             json!({"messages":[{"id":"wamid.ROUTED"}], "contacts":[{"input":"15551234567"}]});
         Mock::given(method("POST"))
-            .and(path(format!("/v26.0/{PHONE}/{edge}")))
+            .and(path(format!("/{V}/{PHONE}/{edge}")))
             .and(header("authorization", format!("Bearer {TOKEN}")))
             .and(body_json(routing_template_body()))
             .respond_with(ResponseTemplate::new(200).set_body_json(&response))
@@ -709,7 +709,7 @@ async fn marketing_route_keeps_bsuid_components_reply_and_the_billed_account() {
     ]);
     let file = home.path().join("routing-components.json");
     std::fs::write(&file, components.to_string()).unwrap();
-    Mock::given(method("POST")).and(path(format!("/v26.0/{PHONE}/marketing_messages")))
+    Mock::given(method("POST")).and(path(format!("/{V}/{PHONE}/marketing_messages")))
         .and(body_json(json!({"messaging_product":"whatsapp", "recipient_type":"individual", "recipient":BSUID, "messaging_account_id":"777", "context":{"message_id":"wamid.OLD"}, "type":"template", "template":{"name":"order", "language":{"code":"en_US"}, "components":components}})))
         .respond_with(ResponseTemplate::new(200).set_body_json(json!({"messages":[{"id":"wamid.BSUID"}],"contacts":[{"user_id":BSUID}]})))
         .expect(1).mount(&graph).await;
@@ -747,7 +747,7 @@ async fn explicit_template_routes_skip_metadata_and_need_no_account_context() {
     let home = TempDir::new().unwrap();
     for (via, edge) in [("cloud", "messages"), ("marketing", "marketing_messages")] {
         Mock::given(method("POST"))
-            .and(path(format!("/v26.0/{PHONE}/{edge}")))
+            .and(path(format!("/{V}/{PHONE}/{edge}")))
             .and(body_json(routing_template_body()))
             .respond_with(
                 ResponseTemplate::new(200)
@@ -851,12 +851,12 @@ async fn template_routing_dry_runs_are_offline_and_show_dynamic_or_fixed_endpoin
 async fn automatic_template_routing_matches_exact_name_and_language_across_pages() {
     let graph = MockServer::start().await;
     let home = TempDir::new().unwrap();
-    Mock::given(method("GET")).and(path(format!("/v26.0/{WABA}/message_templates")))
+    Mock::given(method("GET")).and(path(format!("/{V}/{WABA}/message_templates")))
         .and(query_param("after", "next"))
         .respond_with(ResponseTemplate::new(200).set_body_json(json!({"data":[{"name":"order","language":"en_US","category":"MARKETING","correct_category":"UTILITY"}]})))
         .expect(1).with_priority(1).mount(&graph).await;
     Mock::given(method("GET"))
-        .and(path(format!("/v26.0/{WABA}/message_templates")))
+        .and(path(format!("/{V}/{WABA}/message_templates")))
         .respond_with(ResponseTemplate::new(200).set_body_json(json!({"data":[
             {"name":"order_extra","language":"en_US","category":"UTILITY"},
             {"name":"order","language":"es","category":"AUTHENTICATION"}],
@@ -866,7 +866,7 @@ async fn automatic_template_routing_matches_exact_name_and_language_across_pages
         .mount(&graph)
         .await;
     Mock::given(method("POST"))
-        .and(path(format!("/v26.0/{PHONE}/marketing_messages")))
+        .and(path(format!("/{V}/{PHONE}/marketing_messages")))
         .and(body_json(routing_template_body()))
         .respond_with(
             ResponseTemplate::new(200).set_body_json(json!({"messages":[{"id":"wamid.EXACT"}]})),
@@ -1000,7 +1000,7 @@ async fn automatic_template_routing_reroutes_once_after_confirmed_category_chang
         let home = TempDir::new().unwrap();
         mock_routing_categories(&graph, WABA, &[old, new]).await;
         Mock::given(method("POST"))
-            .and(path(format!("/v26.0/{PHONE}/{first_edge}")))
+            .and(path(format!("/{V}/{PHONE}/{first_edge}")))
             .and(body_json(routing_template_body()))
             .respond_with(
                 ResponseTemplate::new(400)
@@ -1010,7 +1010,7 @@ async fn automatic_template_routing_reroutes_once_after_confirmed_category_chang
             .mount(&graph)
             .await;
         Mock::given(method("POST"))
-            .and(path(format!("/v26.0/{PHONE}/{next_edge}")))
+            .and(path(format!("/{V}/{PHONE}/{next_edge}")))
             .and(body_json(routing_template_body()))
             .respond_with(
                 ResponseTemplate::new(200)
@@ -1047,7 +1047,7 @@ async fn automatic_template_routing_stops_if_refresh_does_not_change_the_endpoin
     let home = TempDir::new().unwrap();
     mock_routing_categories(&graph, WABA, &["UTILITY", "AUTHENTICATION"]).await;
     Mock::given(method("POST"))
-        .and(path(format!("/v26.0/{PHONE}/messages")))
+        .and(path(format!("/{V}/{PHONE}/messages")))
         .respond_with(
             ResponseTemplate::new(400)
                 .set_body_json(json!({"error":{"code":131_063,"message":"original refusal"}})),
@@ -1079,7 +1079,7 @@ async fn automatic_template_routing_never_loops_on_a_second_rejection() {
     mock_routing_categories(&graph, WABA, &["UTILITY", "MARKETING"]).await;
     for (edge, code) in [("messages", 131_063), ("marketing_messages", 100)] {
         Mock::given(method("POST"))
-            .and(path(format!("/v26.0/{PHONE}/{edge}")))
+            .and(path(format!("/{V}/{PHONE}/{edge}")))
             .respond_with(
                 ResponseTemplate::new(400)
                     .set_body_json(json!({"error":{"code":code,"message":"still rejected"}})),
@@ -1146,7 +1146,7 @@ async fn automatic_template_routing_never_reroutes_ambiguous_or_noncategory_fail
         let home = TempDir::new().unwrap();
         mock_routing_categories(&graph, WABA, &["UTILITY"]).await;
         Mock::given(method("POST"))
-            .and(path(format!("/v26.0/{PHONE}/messages")))
+            .and(path(format!("/{V}/{PHONE}/messages")))
             .respond_with(response)
             .expect(1)
             .mount(&graph)
@@ -1175,7 +1175,7 @@ async fn automatic_template_routing_never_reroutes_ambiguous_or_noncategory_fail
 async fn explicit_template_routing_does_not_refresh_or_override_a_rejected_route() {
     let graph = MockServer::start().await;
     let home = TempDir::new().unwrap();
-    Mock::given(method("POST")).and(path(format!("/v26.0/{PHONE}/messages")))
+    Mock::given(method("POST")).and(path(format!("/{V}/{PHONE}/messages")))
         .respond_with(ResponseTemplate::new(400).set_body_json(json!({"error":{"code":131_063,"message":"Marketing templates disabled for Cloud API"}})))
         .expect(1).mount(&graph).await;
     paloma(Some(&graph), &home)
@@ -1245,7 +1245,7 @@ async fn template_routing_never_refreshes_http_400_auth_policy_or_unknown_reject
             let home = TempDir::new().unwrap();
             mock_routing_categories(&graph, WABA, &[category]).await;
             Mock::given(method("POST"))
-                .and(path(format!("/v26.0/{PHONE}/{edge}")))
+                .and(path(format!("/{V}/{PHONE}/{edge}")))
                 .respond_with(
                     ResponseTemplate::new(400)
                         .set_body_json(json!({"error":{"code":code,"message":"do not reroute"}})),
@@ -1277,7 +1277,7 @@ async fn marketing_options_go_on_the_marketing_route_only() {
     let graph = MockServer::start().await;
     let home = TempDir::new().unwrap();
     Mock::given(method("POST"))
-        .and(path("/v26.0/111/marketing_messages"))
+        .and(path(format!("/{V}/111/marketing_messages")))
         .and(body_json(json!({
             "messaging_product":"whatsapp","recipient_type":"individual","to":"15551234567",
             "type":"template","template":{"name":"sale","language":{"code":"en_US"}},

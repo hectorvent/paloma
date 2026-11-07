@@ -99,3 +99,27 @@ impl FromStr for ProfileKey {
             })
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn keys_parse_in_any_case_with_dashes_and_round_trip() {
+        for key in ProfileKey::ALL {
+            assert_eq!(key.as_str().parse::<ProfileKey>().unwrap(), key);
+            assert_eq!(key.to_string(), key.as_str());
+        }
+        assert_eq!("WABA-ID".parse::<ProfileKey>().unwrap(), ProfileKey::WabaId);
+        assert!("password".parse::<ProfileKey>().is_err());
+    }
+
+    #[test]
+    fn only_the_secret_references_are_redacted() {
+        let secret: Vec<_> = ProfileKey::ALL
+            .into_iter()
+            .filter(|k| k.is_secret_ref())
+            .collect();
+        assert_eq!(secret, [ProfileKey::TokenRef, ProfileKey::AppSecretRef]);
+    }
+}

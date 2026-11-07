@@ -6,7 +6,7 @@ use crate::common::*;
 async fn media_upload_is_multipart() {
     let graph = MockServer::start().await;
     Mock::given(method("POST"))
-        .and(path(format!("/v26.0/{PHONE}/media")))
+        .and(path(format!("/{V}/{PHONE}/media")))
         .and(body_string_contains("name=\"messaging_product\""))
         .and(body_string_contains("image/png"))
         .and(body_string_contains("PNGDATA"))
@@ -31,7 +31,7 @@ async fn upload_handle_opens_a_session_then_sends_the_raw_file() {
     let graph = MockServer::start().await;
     mount_upload_session(&graph).await;
     Mock::given(method("POST"))
-        .and(path("/v26.0/upload:S1"))
+        .and(path(format!("/{V}/upload:S1")))
         .and(query_param("sig", "abc"))
         .and(header("authorization", format!("OAuth {TOKEN}").as_str()))
         .and(header("file_offset", "0"))
@@ -60,14 +60,14 @@ async fn upload_handle_resumes_from_the_offset_meta_reports() {
     let graph = MockServer::start().await;
     mount_upload_session(&graph).await;
     Mock::given(method("POST"))
-        .and(path("/v26.0/upload:S1"))
+        .and(path(format!("/{V}/upload:S1")))
         .and(header("file_offset", "0"))
         .respond_with(ResponseTemplate::new(503))
         .expect(1)
         .mount(&graph)
         .await;
     Mock::given(method("GET"))
-        .and(path("/v26.0/upload:S1"))
+        .and(path(format!("/{V}/upload:S1")))
         .and(query_param("sig", "abc"))
         .and(header("authorization", format!("OAuth {TOKEN}").as_str()))
         .respond_with(
@@ -78,7 +78,7 @@ async fn upload_handle_resumes_from_the_offset_meta_reports() {
         .mount(&graph)
         .await;
     Mock::given(method("POST"))
-        .and(path("/v26.0/upload:S1"))
+        .and(path(format!("/{V}/upload:S1")))
         .and(header("file_offset", "3"))
         .and(header("content-length", "4"))
         .and(wiremock::matchers::body_string("DATA"))
@@ -103,13 +103,13 @@ async fn upload_handle_gives_up_after_three_tries_with_the_server_error() {
     let graph = MockServer::start().await;
     mount_upload_session(&graph).await;
     Mock::given(method("POST"))
-        .and(path("/v26.0/upload:S1"))
+        .and(path(format!("/{V}/upload:S1")))
         .respond_with(ResponseTemplate::new(503))
         .expect(3)
         .mount(&graph)
         .await;
     Mock::given(method("GET"))
-        .and(path("/v26.0/upload:S1"))
+        .and(path(format!("/{V}/upload:S1")))
         .respond_with(ResponseTemplate::new(200).set_body_json(json!({ "file_offset": "0" })))
         .expect(2)
         .mount(&graph)
@@ -130,7 +130,7 @@ async fn upload_handle_does_not_resume_after_an_auth_error_or_trust_a_bad_offset
     let graph = MockServer::start().await;
     mount_upload_session(&graph).await;
     Mock::given(method("POST"))
-        .and(path("/v26.0/upload:S1"))
+        .and(path(format!("/{V}/upload:S1")))
         .respond_with(ResponseTemplate::new(401).set_body_json(json!({
             "error": { "message": "bad token", "code": 190 }
         })))
@@ -150,13 +150,13 @@ async fn upload_handle_does_not_resume_after_an_auth_error_or_trust_a_bad_offset
     let graph = MockServer::start().await;
     mount_upload_session(&graph).await;
     Mock::given(method("POST"))
-        .and(path("/v26.0/upload:S1"))
+        .and(path(format!("/{V}/upload:S1")))
         .respond_with(ResponseTemplate::new(503))
         .expect(1)
         .mount(&graph)
         .await;
     Mock::given(method("GET"))
-        .and(path("/v26.0/upload:S1"))
+        .and(path(format!("/{V}/upload:S1")))
         .respond_with(ResponseTemplate::new(200).set_body_json(json!({ "file_offset": "8" })))
         .expect(1)
         .mount(&graph)
@@ -222,7 +222,7 @@ fn upload_handle_refuses_bad_files_before_any_call_and_dry_run_hides_the_token()
 async fn upload_handle_looks_up_the_app_when_none_is_set() {
     let graph = MockServer::start().await;
     Mock::given(method("GET"))
-        .and(path(format!("/v26.0/{WABA}/subscribed_apps")))
+        .and(path(format!("/{V}/{WABA}/subscribed_apps")))
         .respond_with(ResponseTemplate::new(200).set_body_json(json!({
             "data": [{ "whatsapp_business_api_data": { "id": "999" } }]
         })))
@@ -251,7 +251,7 @@ async fn upload_handle_looks_up_the_app_when_none_is_set() {
 async fn upload_handle_warns_when_the_waba_has_several_apps_and_names_app_id_when_it_has_none() {
     let graph = MockServer::start().await;
     Mock::given(method("GET"))
-        .and(path(format!("/v26.0/{WABA}/subscribed_apps")))
+        .and(path(format!("/{V}/{WABA}/subscribed_apps")))
         .respond_with(ResponseTemplate::new(200).set_body_json(json!({
             "data": [
                 { "whatsapp_business_api_data": { "id": "999" } },
@@ -286,7 +286,7 @@ async fn upload_handle_resumes_after_a_timeout() {
     let graph = MockServer::start().await;
     mount_upload_session(&graph).await;
     Mock::given(method("POST"))
-        .and(path("/v26.0/upload:S1"))
+        .and(path(format!("/{V}/upload:S1")))
         .and(header("file_offset", "0"))
         .respond_with(
             ResponseTemplate::new(200)
@@ -296,13 +296,13 @@ async fn upload_handle_resumes_after_a_timeout() {
         .mount(&graph)
         .await;
     Mock::given(method("GET"))
-        .and(path("/v26.0/upload:S1"))
+        .and(path(format!("/{V}/upload:S1")))
         .respond_with(ResponseTemplate::new(200).set_body_json(json!({ "file_offset": "3" })))
         .expect(1)
         .mount(&graph)
         .await;
     Mock::given(method("POST"))
-        .and(path("/v26.0/upload:S1"))
+        .and(path(format!("/{V}/upload:S1")))
         .and(header("file_offset", "3"))
         .and(wiremock::matchers::body_string("DATA"))
         .respond_with(ResponseTemplate::new(200).set_body_json(json!({ "h": "4::HANDLE" })))
@@ -335,20 +335,20 @@ async fn upload_handle_says_so_when_meta_has_the_file_but_gave_no_handle() {
     let graph = MockServer::start().await;
     mount_upload_session(&graph).await;
     Mock::given(method("POST"))
-        .and(path("/v26.0/upload:S1"))
+        .and(path(format!("/{V}/upload:S1")))
         .and(header("file_offset", "0"))
         .respond_with(ResponseTemplate::new(503))
         .expect(1)
         .mount(&graph)
         .await;
     Mock::given(method("GET"))
-        .and(path("/v26.0/upload:S1"))
+        .and(path(format!("/{V}/upload:S1")))
         .respond_with(ResponseTemplate::new(200).set_body_json(json!({ "file_offset": 7 })))
         .expect(1)
         .mount(&graph)
         .await;
     Mock::given(method("POST"))
-        .and(path("/v26.0/upload:S1"))
+        .and(path(format!("/{V}/upload:S1")))
         .and(header("file_offset", "7"))
         .and(header("content-length", "0"))
         .respond_with(ResponseTemplate::new(400).set_body_json(json!({
@@ -374,7 +374,7 @@ async fn upload_handle_keeps_the_transfer_failure_visible_when_the_offset_check_
     let graph = MockServer::start().await;
     mount_upload_session(&graph).await;
     Mock::given(method("POST"))
-        .and(path("/v26.0/upload:S1"))
+        .and(path(format!("/{V}/upload:S1")))
         .respond_with(ResponseTemplate::new(503).set_body_json(json!({
             "error": { "message": "transfer broke", "code": 2 }
         })))
@@ -382,7 +382,7 @@ async fn upload_handle_keeps_the_transfer_failure_visible_when_the_offset_check_
         .mount(&graph)
         .await;
     Mock::given(method("GET"))
-        .and(path("/v26.0/upload:S1"))
+        .and(path(format!("/{V}/upload:S1")))
         .respond_with(ResponseTemplate::new(400).set_body_json(json!({
             "error": { "message": "session gone", "code": 100 }
         })))
@@ -414,7 +414,7 @@ async fn upload_handle_output_formats_pass_the_response_through_and_empty_handle
         let graph = MockServer::start().await;
         mount_upload_session(&graph).await;
         Mock::given(method("POST"))
-            .and(path("/v26.0/upload:S1"))
+            .and(path(format!("/{V}/upload:S1")))
             .respond_with(ResponseTemplate::new(200).set_body_json(json!({ "h": "4::HANDLE" })))
             .mount(&graph)
             .await;
@@ -434,7 +434,7 @@ async fn upload_handle_output_formats_pass_the_response_through_and_empty_handle
     let graph = MockServer::start().await;
     mount_upload_session(&graph).await;
     Mock::given(method("POST"))
-        .and(path("/v26.0/upload:S1"))
+        .and(path(format!("/{V}/upload:S1")))
         .respond_with(ResponseTemplate::new(200).set_body_json(json!({ "h": "" })))
         .mount(&graph)
         .await;
@@ -453,7 +453,7 @@ async fn upload_handle_output_formats_pass_the_response_through_and_empty_handle
 async fn upload_handle_stops_when_the_file_changes_after_the_session_opens() {
     let graph = MockServer::start().await;
     Mock::given(method("POST"))
-        .and(path("/v26.0/999/uploads"))
+        .and(path(format!("/{V}/999/uploads")))
         .respond_with(
             ResponseTemplate::new(200)
                 .set_delay(std::time::Duration::from_secs(2))
@@ -463,7 +463,7 @@ async fn upload_handle_stops_when_the_file_changes_after_the_session_opens() {
         .mount(&graph)
         .await;
     Mock::given(method("POST"))
-        .and(path("/v26.0/upload:S1"))
+        .and(path(format!("/{V}/upload:S1")))
         .respond_with(ResponseTemplate::new(200).set_body_json(json!({ "h": "4::HANDLE" })))
         .expect(0)
         .mount(&graph)
@@ -492,7 +492,7 @@ async fn upload_handle_stops_when_the_file_changes_after_the_session_opens() {
 async fn upload_handle_keeps_the_session_signature_and_token_out_of_verbose_logs() {
     let graph = MockServer::start().await;
     Mock::given(method("POST"))
-        .and(path("/v26.0/999/uploads"))
+        .and(path(format!("/{V}/999/uploads")))
         .respond_with(
             ResponseTemplate::new(200).set_body_json(json!({ "id": "upload:S1?sig=SIGSECRET" })),
         )
@@ -500,7 +500,7 @@ async fn upload_handle_keeps_the_session_signature_and_token_out_of_verbose_logs
         .mount(&graph)
         .await;
     Mock::given(method("POST"))
-        .and(path("/v26.0/upload:S1"))
+        .and(path(format!("/{V}/upload:S1")))
         .and(query_param("sig", "SIGSECRET"))
         .respond_with(ResponseTemplate::new(200).set_body_json(json!({ "h": "4::HANDLE" })))
         .expect(1)
@@ -583,7 +583,7 @@ fn media_upload_checks_the_type_and_its_size_before_context() {
 async fn media_upload_warns_about_an_unlisted_type_and_still_uploads() {
     let graph = MockServer::start().await;
     Mock::given(method("POST"))
-        .and(path(format!("/v26.0/{PHONE}/media")))
+        .and(path(format!("/{V}/{PHONE}/media")))
         .and(body_string_contains("application/zip"))
         .respond_with(ResponseTemplate::new(200).set_body_json(json!({ "id": "MEDIA1" })))
         .expect(1)
@@ -641,7 +641,7 @@ fn media_upload_handle_keeps_its_own_type_list() {
 async fn media_upload_marks_a_voicemail_announcement() {
     let graph = MockServer::start().await;
     Mock::given(method("POST"))
-        .and(path(format!("/v26.0/{PHONE}/media")))
+        .and(path(format!("/{V}/{PHONE}/media")))
         .and(body_string_contains("name=\"use_case\""))
         .and(body_string_contains("call_voicemail_announcement"))
         .and(body_string_contains("OGGDATA"))

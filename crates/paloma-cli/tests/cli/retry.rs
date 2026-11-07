@@ -210,7 +210,7 @@ async fn write_retry_resends_the_whole_file_on_a_multipart_upload() {
     let graph = MockServer::start().await;
     fail_once(&graph, "POST", 429, Some("0")).await;
     Mock::given(method("POST"))
-        .and(path(format!("/v26.0/{PHONE}/media")))
+        .and(path(format!("/{V}/{PHONE}/media")))
         .respond_with(ResponseTemplate::new(200).set_body_json(json!({"id":"m1"})))
         .expect(1)
         .mount(&graph)
@@ -305,7 +305,7 @@ async fn a_timeout_is_never_retried_for_reads_or_writes() {
 /// Mounts the media lookup, pointing at `/cdn/file` on the same server.
 async fn mount_media_lookup(graph: &MockServer) {
     Mock::given(method("GET"))
-        .and(path("/v26.0/m1"))
+        .and(path(format!("/{V}/m1")))
         .respond_with(
             ResponseTemplate::new(200)
                 .set_body_json(json!({"url": format!("{}/cdn/file", graph.uri())})),
@@ -454,7 +454,7 @@ async fn download_timeout_also_bounds_a_stalled_response_body() {
     });
     let graph = MockServer::start().await;
     Mock::given(method("GET"))
-        .and(path("/v26.0/m1"))
+        .and(path(format!("/{V}/m1")))
         .respond_with(
             ResponseTemplate::new(200)
                 .set_body_json(json!({"url":format!("http://{address}/file")})),

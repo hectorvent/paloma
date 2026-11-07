@@ -132,3 +132,69 @@ pub async fn find_one(
         [first, ..] => Ok((*first).clone()),
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::ClientConfig;
+    use paloma_core::Credentials;
+    use secrecy::SecretString;
+    use wiremock::matchers::{method, path};
+    use wiremock::{Mock, MockServer, ResponseTemplate};
+
+    #[derive(Debug)]
+    struct Token;
+    impl Credentials for Token {
+        fn access_token(&self) -> Result<SecretString> {
+            Ok("EAAtest".to_owned().into())
+        }
+        fn app_secret(&self) -> Result<SecretString> {
+            Ok("s".to_owned().into())
+        }
+    }
+
+    fn client(server: &MockServer) -> Client {
+        Client::new(
+            ClientConfig::new(server.uri(), "v26.0"),
+            std::sync::Arc::new(Token),
+        )
+        .unwrap()
+    }
+
+    #[tokio::test]
+    async fn a_given_app_id_needs_no_read_and_a_missing_one_is_input_the_user_supplies() {
+        let server = MockServer::start().await;
+        let c = client(&server);
+        assert_eq!(
+            find_app(&c, Some("7"), Some("w")).await.unwrap(),
+            AppChoice::Given("7".into())
+        );
+        let err = find_app(&c, None, None).await.unwrap_err();
+        assert_eq!(err.exit_code().code(), 5);
+        assert!(server.received_requests().await.unwrap().is_empty());
+    }
+
+    #[tokio::test]
+    async fn a_discovered_app_says_how_many_were_subscribed() {
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/v26.0/w/subscribed_apps"))
+            .respond_with(
+                ResponseTemplate::new(200).set_body_json(serde_json::json!({ "data": [
+                { "whatsapp_business_api_data": { "id": "1" } },
+                { "whatsapp_business_api_data": { "id": "2" } },
+            ] })),
+            )
+            .mount(&server)
+            .await;
+        let choice = find_app(&client(&server), None, Some("w")).await.unwrap();
+        assert_eq!(
+            choice,
+            AppChoice::Discovered {
+                id: "1".into(),
+                subscribed: 2
+            }
+        );
+        assert_eq!(choice.id(), "1");
+    }
+}

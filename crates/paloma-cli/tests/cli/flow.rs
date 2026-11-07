@@ -6,7 +6,7 @@ use crate::common::*;
 async fn flow_validation_errors_print_response_and_exit_5() {
     let graph = MockServer::start().await;
     Mock::given(method("POST"))
-        .and(path(format!("/v26.0/{WABA}/flows")))
+        .and(path(format!("/{V}/{WABA}/flows")))
         .respond_with(ResponseTemplate::new(200).set_body_json(json!({
             "id": "F1",
             "success": true,
@@ -38,7 +38,7 @@ async fn flow_migration_copies_named_flows() {
     let graph = MockServer::start().await;
     let home = TempDir::new().unwrap();
     Mock::given(method("POST"))
-        .and(path("/v26.0/222/migrate_flows"))
+        .and(path(format!("/{V}/222/migrate_flows")))
         .and(query_param("source_waba_id", "333"))
         .and(query_param("source_flow_names", "[\"booking\",\"survey\"]"))
         .respond_with(
@@ -75,7 +75,7 @@ async fn flow_key_reads_and_writes_public_pem_but_rejects_private_material_befor
     let public = "-----BEGIN PUBLIC KEY-----\nTEST_PUBLIC_MATERIAL\n-----END PUBLIC KEY-----";
     std::fs::write(&file, public).unwrap();
     Mock::given(method("GET"))
-        .and(path("/v26.0/111/whatsapp_business_encryption"))
+        .and(path(format!("/{V}/111/whatsapp_business_encryption")))
         .respond_with(
             ResponseTemplate::new(200)
                 .set_body_json(json!({"business_public_key_signature_status":"VALID"})),
@@ -89,7 +89,7 @@ async fn flow_key_reads_and_writes_public_pem_but_rejects_private_material_befor
         .success()
         .stdout(predicate::str::contains("VALID"));
     Mock::given(method("POST"))
-        .and(path("/v26.0/111/whatsapp_business_encryption"))
+        .and(path(format!("/{V}/111/whatsapp_business_encryption")))
         .and(body_string_contains("name=\"business_public_key\""))
         .and(body_string_contains(public))
         .respond_with(ResponseTemplate::new(200).set_body_json(json!({"success":true})))
@@ -131,7 +131,7 @@ async fn flow_migration_partial_failure_preserves_results_and_exits_one() {
     let home = TempDir::new().unwrap();
     let body = json!({"migrated_flows":[{"source_name":"one","migrated_id":"444"}],"failed_flows":[{"source_name":"two","error_code":"4233041","error_message":"already exists"}]});
     Mock::given(method("POST"))
-        .and(path("/v26.0/222/migrate_flows"))
+        .and(path(format!("/{V}/222/migrate_flows")))
         .and(query_param("source_waba_id", "333"))
         .respond_with(ResponseTemplate::new(200).set_body_json(body.clone()))
         .expect(2)

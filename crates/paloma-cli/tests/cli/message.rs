@@ -8,7 +8,7 @@ const HISTORY_FIELDS: &str = "cursor,node{id,delivery_status,error_description,o
 
 async fn mount_history_lookup(graph: &MockServer) {
     Mock::given(method("GET"))
-        .and(path(format!("/v26.0/{PHONE}/message_history")))
+        .and(path(format!("/{V}/{PHONE}/message_history")))
         .and(query_param("message_id", HISTORY_WAMID))
         .and(query_param("fields", "id,message_id"))
         .and(header("authorization", format!("Bearer {TOKEN}").as_str()))
@@ -32,7 +32,7 @@ async fn message_history_follows_the_lookup_and_every_page_of_events() {
     let graph = MockServer::start().await;
     mount_history_lookup(&graph).await;
     Mock::given(method("GET"))
-        .and(path("/v26.0/777/events"))
+        .and(path(format!("/{V}/777/events")))
         .and(query_param("fields", HISTORY_FIELDS))
         .and(query_param("limit", "100"))
         .and(query_param("after", "C1"))
@@ -44,7 +44,7 @@ async fn message_history_follows_the_lookup_and_every_page_of_events() {
         .mount(&graph)
         .await;
     Mock::given(method("GET"))
-        .and(path("/v26.0/777/events"))
+        .and(path(format!("/{V}/777/events")))
         .and(query_param("fields", HISTORY_FIELDS))
         .and(query_param("limit", "100"))
         .respond_with(ResponseTemplate::new(200).set_body_json(json!({
@@ -71,7 +71,7 @@ async fn message_history_follows_the_lookup_and_every_page_of_events() {
 async fn message_history_table_shows_the_status_rows_and_quiet_prints_the_history_id() {
     let graph = MockServer::start().await;
     Mock::given(method("GET"))
-        .and(path(format!("/v26.0/{PHONE}/message_history")))
+        .and(path(format!("/{V}/{PHONE}/message_history")))
         .respond_with(ResponseTemplate::new(200).set_body_json(json!({
             "data": [{ "id": "777", "message_id": HISTORY_WAMID }],
         })))
@@ -79,7 +79,7 @@ async fn message_history_table_shows_the_status_rows_and_quiet_prints_the_histor
         .mount(&graph)
         .await;
     Mock::given(method("GET"))
-        .and(path("/v26.0/777/events"))
+        .and(path(format!("/{V}/777/events")))
         .respond_with(ResponseTemplate::new(200).set_body_json(json!({
             "data": [{
                 "cursor": "e1",
@@ -122,13 +122,13 @@ async fn message_history_refuses_an_entry_for_another_message_and_an_empty_looku
     ] {
         let graph = MockServer::start().await;
         Mock::given(method("GET"))
-            .and(path(format!("/v26.0/{PHONE}/message_history")))
+            .and(path(format!("/{V}/{PHONE}/message_history")))
             .respond_with(ResponseTemplate::new(200).set_body_json(json!({ "data": data })))
             .expect(1)
             .mount(&graph)
             .await;
         Mock::given(method("GET"))
-            .and(path("/v26.0/1/events"))
+            .and(path(format!("/{V}/1/events")))
             .respond_with(ResponseTemplate::new(200).set_body_json(json!({ "data": [] })))
             .expect(0)
             .mount(&graph)
@@ -148,7 +148,7 @@ async fn message_history_a_message_with_no_events_is_an_empty_trail() {
     let graph = MockServer::start().await;
     mount_history_lookup(&graph).await;
     Mock::given(method("GET"))
-        .and(path("/v26.0/777/events"))
+        .and(path(format!("/{V}/777/events")))
         .respond_with(ResponseTemplate::new(200).set_body_json(json!({ "data": [] })))
         .expect(1)
         .mount(&graph)
@@ -217,7 +217,7 @@ fn message_history_trims_the_wamid() {
 async fn message_history_with_no_entry_says_a_delivered_message_can_have_none() {
     let graph = MockServer::start().await;
     Mock::given(method("GET"))
-        .and(path(format!("/v26.0/{PHONE}/message_history")))
+        .and(path(format!("/{V}/{PHONE}/message_history")))
         .respond_with(ResponseTemplate::new(200).set_body_json(json!({ "data": [] })))
         .expect(1)
         .mount(&graph)

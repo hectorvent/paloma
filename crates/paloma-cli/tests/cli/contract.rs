@@ -168,9 +168,9 @@ async fn a_next_page_without_a_cursor_is_an_error_not_the_end() {
     let broken =
         json!({ "data": [{ "name": "other" }], "paging": { "next": "https://graph/next" } });
     for edge in [
-        format!("/v26.0/{WABA}/message_templates"),
-        format!("/v26.0/{WABA}/phone_numbers"),
-        format!("/v26.0/{PHONE}/block_users"),
+        format!("/{V}/{WABA}/message_templates"),
+        format!("/{V}/{WABA}/phone_numbers"),
+        format!("/{V}/{PHONE}/block_users"),
     ] {
         Mock::given(method("GET"))
             .and(path(edge))
@@ -199,7 +199,7 @@ async fn a_next_page_without_a_cursor_is_an_error_not_the_end() {
 async fn a_list_page_with_no_data_is_an_error() {
     let graph = MockServer::start().await;
     Mock::given(method("GET"))
-        .and(path(format!("/v26.0/{PHONE}/block_users")))
+        .and(path(format!("/{V}/{PHONE}/block_users")))
         .respond_with(ResponseTemplate::new(200).set_body_json(json!({})))
         .mount(&graph)
         .await;
@@ -262,19 +262,19 @@ async fn lists_print_one_row_id_per_line_under_quiet() {
     for (args, node, body, expected) in [
         (
             vec!["template", "list"],
-            format!("/v26.0/{WABA}/message_templates"),
+            format!("/{V}/{WABA}/message_templates"),
             json!({"data":[{"id":"7","name":"a"},{"id":"8","name":"b"}]}),
             "7\n8\n",
         ),
         (
             vec!["flow", "list"],
-            format!("/v26.0/{WABA}/flows"),
+            format!("/{V}/{WABA}/flows"),
             json!({"data":[{"id":"9","name":"f"}]}),
             "9\n",
         ),
         (
             vec!["block", "list"],
-            format!("/v26.0/{PHONE}/block_users"),
+            format!("/{V}/{PHONE}/block_users"),
             json!({"data":[{"wa_id":"15551234567"},{"user_id":"US.13491208655302741918"}]}),
             "15551234567\nUS.13491208655302741918\n",
         ),
@@ -339,7 +339,7 @@ async fn bulk_writes_print_only_what_meta_did_and_exit_1_on_a_partial_failure() 
     let graph = MockServer::start().await;
     let home = TempDir::new().unwrap();
     Mock::given(method("POST"))
-        .and(path(format!("/v26.0/{PHONE}/block_users")))
+        .and(path(format!("/{V}/{PHONE}/block_users")))
         .respond_with(ResponseTemplate::new(200).set_body_json(json!({
             "messaging_product": "whatsapp",
             "block_users": {
@@ -356,7 +356,7 @@ async fn bulk_writes_print_only_what_meta_did_and_exit_1_on_a_partial_failure() 
         .stdout("15551234567\n")
         .stderr(predicate::str::contains("failed_users"));
     Mock::given(method("POST"))
-        .and(path(format!("/v26.0/{WABA}/message_templates/archive")))
+        .and(path(format!("/{V}/{WABA}/message_templates/archive")))
         .respond_with(ResponseTemplate::new(200).set_body_json(json!({
             "archived_templates": ["1"],
             "failed_templates": {"2": "bad"}

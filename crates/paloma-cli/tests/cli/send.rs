@@ -6,7 +6,7 @@ use crate::common::*;
 async fn send_text_posts_with_bearer_and_quiet_prints_wamid() {
     let graph = MockServer::start().await;
     Mock::given(method("POST"))
-        .and(path(format!("/v26.0/{PHONE}/messages")))
+        .and(path(format!("/{V}/{PHONE}/messages")))
         .and(header("authorization", format!("Bearer {TOKEN}").as_str()))
         .and(body_json(json!({
             "messaging_product": "whatsapp",
@@ -36,7 +36,7 @@ async fn send_text_posts_with_bearer_and_quiet_prints_wamid() {
 async fn messaging_account_flag_is_sent_on_the_message_and_quiet_still_prints_the_id() {
     let graph = MockServer::start().await;
     Mock::given(method("POST"))
-        .and(path(format!("/v26.0/{PHONE}/messages")))
+        .and(path(format!("/{V}/{PHONE}/messages")))
         .and(body_json(json!({
             "messaging_product":"whatsapp", "recipient_type":"individual", "to":"15551234567",
             "type":"text", "text":{"preview_url":false, "body":"hi"},
@@ -304,7 +304,7 @@ fn reply_to_is_refused_where_it_cannot_apply_or_is_blank() {
 async fn blank_reply_to_fails_before_the_upload_and_before_the_context() {
     let graph = MockServer::start().await;
     Mock::given(method("POST"))
-        .and(path(format!("/v26.0/{PHONE}/media")))
+        .and(path(format!("/{V}/{PHONE}/media")))
         .respond_with(ResponseTemplate::new(200).set_body_json(json!({ "id": "MEDIA1" })))
         .expect(0)
         .mount(&graph)
@@ -330,7 +330,7 @@ async fn blank_reply_to_fails_before_the_upload_and_before_the_context() {
 async fn reply_to_on_a_template_warns_on_stderr_and_still_sends() {
     let graph = MockServer::start().await;
     Mock::given(method("POST"))
-        .and(path(format!("/v26.0/{PHONE}/messages")))
+        .and(path(format!("/{V}/{PHONE}/messages")))
         .and(body_json(json!({
             "messaging_product": "whatsapp",
             "recipient_type": "individual",
@@ -369,13 +369,13 @@ async fn reply_to_on_a_template_warns_on_stderr_and_still_sends() {
 async fn voice_note_from_a_local_file_uploads_then_sends_with_voice_and_reply() {
     let graph = MockServer::start().await;
     Mock::given(method("POST"))
-        .and(path(format!("/v26.0/{PHONE}/media")))
+        .and(path(format!("/{V}/{PHONE}/media")))
         .respond_with(ResponseTemplate::new(200).set_body_json(json!({ "id": "MEDIA1" })))
         .expect(1)
         .mount(&graph)
         .await;
     Mock::given(method("POST"))
-        .and(path(format!("/v26.0/{PHONE}/messages")))
+        .and(path(format!("/{V}/{PHONE}/messages")))
         .and(body_json(json!({
             "messaging_product": "whatsapp",
             "recipient_type": "individual",
@@ -571,7 +571,7 @@ fn dry_run_send_body(home: &TempDir, args: &[&str]) -> Value {
 async fn send_to_a_bsuid_posts_recipient_and_no_to() {
     let graph = MockServer::start().await;
     Mock::given(method("POST"))
-        .and(path(format!("/v26.0/{PHONE}/messages")))
+        .and(path(format!("/{V}/{PHONE}/messages")))
         .and(body_json(json!({
             "messaging_product": "whatsapp",
             "recipient_type": "individual",
@@ -601,7 +601,7 @@ async fn send_to_a_bsuid_posts_recipient_and_no_to() {
 async fn send_to_a_parent_bsuid_posts_recipient() {
     let graph = MockServer::start().await;
     Mock::given(method("POST"))
-        .and(path(format!("/v26.0/{PHONE}/messages")))
+        .and(path(format!("/{V}/{PHONE}/messages")))
         .and(body_json(json!({
             "messaging_product": "whatsapp",
             "recipient_type": "individual",
@@ -774,7 +774,7 @@ async fn send_raw_keeps_its_own_addressing() {
     });
     let graph = MockServer::start().await;
     Mock::given(method("POST"))
-        .and(path(format!("/v26.0/{PHONE}/messages")))
+        .and(path(format!("/{V}/{PHONE}/messages")))
         .and(body_json(&payload))
         .respond_with(ResponseTemplate::new(200).set_body_json(json!({
             "contacts": [{ "input": "15551234567", "wa_id": "15551234567" }],
@@ -817,7 +817,7 @@ async fn a_send_response_without_wa_id_keeps_the_wamid_contract() {
     for response in responses {
         let graph = MockServer::start().await;
         Mock::given(method("POST"))
-            .and(path(format!("/v26.0/{PHONE}/messages")))
+            .and(path(format!("/{V}/{PHONE}/messages")))
             .respond_with(ResponseTemplate::new(200).set_body_json(&response))
             .mount(&graph)
             .await;
@@ -847,7 +847,7 @@ async fn a_send_response_without_wa_id_keeps_the_wamid_contract() {
 async fn send_contact_typed_flags_post_the_exact_contact() {
     let graph = MockServer::start().await;
     Mock::given(method("POST"))
-        .and(path(format!("/v26.0/{PHONE}/messages")))
+        .and(path(format!("/{V}/{PHONE}/messages")))
         .and(body_json(json!({
             "messaging_product": "whatsapp",
             "recipient_type": "individual",

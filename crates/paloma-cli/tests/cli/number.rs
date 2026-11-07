@@ -5,7 +5,7 @@ use crate::common::*;
 #[tokio::test(flavor = "multi_thread")]
 async fn number_get_and_quality_request_the_current_limit_field() {
     let graph = MockServer::start().await;
-    let p = format!("/v26.0/{PHONE}");
+    let p = format!("/{V}/{PHONE}");
     Mock::given(method("GET"))
         .and(path(&p))
         .and(query_param(
@@ -78,7 +78,7 @@ fn number_reads_no_longer_ask_for_the_deprecated_limit_field() {
 #[tokio::test(flavor = "multi_thread")]
 async fn number_list_all_follows_paging_next_and_keeps_the_filters() {
     let graph = MockServer::start().await;
-    let p = format!("/v26.0/{WABA}/phone_numbers");
+    let p = format!("/{V}/{WABA}/phone_numbers");
     let filtering = r#"[{"field":"account_mode","operator":"EQUAL","value":"LIVE"}]"#;
     let sort = "['last_onboarded_time_ascending']";
     Mock::given(method("GET"))
@@ -128,7 +128,7 @@ async fn number_list_all_follows_paging_next_and_keeps_the_filters() {
 async fn number_list_single_page_renders_columns_and_warns_on_stderr() {
     let graph = MockServer::start().await;
     Mock::given(method("GET"))
-        .and(path(format!("/v26.0/{WABA}/phone_numbers")))
+        .and(path(format!("/{V}/{WABA}/phone_numbers")))
         .respond_with(ResponseTemplate::new(200).set_body_json(json!({
             "data": [{ "id": "1", "verified_name": "Jasper" }],
             "paging": { "cursors": { "after": "C1" }, "next": "https://graph/next" }
@@ -208,7 +208,7 @@ async fn number_list_rejects_bad_flags_before_any_request() {
 async fn number_register_sends_the_data_localization_region() {
     let graph = MockServer::start().await;
     Mock::given(method("POST"))
-        .and(path(format!("/v26.0/{PHONE}/register")))
+        .and(path(format!("/{V}/{PHONE}/register")))
         .and(body_json(json!({
             "messaging_product": "whatsapp",
             "pin": "825194",
@@ -230,7 +230,7 @@ async fn number_register_sends_the_data_localization_region() {
 async fn number_register_without_a_region_leaves_it_out_of_the_body() {
     let graph = MockServer::start().await;
     Mock::given(method("POST"))
-        .and(path(format!("/v26.0/{PHONE}/register")))
+        .and(path(format!("/{V}/{PHONE}/register")))
         .and(body_json(json!({
             "messaging_product": "whatsapp",
             "pin": "825194"
@@ -371,7 +371,7 @@ async fn number_onboarding_and_identity_writes_use_exact_payloads() {
     ] {
         let graph = MockServer::start().await;
         Mock::given(method("POST"))
-            .and(path(format!("/v26.0/{node}")))
+            .and(path(format!("/{V}/{node}")))
             .and(body_json(body.clone()))
             .respond_with(ResponseTemplate::new(200).set_body_json(if id {
                 json!({"id":"444"})
@@ -398,7 +398,7 @@ async fn usernames_contacts_and_settings_reads_and_deletes_keep_their_contracts(
     let home = TempDir::new().unwrap();
     let graph = MockServer::start().await;
     Mock::given(method("GET"))
-        .and(path("/v26.0/111/username"))
+        .and(path(format!("/{V}/111/username")))
         .respond_with(
             ResponseTemplate::new(200)
                 .set_body_json(json!({"username":"acme_shop","status":"approved"})),
@@ -413,7 +413,7 @@ async fn usernames_contacts_and_settings_reads_and_deletes_keep_their_contracts(
         .stdout("acme_shop\n")
         .stderr("");
     Mock::given(method("GET"))
-        .and(path("/v26.0/111/username_suggestions"))
+        .and(path(format!("/{V}/111/username_suggestions")))
         .respond_with(
             ResponseTemplate::new(200)
                 .set_body_json(json!({"data":[{"username_suggestions":["acme_shop"]}]})),
@@ -427,7 +427,7 @@ async fn usernames_contacts_and_settings_reads_and_deletes_keep_their_contracts(
         .success()
         .stdout(predicate::str::contains("acme_shop"));
     Mock::given(method("DELETE"))
-        .and(path("/v26.0/111/username"))
+        .and(path(format!("/{V}/111/username")))
         .respond_with(ResponseTemplate::new(200).set_body_json(json!({"success":true})))
         .expect(1)
         .mount(&graph)
@@ -439,7 +439,7 @@ async fn usernames_contacts_and_settings_reads_and_deletes_keep_their_contracts(
         .stdout("");
     for (verb, http) in [("get", "GET"), ("delete", "DELETE")] {
         Mock::given(method(http))
-            .and(path("/v26.0/111/contact_book"))
+            .and(path(format!("/{V}/111/contact_book")))
             .and(query_param("messaging_product", "whatsapp"))
             .and(query_param("bsuid", "US.12345"))
             .respond_with(
@@ -461,7 +461,7 @@ async fn usernames_contacts_and_settings_reads_and_deletes_keep_their_contracts(
             http
         );
     }
-    Mock::given(method("GET")).and(path("/v26.0/111/settings")).respond_with(ResponseTemplate::new(200).set_body_json(json!({"storage_configuration":{"status":"IN_COUNTRY_STORAGE_ENABLED","data_localization_region":"IN"}}))).expect(1).mount(&graph).await;
+    Mock::given(method("GET")).and(path(format!("/{V}/111/settings"))).respond_with(ResponseTemplate::new(200).set_body_json(json!({"storage_configuration":{"status":"IN_COUNTRY_STORAGE_ENABLED","data_localization_region":"IN"}}))).expect(1).mount(&graph).await;
     paloma(Some(&graph), &home)
         .args(["number", "settings", "get", "-o", "raw"])
         .assert()
@@ -572,7 +572,7 @@ async fn oba_and_india_compliance_submit_validated_documents_and_confirm() {
     ] {
         std::fs::write(&file, body.to_string()).unwrap();
         Mock::given(method("POST"))
-            .and(path(format!("/v26.0/111/{edge}")))
+            .and(path(format!("/{V}/111/{edge}")))
             .and(body_json(body.clone()))
             .respond_with(ResponseTemplate::new(200).set_body_json(json!({"success":true})))
             .expect(1)
@@ -581,13 +581,13 @@ async fn oba_and_india_compliance_submit_validated_documents_and_confirm() {
         // OBA status is a field on the number; compliance is read from its edge.
         let (read_path, read_body, read_key) = if group == "oba" {
             (
-                "/v26.0/111".to_owned(),
+                format!("/{V}/111"),
                 json!({"official_business_account":{"oba_status":"NOT_STARTED"},"id":"111"}),
                 "oba_status",
             )
         } else {
             (
-                format!("/v26.0/111/{edge}"),
+                format!("/{V}/111/{edge}"),
                 json!({"data":[body.clone()]}),
                 "data",
             )
@@ -676,7 +676,7 @@ async fn contacts_delete_warns_when_meta_deleted_nothing() {
     let graph = MockServer::start().await;
     let home = TempDir::new().unwrap();
     Mock::given(method("DELETE"))
-        .and(path("/v26.0/111/contact_book"))
+        .and(path(format!("/{V}/111/contact_book")))
         .and(query_param("bsuid", "US.123"))
         .respond_with(
             ResponseTemplate::new(200).set_body_json(
@@ -731,7 +731,7 @@ async fn oba_get_reads_the_status_field_on_the_number() {
     let graph = MockServer::start().await;
     let home = TempDir::new().unwrap();
     Mock::given(method("GET"))
-        .and(path("/v26.0/111"))
+        .and(path(format!("/{V}/111")))
         .and(query_param("fields", "official_business_account"))
         .respond_with(ResponseTemplate::new(200).set_body_json(
             json!({"official_business_account":{"oba_status":"NOT_STARTED"},"id":"111"}),

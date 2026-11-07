@@ -57,7 +57,7 @@ async fn pin_reaches_api_while_verbose_diagnostics_are_redacted() {
     let graph = MockServer::start().await;
     let response = json!({"success":true, "access_token":"RESPONSE_SENTINEL", "paging":{"next":"https://graph.test/next?access_token=PAGING_SENTINEL"}});
     Mock::given(method("POST"))
-        .and(path(format!("/v26.0/{PHONE}")))
+        .and(path(format!("/{V}/{PHONE}")))
         .and(header("authorization", format!("Bearer {TOKEN}")))
         .and(body_json(json!({"pin":"825194"})))
         .respond_with(ResponseTemplate::new(200).set_body_json(&response))
@@ -86,7 +86,7 @@ async fn pin_reaches_api_while_verbose_diagnostics_are_redacted() {
 async fn verification_query_reaches_api_but_not_verbose_logs() {
     let graph = MockServer::start().await;
     Mock::given(method("POST"))
-        .and(path("/v26.0/333/subscriptions"))
+        .and(path(format!("/{V}/333/subscriptions")))
         .and(query_param("verify_token", "VERIFY_SENTINEL"))
         .and(header("authorization", "Bearer 333|APP_SECRET_SENTINEL"))
         .respond_with(ResponseTemplate::new(200).set_body_json(json!({"success":true})))
@@ -128,7 +128,7 @@ async fn pin_from_env_or_stdin_reaches_the_api_without_a_warning() {
     for use_stdin in [false, true] {
         let graph = MockServer::start().await;
         Mock::given(method("POST"))
-            .and(path(format!("/v26.0/{PHONE}/register")))
+            .and(path(format!("/{V}/{PHONE}/register")))
             .and(body_json(
                 json!({"messaging_product":"whatsapp", "pin":"825194"}),
             ))
@@ -322,7 +322,7 @@ async fn verify_token_from_env_or_stdin_reaches_the_api_exactly() {
     for use_stdin in [false, true] {
         let graph = MockServer::start().await;
         Mock::given(method("POST"))
-            .and(path(format!("/v26.0/{WABA}/subscribed_apps")))
+            .and(path(format!("/{V}/{WABA}/subscribed_apps")))
             .and(body_json(json!({
                 "override_callback_uri":"https://example.test/hook",
                 "verify_token":"VERIFY_SENTINEL"
@@ -332,7 +332,7 @@ async fn verify_token_from_env_or_stdin_reaches_the_api_exactly() {
             .mount(&graph)
             .await;
         Mock::given(method("POST"))
-            .and(path("/v26.0/333/subscriptions"))
+            .and(path(format!("/{V}/333/subscriptions")))
             .and(query_param("callback_url", "https://example.test/hook"))
             .and(query_param("verify_token", "VERIFY_SENTINEL"))
             .respond_with(ResponseTemplate::new(200).set_body_json(json!({"success":true})))
@@ -394,7 +394,7 @@ async fn verification_code_uses_secret_sources_and_never_appears_in_diagnostics(
     let graph = MockServer::start().await;
     let home = TempDir::new().unwrap();
     Mock::given(method("POST"))
-        .and(path("/v26.0/111/verify_code"))
+        .and(path(format!("/{V}/111/verify_code")))
         .and(body_json(json!({"code":"817263"})))
         .respond_with(ResponseTemplate::new(200).set_body_json(json!({"success":true})))
         .expect(2)

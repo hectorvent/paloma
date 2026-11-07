@@ -7,14 +7,14 @@ async fn profile_photo_uploads_then_sets_the_handle() {
     let graph = MockServer::start().await;
     mount_upload_session(&graph).await;
     Mock::given(method("POST"))
-        .and(path("/v26.0/upload:S1"))
+        .and(path(format!("/{V}/upload:S1")))
         .and(wiremock::matchers::body_string("PNGDATA"))
         .respond_with(ResponseTemplate::new(200).set_body_json(json!({ "h": "4::HANDLE" })))
         .expect(1)
         .mount(&graph)
         .await;
     Mock::given(method("POST"))
-        .and(path(format!("/v26.0/{PHONE}/whatsapp_business_profile")))
+        .and(path(format!("/{V}/{PHONE}/whatsapp_business_profile")))
         .and(body_json(json!({
             "messaging_product": "whatsapp",
             "profile_picture_handle": "4::HANDLE"
@@ -44,7 +44,7 @@ async fn profile_photo_does_not_update_the_profile_when_the_upload_fails() {
     let graph = MockServer::start().await;
     mount_upload_session(&graph).await;
     Mock::given(method("POST"))
-        .and(path("/v26.0/upload:S1"))
+        .and(path(format!("/{V}/upload:S1")))
         .respond_with(ResponseTemplate::new(401).set_body_json(json!({
             "error": { "message": "bad token", "code": 190 }
         })))
@@ -52,7 +52,7 @@ async fn profile_photo_does_not_update_the_profile_when_the_upload_fails() {
         .mount(&graph)
         .await;
     Mock::given(method("POST"))
-        .and(path(format!("/v26.0/{PHONE}/whatsapp_business_profile")))
+        .and(path(format!("/{V}/{PHONE}/whatsapp_business_profile")))
         .respond_with(ResponseTemplate::new(200).set_body_json(json!({ "success": true })))
         .expect(0)
         .mount(&graph)
@@ -73,13 +73,13 @@ async fn profile_photo_explains_a_failed_update_after_a_good_upload() {
     let graph = MockServer::start().await;
     mount_upload_session(&graph).await;
     Mock::given(method("POST"))
-        .and(path("/v26.0/upload:S1"))
+        .and(path(format!("/{V}/upload:S1")))
         .respond_with(ResponseTemplate::new(200).set_body_json(json!({ "h": "4::HANDLE" })))
         .expect(1)
         .mount(&graph)
         .await;
     Mock::given(method("POST"))
-        .and(path(format!("/v26.0/{PHONE}/whatsapp_business_profile")))
+        .and(path(format!("/{V}/{PHONE}/whatsapp_business_profile")))
         .respond_with(ResponseTemplate::new(400).set_body_json(json!({
             "error": { "message": "handle is invalid", "code": 100 }
         })))
@@ -108,12 +108,12 @@ async fn profile_photo_quiet_prints_nothing_and_raw_prints_the_update_response()
         let graph = MockServer::start().await;
         mount_upload_session(&graph).await;
         Mock::given(method("POST"))
-            .and(path("/v26.0/upload:S1"))
+            .and(path(format!("/{V}/upload:S1")))
             .respond_with(ResponseTemplate::new(200).set_body_json(json!({ "h": "4::HANDLE" })))
             .mount(&graph)
             .await;
         Mock::given(method("POST"))
-            .and(path(format!("/v26.0/{PHONE}/whatsapp_business_profile")))
+            .and(path(format!("/{V}/{PHONE}/whatsapp_business_profile")))
             .respond_with(ResponseTemplate::new(200).set_body_json(json!({ "success": true })))
             .mount(&graph)
             .await;
@@ -213,7 +213,7 @@ async fn profile_set_sends_fields_at_their_limits() {
     let (description, email) = ("c".repeat(512), "d".repeat(128));
     let website = "e".repeat(256);
     Mock::given(method("POST"))
-        .and(path(format!("/v26.0/{PHONE}/whatsapp_business_profile")))
+        .and(path(format!("/{V}/{PHONE}/whatsapp_business_profile")))
         .and(body_json(json!({
             "messaging_product": "whatsapp",
             "about": about,
@@ -298,7 +298,7 @@ async fn automation_reads_and_writes_typed_and_cleared_components() {
     let graph = MockServer::start().await;
     let home = TempDir::new().unwrap();
     Mock::given(method("GET"))
-        .and(path(format!("/v26.0/{PHONE}")))
+        .and(path(format!("/{V}/{PHONE}")))
         .and(query_param("fields", "conversational_automation"))
         .respond_with(
             ResponseTemplate::new(200).set_body_json(
@@ -331,7 +331,7 @@ async fn automation_reads_and_writes_typed_and_cleared_components() {
         ),
     ] {
         Mock::given(method("POST"))
-            .and(path(format!("/v26.0/{PHONE}/conversational_automation")))
+            .and(path(format!("/{V}/{PHONE}/conversational_automation")))
             .and(body_json(&body))
             .respond_with(ResponseTemplate::new(200).set_body_json(json!({"success":true})))
             .expect(1)
@@ -441,7 +441,7 @@ async fn commerce_uses_query_flags_including_false_and_preserves_list_output() {
     let home = TempDir::new().unwrap();
     let body = json!({"data":[{"id":"333","is_cart_enabled":true,"is_catalog_visible":false}]});
     Mock::given(method("GET"))
-        .and(path("/v26.0/111/whatsapp_commerce_settings"))
+        .and(path(format!("/{V}/111/whatsapp_commerce_settings")))
         .respond_with(ResponseTemplate::new(200).set_body_json(body.clone()))
         .expect(2)
         .mount(&graph)
@@ -457,7 +457,7 @@ async fn commerce_uses_query_flags_including_false_and_preserves_list_output() {
         .unwrap();
     assert_eq!(stdout_json(&out), body);
     Mock::given(method("POST"))
-        .and(path("/v26.0/111/whatsapp_commerce_settings"))
+        .and(path(format!("/{V}/111/whatsapp_commerce_settings")))
         .and(query_param("is_cart_enabled", "false"))
         .and(query_param("is_catalog_visible", "true"))
         .respond_with(ResponseTemplate::new(200).set_body_json(json!({"success":true})))

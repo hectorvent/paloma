@@ -4,7 +4,7 @@ use crate::common::*;
 
 #[tokio::test]
 async fn group_writes_send_exact_bodies() {
-    let group_path = format!("/v26.0/{GROUP}");
+    let group_path = format!("/{V}/{GROUP}");
     let invite = format!("{group_path}/invite_link");
     let members = format!("{group_path}/participants");
     let requests = format!("{group_path}/join_requests");
@@ -20,7 +20,7 @@ async fn group_writes_send_exact_bodies() {
                 "approval-required",
             ],
             "POST",
-            "/v26.0/111/groups".to_owned(),
+            format!("/{V}/111/groups"),
             json!({"messaging_product":"whatsapp","subject":"Inquiries","description":"About cars","join_approval_mode":"approval_required"}),
         ),
         (
@@ -56,13 +56,13 @@ async fn group_writes_send_exact_bodies() {
         (
             vec!["group", "pin", GROUP, "wamid.1", "--days", "7"],
             "POST",
-            "/v26.0/111/messages".to_owned(),
+            format!("/{V}/111/messages"),
             json!({"messaging_product":"whatsapp","recipient_type":"group","to":GROUP,"type":"pin","pin":{"type":"pin","message_id":"wamid.1","expiration_days":7}}),
         ),
         (
             vec!["group", "unpin", GROUP, "wamid.1"],
             "POST",
-            "/v26.0/111/messages".to_owned(),
+            format!("/{V}/111/messages"),
             json!({"messaging_product":"whatsapp","recipient_type":"group","to":GROUP,"type":"pin","pin":{"type":"unpin","message_id":"wamid.1"}}),
         ),
     ] {
@@ -88,7 +88,7 @@ async fn group_create_prints_the_request_id_and_explains_the_webhook() {
     let graph = MockServer::start().await;
     let home = TempDir::new().unwrap();
     Mock::given(method("POST"))
-        .and(path("/v26.0/111/groups"))
+        .and(path(format!("/{V}/111/groups")))
         .respond_with(
             ResponseTemplate::new(200)
                 .set_body_json(json!({"messaging_product":"whatsapp","request_id":"req-9"})),
@@ -108,7 +108,7 @@ async fn group_list_reads_nested_groups_and_follows_cursors() {
     let graph = MockServer::start().await;
     let home = TempDir::new().unwrap();
     Mock::given(method("GET"))
-        .and(path("/v26.0/111/groups"))
+        .and(path(format!("/{V}/111/groups")))
         .and(query_param("after", "next-page"))
         .respond_with(ResponseTemplate::new(200).set_body_json(
             json!({"data":{"groups":[{"id":"b","subject":"Two","created_at":"2"}]}}),
@@ -116,7 +116,7 @@ async fn group_list_reads_nested_groups_and_follows_cursors() {
         .mount(&graph)
         .await;
     Mock::given(method("GET"))
-        .and(path("/v26.0/111/groups"))
+        .and(path(format!("/{V}/111/groups")))
         .respond_with(ResponseTemplate::new(200).set_body_json(json!({
             "data":{"groups":[{"id":"a","subject":"One","created_at":"1"}]},
             "paging":{"cursors":{"after":"next-page"},"next":"https://example.com/next"},
@@ -143,14 +143,14 @@ async fn group_reads_use_their_documented_nodes() {
     let graph = MockServer::start().await;
     let home = TempDir::new().unwrap();
     Mock::given(method("GET"))
-        .and(path(format!("/v26.0/{GROUP}")))
+        .and(path(format!("/{V}/{GROUP}")))
         .and(query_param("fields", "subject,description,suspended,creation_timestamp,total_participant_count,participants,join_approval_mode"))
         .respond_with(ResponseTemplate::new(200).set_body_json(json!({"id":GROUP,"subject":"One"})))
         .expect(1)
         .mount(&graph)
         .await;
     Mock::given(method("GET"))
-        .and(path(format!("/v26.0/{GROUP}/invite_link")))
+        .and(path(format!("/{V}/{GROUP}/invite_link")))
         .respond_with(ResponseTemplate::new(200).set_body_json(
             json!({"messaging_product":"whatsapp","invite_link":"https://chat.whatsapp.com/abc"}),
         ))
@@ -158,7 +158,7 @@ async fn group_reads_use_their_documented_nodes() {
         .mount(&graph)
         .await;
     Mock::given(method("GET"))
-        .and(path(format!("/v26.0/{GROUP}/join_requests")))
+        .and(path(format!("/{V}/{GROUP}/join_requests")))
         .respond_with(ResponseTemplate::new(200).set_body_json(
             json!({"data":[{"join_request_id":"r1","wa_id":"1555","creation_timestamp":"1"}]}),
         ))
@@ -187,7 +187,7 @@ async fn group_requests_exit_1_when_meta_processes_only_some() {
     let graph = MockServer::start().await;
     let home = TempDir::new().unwrap();
     Mock::given(method("POST"))
-        .and(path(format!("/v26.0/{GROUP}/join_requests")))
+        .and(path(format!("/{V}/{GROUP}/join_requests")))
         .respond_with(ResponseTemplate::new(200).set_body_json(json!({
             "messaging_product":"whatsapp",
             "approved_join_requests":["r1"],
@@ -257,13 +257,13 @@ async fn group_rejects_bad_input_before_context_or_network() {
 }
 
 #[tokio::test]
-async fn group_set_uploads_a_photo_as_multipart() {
+async fn group_update_uploads_a_photo_as_multipart() {
     let graph = MockServer::start().await;
     let home = TempDir::new().unwrap();
     let photo = home.path().join("square.jpg");
     std::fs::write(&photo, "jpeg-bytes").unwrap();
     Mock::given(method("POST"))
-        .and(path(format!("/v26.0/{GROUP}")))
+        .and(path(format!("/{V}/{GROUP}")))
         .and(body_string_contains("name=\"file\""))
         .and(body_string_contains("jpeg-bytes"))
         .and(body_string_contains("name=\"messaging_product\""))
@@ -310,7 +310,7 @@ async fn sends_to_a_group_address_the_group() {
             expected[key] = value.clone();
         }
         Mock::given(method("POST"))
-            .and(path("/v26.0/111/messages"))
+            .and(path(format!("/{V}/111/messages")))
             .and(body_json(expected))
             .respond_with(
                 ResponseTemplate::new(200).set_body_json(json!({"messages":[{"id":"wamid.g"}]})),
@@ -361,7 +361,7 @@ async fn group_list_shows_none_for_an_empty_data_array() {
     let graph = MockServer::start().await;
     let home = TempDir::new().unwrap();
     Mock::given(method("GET"))
-        .and(path("/v26.0/111/groups"))
+        .and(path(format!("/{V}/111/groups")))
         .respond_with(ResponseTemplate::new(200).set_body_json(json!({"data":[]})))
         .mount(&graph)
         .await;

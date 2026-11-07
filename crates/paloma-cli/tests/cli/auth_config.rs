@@ -17,7 +17,7 @@ fn debug_token_body(is_valid: bool) -> Value {
 
 async fn mount_debug_token(graph: &MockServer, response: ResponseTemplate) {
     Mock::given(method("GET"))
-        .and(path("/v26.0/debug_token"))
+        .and(path(format!("/{V}/debug_token")))
         .and(query_param("input_token", TOKEN))
         .and(header("authorization", format!("Bearer {TOKEN}").as_str()))
         .respond_with(response)
@@ -27,7 +27,7 @@ async fn mount_debug_token(graph: &MockServer, response: ResponseTemplate) {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn auth_status_scopes_shows_the_token_without_a_phone_number() {
+async fn auth_status_with_scopes_shows_the_token_without_a_phone_number() {
     let body = debug_token_body(true);
     let graph = MockServer::start().await;
     mount_debug_token(&graph, ResponseTemplate::new(200).set_body_json(&body)).await;
@@ -58,7 +58,7 @@ async fn auth_status_scopes_shows_the_token_without_a_phone_number() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn auth_status_scopes_exits_3_when_the_token_is_bad() {
+async fn auth_status_with_scopes_exits_3_when_the_token_is_bad() {
     let responses = [
         ResponseTemplate::new(200).set_body_json(debug_token_body(false)),
         ResponseTemplate::new(401)
@@ -77,7 +77,7 @@ async fn auth_status_scopes_exits_3_when_the_token_is_bad() {
 }
 
 #[test]
-fn auth_status_scopes_dry_run_needs_no_token_and_shows_none() {
+fn auth_status_with_scopes_dry_run_needs_no_token_and_shows_none() {
     let home = TempDir::new().unwrap();
     let out = paloma(None, &home)
         .env_remove("PALOMA_TOKEN")
@@ -88,7 +88,10 @@ fn auth_status_scopes_dry_run_needs_no_token_and_shows_none() {
     let request = stdout_json(&out);
     assert_eq!(request["method"], "GET");
     let url = request["url"].as_str().unwrap();
-    assert!(url.contains("/v26.0/debug_token?input_token="), "{url}");
+    assert!(
+        url.contains(&format!("/{V}/debug_token?input_token=")),
+        "{url}"
+    );
     assert!(!url.contains("active-token"), "{url}");
 }
 

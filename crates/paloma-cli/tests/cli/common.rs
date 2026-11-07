@@ -44,7 +44,7 @@ pub(crate) fn stdout_json(output: &std::process::Output) -> Value {
 /// A handle upload's first step: the session id comes back with its own query string.
 pub(crate) async fn mount_upload_session(graph: &MockServer) {
     Mock::given(method("POST"))
-        .and(path("/v26.0/999/uploads"))
+        .and(path(format!("/{V}/999/uploads")))
         .and(query_param("file_name", "pic.png"))
         .and(query_param("file_length", "7"))
         .and(query_param("file_type", "image/png"))
@@ -126,7 +126,7 @@ pub(crate) const PARENT_BSUID: &str = "US.ENT.11815799212886844830";
 /// Stub the send endpoint so that only this exact body gets a wamid.
 pub(crate) async fn expect_exact_send(graph: &MockServer, body: Value) {
     Mock::given(method("POST"))
-        .and(path(format!("/v26.0/{PHONE}/messages")))
+        .and(path(format!("/{V}/{PHONE}/messages")))
         .and(header("authorization", format!("Bearer {TOKEN}").as_str()))
         .and(body_json(body))
         .respond_with(
@@ -207,6 +207,9 @@ pub(crate) fn dry_run_request(home: &TempDir, args: &[&str]) -> Value {
     stdout_json(&out)
 }
 
+/// The Graph API version every mocked path uses: the binary's default, so bumping it is one
+/// change in `paloma-graph`, not hundreds here.
+pub(crate) const V: &str = paloma_graph::DEFAULT_API_VERSION;
 pub(crate) const GRAPH: &str = "https://graph.facebook.com/v26.0";
 
 pub(crate) const APP_SECRET: &str = "APP_SECRET_SENTINEL";

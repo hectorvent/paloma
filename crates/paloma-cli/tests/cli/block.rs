@@ -5,7 +5,7 @@ use crate::common::*;
 #[tokio::test(flavor = "multi_thread")]
 async fn block_list_all_walks_to_an_empty_page_without_paging_next() {
     let graph = MockServer::start().await;
-    let p = format!("/v26.0/{PHONE}/block_users");
+    let p = format!("/{V}/{PHONE}/block_users");
     Mock::given(method("GET"))
         .and(path(&p))
         .and(query_param("after", "C2"))
@@ -61,7 +61,7 @@ async fn block_list_all_walks_to_an_empty_page_without_paging_next() {
 async fn block_list_all_refuses_a_repeated_cursor_rather_than_truncating() {
     let graph = MockServer::start().await;
     Mock::given(method("GET"))
-        .and(path(format!("/v26.0/{PHONE}/block_users")))
+        .and(path(format!("/{V}/{PHONE}/block_users")))
         .respond_with(ResponseTemplate::new(200).set_body_json(json!({
             "data": [{ "wa_id": "1" }],
             "paging": { "cursors": { "after": "SAME" } }
@@ -81,7 +81,7 @@ async fn block_list_all_refuses_a_repeated_cursor_rather_than_truncating() {
 #[tokio::test(flavor = "multi_thread")]
 async fn block_list_single_page_says_what_paging_can_and_cannot_tell() {
     let graph = MockServer::start().await;
-    let p = format!("/v26.0/{PHONE}/block_users");
+    let p = format!("/{V}/{PHONE}/block_users");
     Mock::given(method("GET"))
         .and(path(&p))
         .and(query_param("after", "NEXT"))
@@ -175,7 +175,7 @@ async fn block_list_rejects_a_zero_limit_before_resolving_the_phone_number() {
 #[tokio::test(flavor = "multi_thread")]
 async fn block_list_all_follows_next_even_past_an_empty_page() {
     let graph = MockServer::start().await;
-    let phone_path = format!("/v26.0/{PHONE}/block_users");
+    let phone_path = format!("/{V}/{PHONE}/block_users");
     Mock::given(method("GET"))
         .and(path(phone_path.clone()))
         .and(query_param("after", "C1"))
@@ -220,7 +220,7 @@ async fn block_add_and_remove_write_user_id_for_a_bsuid() {
     let graph = MockServer::start().await;
     for (http_method, listed) in [("POST", "added_users"), ("DELETE", "removed_users")] {
         Mock::given(method(http_method))
-            .and(path(format!("/v26.0/{PHONE}/block_users")))
+            .and(path(format!("/{V}/{PHONE}/block_users")))
             .and(body_json(&body))
             .respond_with(ResponseTemplate::new(200).set_body_json(json!({
                 "messaging_product": "whatsapp",
@@ -303,7 +303,7 @@ async fn block_list_shows_user_id_and_survives_a_missing_wa_id() {
     });
     let graph = MockServer::start().await;
     Mock::given(method("GET"))
-        .and(path(format!("/v26.0/{PHONE}/block_users")))
+        .and(path(format!("/{V}/{PHONE}/block_users")))
         .respond_with(ResponseTemplate::new(200).set_body_json(&data))
         .mount(&graph)
         .await;

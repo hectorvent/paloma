@@ -7,7 +7,7 @@ async fn calling_hours_set_sends_the_whole_schedule_and_confirms() {
     let graph = MockServer::start().await;
     let home = TempDir::new().unwrap();
     Mock::given(method("POST"))
-        .and(path("/v26.0/111/settings"))
+        .and(path(format!("/{V}/111/settings")))
         .and(body_json(
             json!({"messaging_product":"whatsapp","calling":{"call_hours":{
                 "status":"ENABLED","timezone_id":"America/Santo_Domingo",
@@ -61,14 +61,14 @@ async fn calling_hours_disable_keeps_the_saved_schedule() {
     let mut disabled = schedule;
     disabled["status"] = json!("DISABLED");
     Mock::given(method("GET"))
-        .and(path("/v26.0/111/settings"))
+        .and(path(format!("/{V}/111/settings")))
         .respond_with(
             ResponseTemplate::new(200).set_body_json(json!({"calling":{"call_hours":enabled}})),
         )
         .mount(&graph)
         .await;
     Mock::given(method("POST"))
-        .and(path("/v26.0/111/settings"))
+        .and(path(format!("/{V}/111/settings")))
         .and(body_json(
             json!({"messaging_product":"whatsapp","calling":{"call_hours":disabled}}),
         ))
@@ -94,7 +94,7 @@ async fn calling_hours_disable_writes_nothing_without_a_schedule() {
     let graph = MockServer::start().await;
     let home = TempDir::new().unwrap();
     Mock::given(method("GET"))
-        .and(path("/v26.0/111/settings"))
+        .and(path(format!("/{V}/111/settings")))
         .respond_with(
             ResponseTemplate::new(200).set_body_json(json!({"calling":{"status":"ENABLED"}})),
         )
@@ -121,7 +121,7 @@ async fn calling_permission_addresses_phones_and_bsuids() {
         let graph = MockServer::start().await;
         let home = TempDir::new().unwrap();
         Mock::given(method("GET"))
-            .and(path("/v26.0/111/call_permissions"))
+            .and(path(format!("/{V}/111/call_permissions")))
             .and(query_param(param, value))
             .respond_with(ResponseTemplate::new(200).set_body_json(json!({
                 "messaging_product":"whatsapp",
@@ -145,7 +145,7 @@ async fn calling_analytics_builds_the_field_expansion() {
     let graph = MockServer::start().await;
     let home = TempDir::new().unwrap();
     Mock::given(method("GET"))
-        .and(path("/v26.0/222"))
+        .and(path(format!("/{V}/222")))
         .and(query_param(
             "fields",
             r#"call_analytics.start(1759276800).end(1761955200).granularity(MONTHLY).country_codes(["DO"]).directions(["USER_INITIATED"]).dimensions(["country"]).metric_types(["COUNT","AVERAGE_DURATION"])"#,
@@ -253,7 +253,7 @@ async fn calling_set_restricts_icons_and_sets_srtp() {
         json!({"call_icons":{"restrict_to_user_countries":[]}}),
     ] {
         Mock::given(method("POST"))
-            .and(path(format!("/v26.0/{PHONE}/settings")))
+            .and(path(format!("/{V}/{PHONE}/settings")))
             .and(body_json(
                 json!({"messaging_product":"whatsapp","calling":calling}),
             ))
@@ -342,7 +342,7 @@ async fn calling_voicemail_set_and_disable() {
         json!({"status":"DISABLED"}),
     ] {
         Mock::given(method("POST"))
-            .and(path(format!("/v26.0/{PHONE}/settings")))
+            .and(path(format!("/{V}/{PHONE}/settings")))
             .and(body_json(
                 json!({"messaging_product":"whatsapp","calling":{"voicemail":voicemail}}),
             ))

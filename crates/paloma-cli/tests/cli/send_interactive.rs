@@ -21,7 +21,7 @@ fn dry_run_body(home: &TempDir, args: &[&str]) -> Value {
 async fn interactive_button_sends_a_media_id_header() {
     let graph = MockServer::start().await;
     Mock::given(method("POST"))
-        .and(path(format!("/v26.0/{PHONE}/messages")))
+        .and(path(format!("/{V}/{PHONE}/messages")))
         .and(body_json(json!({
             "messaging_product": "whatsapp",
             "recipient_type": "individual",

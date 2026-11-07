@@ -193,3 +193,34 @@ pub fn oba_status(response: &Value) -> Option<&str> {
         .pointer("/official_business_account/oba_status")
         .and_then(Value::as_str)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn storage_and_identity_bodies_are_meta_s_shapes() {
+        let on = set_storage("1", true, Some("IN"));
+        assert_eq!(
+            on.json_body().unwrap(),
+            &json!({ "storage_configuration": { "status": "IN_COUNTRY_STORAGE_ENABLED", "data_localization_region": "IN" } })
+        );
+        let off = set_storage("1", false, None);
+        assert_eq!(
+            off.json_body().unwrap(),
+            &json!({ "storage_configuration": { "status": "IN_COUNTRY_STORAGE_DISABLED" } })
+        );
+        assert_eq!(
+            set_identity_check("1", false).json_body().unwrap(),
+            &json!({ "user_identity_change": { "enable_identity_key_check": false } })
+        );
+    }
+
+    #[test]
+    fn oba_status_is_read_from_the_number() {
+        let number = json!({ "official_business_account": { "oba_status": "APPROVED" } });
+        assert_eq!(oba_status(&number), Some("APPROVED"));
+        assert_eq!(oba_status(&json!({})), None);
+    }
+}

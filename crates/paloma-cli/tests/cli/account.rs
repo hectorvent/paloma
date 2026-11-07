@@ -7,7 +7,7 @@ async fn account_get_requests_details_and_preserves_output_contracts() {
     let graph = MockServer::start().await;
     let body = json!({"id": WABA, "name": "Example", "account_review_status": "APPROVED"});
     Mock::given(method("GET"))
-        .and(path(format!("/v26.0/{WABA}")))
+        .and(path(format!("/{V}/{WABA}")))
         .and(header("authorization", format!("Bearer {TOKEN}")))
         .and(query_param("fields", "id,name,timezone_id,message_template_namespace,account_review_status,business_verification_status"))
         .respond_with(ResponseTemplate::new(200).set_body_json(&body))
@@ -64,7 +64,7 @@ async fn account_get_custom_fields_and_health_use_the_waba_flag() {
         ),
     ] {
         Mock::given(method("GET"))
-            .and(path("/v26.0/999"))
+            .and(path(format!("/{V}/999")))
             .and(query_param("fields", fields))
             .respond_with(ResponseTemplate::new(200).set_body_json(&body))
             .expect(2)
@@ -112,7 +112,7 @@ async fn account_lists_render_nested_apps_and_limits_without_a_phone_context() {
         ),
     ] {
         let mut mock = Mock::given(method("GET"))
-            .and(path(format!("/v26.0/{WABA}/{edge}")))
+            .and(path(format!("/{V}/{WABA}/{edge}")))
             .and(header("authorization", format!("Bearer {TOKEN}")));
         if verb == "limits" {
             mock = mock.and(query_param(
@@ -163,7 +163,7 @@ async fn account_lists_warn_and_follow_cursors_with_all() {
         ("apps list", "subscribed_apps"),
     ] {
         Mock::given(method("GET"))
-            .and(path(format!("/v26.0/{WABA}/{edge}")))
+            .and(path(format!("/{V}/{WABA}/{edge}")))
             .and(query_param("after", "start"))
             .respond_with(ResponseTemplate::new(200).set_body_json(json!({
                 "data":[{"id":"first"}],
@@ -173,7 +173,7 @@ async fn account_lists_warn_and_follow_cursors_with_all() {
             .mount(&graph)
             .await;
         Mock::given(method("GET"))
-            .and(path(format!("/v26.0/{WABA}/{edge}")))
+            .and(path(format!("/{V}/{WABA}/{edge}")))
             .and(query_param("after", "next"))
             .respond_with(
                 ResponseTemplate::new(200).set_body_json(json!({"data":[{"id":"second"}]})),
@@ -228,7 +228,7 @@ async fn account_reads_dry_run_without_network_or_token() {
             request["url"]
                 .as_str()
                 .unwrap()
-                .contains(&format!("/v26.0/{WABA}"))
+                .contains(&format!("/{V}/{WABA}"))
         );
         assert!(!request.to_string().contains(TOKEN));
         assert!(String::from_utf8_lossy(&out.stderr).contains("dry-run: no request sent"));
@@ -277,7 +277,7 @@ async fn billing_currency_start_posts_optional_credit_and_quiet_prints_migration
         }
         Mock::given(method("POST"))
             .and(path(format!(
-                "/v26.0/{WABA}/set_payment_method_migration_intent"
+                "/{V}/{WABA}/set_payment_method_migration_intent"
             )))
             .and(header("authorization", format!("Bearer {TOKEN}")))
             .and(body_json(body))
@@ -316,7 +316,7 @@ async fn billing_currency_status_and_complete_use_migration_context_and_check_re
         ("mig_busy", "IN_PROGRESS", false),
     ] {
         Mock::given(method("GET"))
-            .and(path(format!("/v26.0/{id}")))
+            .and(path(format!("/{V}/{id}")))
             .respond_with(
                 ResponseTemplate::new(200).set_body_json(
                     json!({"id":id, "status":status, "destination_waba":{"id":"999"}}),
@@ -326,7 +326,7 @@ async fn billing_currency_status_and_complete_use_migration_context_and_check_re
             .mount(&graph)
             .await;
         Mock::given(method("POST"))
-            .and(path(format!("/v26.0/{id}/resume_migration")))
+            .and(path(format!("/{V}/{id}/resume_migration")))
             .respond_with(
                 ResponseTemplate::new(200).set_body_json(json!({"id":id, "status":"COMPLETED"})),
             )
@@ -420,7 +420,7 @@ async fn account_set_shapes_settings_including_false_and_supports_file() {
     let graph = MockServer::start().await;
     let home = TempDir::new().unwrap();
     Mock::given(method("POST"))
-        .and(path(format!("/v26.0/{WABA}")))
+        .and(path(format!("/{V}/{WABA}")))
         .and(body_json(json!({"name":"New name", "timezone_id":"1", "disable_marketing_messages_on_cloud_api":false})))
         .respond_with(ResponseTemplate::new(200).set_body_json(json!({"success":true})))
         .expect(1).mount(&graph).await;
@@ -442,7 +442,7 @@ async fn account_set_shapes_settings_including_false_and_supports_file() {
     let file = home.path().join("account.json");
     std::fs::write(&file, r#"{"name":"From file"}"#).unwrap();
     Mock::given(method("POST"))
-        .and(path(format!("/v26.0/{WABA}")))
+        .and(path(format!("/{V}/{WABA}")))
         .and(body_json(json!({"name":"From file"})))
         .respond_with(ResponseTemplate::new(200).set_body_json(json!({"success":true})))
         .expect(1)
@@ -521,7 +521,7 @@ async fn account_activities_and_number_health_request_the_documented_fields() {
     let graph = MockServer::start().await;
     let home = TempDir::new().unwrap();
     Mock::given(method("GET"))
-        .and(path(format!("/v26.0/{WABA}/activities")))
+        .and(path(format!("/{V}/{WABA}/activities")))
         .and(query_param(
             "fields",
             "id,actor_business_id,actor_id,category,event_type,timestamp",
@@ -541,7 +541,7 @@ async fn account_activities_and_number_health_request_the_documented_fields() {
         .stdout(predicate::str::contains("ACCOUNT_UPDATE"))
         .stderr("");
     Mock::given(method("GET"))
-        .and(path("/v26.0/999"))
+        .and(path(format!("/{V}/999")))
         .and(query_param("fields", "health_status"))
         .respond_with(
             ResponseTemplate::new(200).set_body_json(
@@ -576,7 +576,7 @@ async fn account_analytics_sends_the_exact_messaging_field_expansion_and_preserv
     let graph = MockServer::start().await;
     let home = TempDir::new().unwrap();
     let body = messaging_analytics_response();
-    Mock::given(method("GET")).and(path(format!("/v26.0/{WABA}")))
+    Mock::given(method("GET")).and(path(format!("/{V}/{WABA}")))
         .and(header("authorization", format!("Bearer {TOKEN}")))
         .and(query_param("fields", "analytics.start(1793491200).end(1793577600).granularity(DAY).phone_numbers([\"15551234567\",\"15557654321\"]).product_types([0,2,100]).country_codes([\"US\",\"IN\"])"))
         .respond_with(ResponseTemplate::new(200).set_body_json(&body))
@@ -662,7 +662,7 @@ async fn account_pricing_analytics_serializes_all_filters_and_flattens_every_tab
     let graph = MockServer::start().await;
     let home = TempDir::new().unwrap();
     let body = pricing_analytics_response();
-    Mock::given(method("GET")).and(path(format!("/v26.0/{WABA}")))
+    Mock::given(method("GET")).and(path(format!("/{V}/{WABA}")))
         .and(header("authorization", format!("Bearer {TOKEN}")))
         .and(query_param("fields", "pricing_analytics.start(1793491200).end(1793577600).granularity(DAILY).phone_numbers([\"15551234567\"]).country_codes([\"US\",\"IN\"]).metric_types([\"COST\",\"VOLUME\"]).pricing_types([\"REGULAR\",\"FREE_ENTRY_POINT\"]).pricing_categories([\"AUTHENTICATION\",\"MARKETING_LITE_DYNAMIC\"]).dimensions([\"COUNTRY\",\"PRICING_CATEGORY\",\"TIER\",\"PHONE\",\"PRICING_TYPE\"])"))
         .respond_with(ResponseTemplate::new(200).set_body_json(&body))
@@ -778,7 +778,7 @@ async fn analytics_granularities_translate_by_mode_and_omit_unspecified_filters_
         let url = percent_encoding::percent_decode_str(request["url"].as_str().unwrap())
             .decode_utf8()
             .unwrap();
-        assert_eq!(url, format!("{}/v26.0/{WABA}?fields={query}", graph.uri()));
+        assert_eq!(url, format!("{}/{V}/{WABA}?fields={query}", graph.uri()));
         assert!(String::from_utf8_lossy(&out.stderr).contains("dry-run: no request sent"));
     }
     assert!(graph.received_requests().await.unwrap().is_empty());
@@ -848,7 +848,7 @@ async fn analytics_targets_the_selected_waba_and_can_read_pre_migration_history(
     let graph = MockServer::start().await;
     let home = TempDir::new().unwrap();
     Mock::given(method("GET"))
-        .and(path("/v26.0/old_account"))
+        .and(path(format!("/{V}/old_account")))
         .and(query_param(
             "fields",
             "analytics.start(1709164800).end(1709251200).granularity(DAY)",
@@ -973,7 +973,7 @@ async fn pricing_analytics_raw_keeps_decimal_text_and_unknown_response_fields() 
     let home = TempDir::new().unwrap();
     let body = r#"{ "id":"222", "currency":"EUR", "pricing_analytics":{"data":[{"data_points":[{"start":1,"end":2,"pricing_category":"FUTURE_CATEGORY","cost":0.1234567890123456789012345}]}]}}"#;
     Mock::given(method("GET"))
-        .and(path(format!("/v26.0/{WABA}")))
+        .and(path(format!("/{V}/{WABA}")))
         .respond_with(ResponseTemplate::new(200).set_body_string(body))
         .expect(1)
         .mount(&graph)
@@ -997,11 +997,11 @@ async fn pricing_analytics_raw_keeps_decimal_text_and_unknown_response_fields() 
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn account_insights_is_confirmed_one_way_and_uses_query() {
+async fn account_set_insights_is_confirmed_one_way_and_uses_query() {
     let graph = MockServer::start().await;
     let home = TempDir::new().unwrap();
     Mock::given(method("POST"))
-        .and(path(format!("/v26.0/{WABA}")))
+        .and(path(format!("/{V}/{WABA}")))
         .and(query_param("is_enabled_for_insights", "true"))
         .respond_with(ResponseTemplate::new(200).set_body_json(json!({"success":true})))
         .expect(2)
@@ -1069,7 +1069,7 @@ async fn account_limits_portfolio_and_activities_limit_are_validated() {
     let graph = MockServer::start().await;
     let home = TempDir::new().unwrap();
     Mock::given(method("GET"))
-        .and(path("/v26.0/333"))
+        .and(path(format!("/{V}/333")))
         .and(query_param(
             "fields",
             "whatsapp_business_manager_messaging_limit",
@@ -1088,7 +1088,7 @@ async fn account_limits_portfolio_and_activities_limit_are_validated() {
         .success()
         .stdout(predicate::str::contains("TIER_250"));
     Mock::given(method("GET"))
-        .and(path(format!("/v26.0/{WABA}/activities")))
+        .and(path(format!("/{V}/{WABA}/activities")))
         .and(query_param("limit", "100"))
         .and(query_param("after", "cursor"))
         .respond_with(ResponseTemplate::new(200).set_body_json(json!({"data":[]})))
@@ -1119,7 +1119,7 @@ async fn account_limits_portfolio_and_activities_limit_are_validated() {
 async fn health_tables_show_entity_diagnostics_but_quiet_keeps_the_id() {
     let graph = MockServer::start().await;
     let home = TempDir::new().unwrap();
-    Mock::given(method("GET")).and(path(format!("/v26.0/{WABA}")))
+    Mock::given(method("GET")).and(path(format!("/{V}/{WABA}")))
         .and(query_param("fields", "health_status"))
         .respond_with(ResponseTemplate::new(200).set_body_json(json!({"id":WABA,"health_status":{"can_send_message":"LIMITED","entities":[{"entity_type":"WABA","id":WABA,"can_send_message":"BLOCKED","errors":[{"error_code":42,"error_description":"Payment missing","possible_solution":"Add payment"}]}]}})))
         .mount(&graph).await;
@@ -1161,7 +1161,7 @@ async fn account_users_and_automation_bot_use_the_documented_nodes() {
             "222/system_users",
         ),
     ] {
-        let mut mock = Mock::given(method("GET")).and(path(format!("/v26.0/{node}")));
+        let mut mock = Mock::given(method("GET")).and(path(format!("/{V}/{node}")));
         if node.ends_with("assigned_users") {
             mock = mock
                 .and(query_param("business", "999"))
@@ -1182,7 +1182,7 @@ async fn account_users_and_automation_bot_use_the_documented_nodes() {
         assert_eq!(dry_run_request(&home, &args)["method"], "GET");
     }
     Mock::given(method("GET"))
-        .and(path("/v26.0/444"))
+        .and(path(format!("/{V}/444")))
         .respond_with(
             ResponseTemplate::new(200).set_body_json(json!({"id":"444","prompts":["Hi"]})),
         )
@@ -1234,7 +1234,7 @@ async fn welcome_sequences_create_update_read_and_delete_waba_ad_assets() {
         ),
     ] {
         Mock::given(method("POST"))
-            .and(path("/v26.0/222/welcome_message_sequences"))
+            .and(path(format!("/{V}/222/welcome_message_sequences")))
             .and(body_json(body))
             .respond_with(ResponseTemplate::new(200).set_body_json(result))
             .expect(1)
@@ -1256,7 +1256,7 @@ async fn welcome_sequences_create_update_read_and_delete_waba_ad_assets() {
             .stdout(predicate::str::contains("welcome_message_sequence"));
     }
     Mock::given(method("GET"))
-        .and(path("/v26.0/222/welcome_message_sequences"))
+        .and(path(format!("/{V}/222/welcome_message_sequences")))
         .and(query_param("sequence_id", "444"))
         .respond_with(
             ResponseTemplate::new(200)
@@ -1271,7 +1271,7 @@ async fn welcome_sequences_create_update_read_and_delete_waba_ad_assets() {
         .success()
         .stdout(predicate::str::contains("is_used_in_ad"));
     Mock::given(method("DELETE"))
-        .and(path("/v26.0/222/welcome_message_sequences"))
+        .and(path(format!("/{V}/222/welcome_message_sequences")))
         .and(query_param("sequence_id", "444"))
         .respond_with(ResponseTemplate::new(200).set_body_json(json!({"success":true})))
         .expect(1)
@@ -1315,9 +1315,9 @@ async fn welcome_sequences_create_update_read_and_delete_waba_ad_assets() {
 async fn account_users_follow_cursors_and_quiet_prints_every_id() {
     let graph = MockServer::start().await;
     let home = TempDir::new().unwrap();
-    Mock::given(method("GET")).and(path("/v26.0/222/assigned_users")).and(query_param("business","999")).and(query_param("after","start")).respond_with(ResponseTemplate::new(200).set_body_json(json!({"data":[{"id":"444"}],"paging":{"next":"https://untrusted.invalid/?access_token=LEAK_SENTINEL","cursors":{"after":"next"}}}))).expect(1).mount(&graph).await;
+    Mock::given(method("GET")).and(path(format!("/{V}/222/assigned_users"))).and(query_param("business","999")).and(query_param("after","start")).respond_with(ResponseTemplate::new(200).set_body_json(json!({"data":[{"id":"444"}],"paging":{"next":"https://untrusted.invalid/?access_token=LEAK_SENTINEL","cursors":{"after":"next"}}}))).expect(1).mount(&graph).await;
     Mock::given(method("GET"))
-        .and(path("/v26.0/222/assigned_users"))
+        .and(path(format!("/{V}/222/assigned_users")))
         .and(query_param("business", "999"))
         .and(query_param("after", "next"))
         .respond_with(ResponseTemplate::new(200).set_body_json(json!({"data":[{"id":"555"}]})))
@@ -1347,7 +1347,7 @@ async fn welcome_sequence_list_renders_meta_s_bare_array() {
     let graph = MockServer::start().await;
     let home = TempDir::new().unwrap();
     Mock::given(method("GET"))
-        .and(path("/v26.0/222/welcome_message_sequences"))
+        .and(path(format!("/{V}/222/welcome_message_sequences")))
         .respond_with(ResponseTemplate::new(200).set_body_json(json!([
             {"sequence_id":"8716291","name":"Driver Sign up","is_used_in_ad":true},
             {"sequence_id":"4362","name":"Basic Triage","is_used_in_ad":false},
@@ -1373,7 +1373,7 @@ async fn account_reach_serializes_the_targeting_and_lists_estimates() {
     let graph = MockServer::start().await;
     let home = TempDir::new().unwrap();
     Mock::given(method("GET"))
-        .and(path("/v26.0/222/reachestimate"))
+        .and(path(format!("/{V}/222/reachestimate")))
         .and(query_param(
             "targeting_spec",
             r#"{"geo_locations":{"countries":["IN","BR"]}}"#,

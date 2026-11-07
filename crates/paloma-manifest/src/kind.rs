@@ -221,3 +221,31 @@ impl FromStr for Kind {
             })
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn kinds_parse_from_the_manifest_or_the_cli_name_and_print_the_manifest_name() {
+        for kind in Kind::ALL {
+            assert_eq!(kind.name().parse::<Kind>().unwrap(), kind);
+            assert_eq!(kind.cli_name().parse::<Kind>().unwrap(), kind);
+            assert_eq!(kind.to_string(), kind.name());
+        }
+        assert_eq!(
+            "PHONE-SETTINGS".parse::<Kind>().unwrap(),
+            Kind::PhoneSettings
+        );
+        assert!("Phonebook".parse::<Kind>().is_err());
+    }
+
+    #[test]
+    fn only_account_template_and_webhook_live_on_the_waba() {
+        let waba: Vec<_> = Kind::ALL
+            .into_iter()
+            .filter(|k| !k.phone_scoped())
+            .collect();
+        assert_eq!(waba, [Kind::Account, Kind::Template, Kind::Webhook]);
+    }
+}
