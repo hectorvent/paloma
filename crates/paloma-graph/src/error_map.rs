@@ -105,6 +105,14 @@ const fn hint(code: i64) -> Option<&'static str> {
              address the message with the user's phone number in `to`, or for max price use a \
              template without optimization_spec",
         ),
+        147_006 => Some(
+            "this number is also used with the WhatsApp Business app; manage its username \
+             there instead",
+        ),
+        147_007 => Some(
+            "this number already has a different username reserved; set that one, or remove it \
+             with paloma number username delete first (paloma number username get shows it)",
+        ),
         131_063 => Some(
             "this account has disable_marketing_messages_on_cloud_api set; use paloma send template \
              --via auto to refresh the category, or --via marketing after completing MM API \
@@ -239,6 +247,8 @@ mod tests {
             (131_062, "phone number", 1),
             (131_063, "disable_marketing_messages_on_cloud_api", 1),
             (131_065, "optimization_spec", 1),
+            (147_006, "WhatsApp Business app", 1),
+            (147_007, "number username delete", 1),
         ] {
             let e = map_error(400, &body(code, "Meta says no"));
             let text = e.to_string();

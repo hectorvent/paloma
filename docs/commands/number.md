@@ -177,6 +177,10 @@ Meta permits two changes per number in a rolling 14-day window (ten for a `reser
 username). Deleting does not reset the limit. Excess changes return rate-limit exit
 `4`; Meta does not provide a `Retry-After` header for this limit.
 
+Two refusals come with a hint and exit `1`. Error `147006` means the number is also used with
+the WhatsApp Business app, which then owns its username. Error `147007` means a different
+username is already reserved for the number: set that one, or delete it first.
+
 ## `paloma number contacts`
 
 ```bash
