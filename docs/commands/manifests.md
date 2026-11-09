@@ -278,7 +278,8 @@ storage status is normalized to disabled to avoid repeated drift.
 
 `Number` also supports `searchVisibility: VISIBLE|HIDDEN` and `newDisplayName`.
 Visibility is compared with live state, so it only writes on drift; Meta may report a hidden
-number as `NON_VISIBLE`, which Paloma treats as `HIDDEN`. A display name is
+number as `NON_VISIBLE`, which Paloma treats as `HIDDEN`, and a write sends `NON_VISIBLE`,
+since Graph refuses `HIDDEN`. A display name is
 submitted for review only if it isn't already the verified name or a pending request, or
 if Meta declined or expired the earlier request. The existing write-only `pin` behavior
 is unchanged, and its value remains redacted from previews and diagnostics. Identity/visibility submissions

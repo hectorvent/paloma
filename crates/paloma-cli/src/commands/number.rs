@@ -188,6 +188,8 @@ pub enum CodeMethod {
 #[value(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum SearchVisibility {
     Visible,
+    /// Sent as Graph's `NON_VISIBLE`, which is also accepted here.
+    #[value(alias = "NON_VISIBLE")]
     Hidden,
 }
 
@@ -288,11 +290,8 @@ impl NumberCommand {
                 if !app.confirm_or_abort(&format!("change search visibility for number {phone}"))? {
                     return Ok(());
                 }
-                let value = match visibility {
-                    SearchVisibility::Visible => "VISIBLE",
-                    SearchVisibility::Hidden => "HIDDEN",
-                };
-                app.send_and_emit(&phone_numbers::search_visibility(phone, value), no_id)
+                let visible = matches!(visibility, SearchVisibility::Visible);
+                app.send_and_emit(&phone_numbers::search_visibility(phone, visible), no_id)
                     .await
             }
             Self::Pin(PinCommand::Set(input)) => {

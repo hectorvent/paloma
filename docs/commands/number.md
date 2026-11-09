@@ -152,7 +152,9 @@ paloma number visibility set HIDDEN --yes
 
 `name set <name>` submits `new_display_name` for Meta's review. It does not promise
 approval or immediate activation. `visibility set <VISIBLE|HIDDEN>` changes search
-visibility without changing the username. Both confirm before writing.
+visibility without changing the username. Both confirm before writing. Meta's reference
+lists `HIDDEN`, but Graph refuses it and takes `NON_VISIBLE`, so Paloma sends that (and
+accepts `NON_VISIBLE` as another name for `HIDDEN`).
 
 ## `paloma number username`
 

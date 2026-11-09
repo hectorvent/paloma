@@ -335,7 +335,19 @@ async fn number_onboarding_and_identity_writes_use_exact_payloads() {
         (
             vec!["number", "visibility", "set", "HIDDEN"],
             "111",
-            json!({"search_visibility":"HIDDEN"}),
+            json!({"search_visibility":"NON_VISIBLE"}),
+            false,
+        ),
+        (
+            vec!["number", "visibility", "set", "NON_VISIBLE"],
+            "111",
+            json!({"search_visibility":"NON_VISIBLE"}),
+            false,
+        ),
+        (
+            vec!["number", "visibility", "set", "VISIBLE"],
+            "111",
+            json!({"search_visibility":"VISIBLE"}),
             false,
         ),
         (

@@ -19,8 +19,9 @@ fn name_is_settled(name: &Value, live: &Value) -> bool {
             ))
 }
 
-/// Meta documents `HIDDEN`, but a live read returned `NON_VISIBLE`. Use one spelling, so an
-/// export can be diffed and a hidden number doesn't look like drift.
+/// Meta documents `HIDDEN`, but Graph reads and writes `NON_VISIBLE`. Manifests use `HIDDEN`,
+/// so an export can be diffed and a hidden number doesn't look like drift; the write sends
+/// Graph's spelling.
 fn canonical_visibility(value: &Value) -> Value {
     if value.as_str() == Some("NON_VISIBLE") {
         json!("HIDDEN")
@@ -148,6 +149,12 @@ pub async fn plan(cx: Cx<'_>, spec: &Value) -> Result<KindPlan> {
     let disruptive = replaces_pin
         || desired.contains_key("new_display_name")
         || desired.contains_key("search_visibility");
+    if desired.get("search_visibility").and_then(Value::as_str) == Some("HIDDEN") {
+        desired.insert(
+            "search_visibility".into(),
+            json!(phone_numbers::SEARCH_HIDDEN),
+        );
+    }
     let body = Value::Object(desired);
     let plan = KindPlan {
         changes,

@@ -1200,7 +1200,7 @@ async fn number_manifest_search_visibility_is_idempotent_and_pin_diagnostics_are
     Mock::given(method("POST"))
         .and(path(format!("/{V}/111")))
         .and(body_json(
-            json!({"pin":"817263","new_display_name":"Acme","search_visibility":"HIDDEN"}),
+            json!({"pin":"817263","new_display_name":"Acme","search_visibility":"NON_VISIBLE"}),
         ))
         .respond_with(ResponseTemplate::new(200).set_body_json(json!({"success":true})))
         .expect(1)

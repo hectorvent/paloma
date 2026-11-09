@@ -110,8 +110,16 @@ pub fn set_name(phone: &str, name: &str) -> Request {
     Request::post(phone).json(json!({"new_display_name": name}))
 }
 
-pub fn search_visibility(phone: &str, value: &str) -> Request {
-    Request::post(phone).json(json!({"search_visibility": value}))
+/// How Graph spells a number hidden from search. The reference lists `VISIBLE` and `HIDDEN`,
+/// but Graph refuses `HIDDEN` (live, 2026-11-09): it takes `VISIBLE`, `NON_VISIBLE` or
+/// `PENDING_VISIBLE`, and reads a hidden number back as `NON_VISIBLE`. Paloma's own word stays
+/// `HIDDEN`; this is only what goes on the wire.
+pub const SEARCH_HIDDEN: &str = "NON_VISIBLE";
+
+pub fn search_visibility(phone: &str, visible: bool) -> Request {
+    Request::post(phone).json(json!({
+        "search_visibility": if visible { "VISIBLE" } else { SEARCH_HIDDEN }
+    }))
 }
 
 pub fn settings(phone: &str) -> Request {
