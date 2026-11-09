@@ -14,7 +14,7 @@ equivalent).
 | `--waba-id <id>` | | Override the active WABA ID |
 | `--messaging-account-id <id>` | | Messaging account to bill for `send` commands. Set it if your token reaches more than one on the phone number |
 | `--app-id <id>` | | Meta App ID (for app-level webhook field subscriptions and upload handles) |
-| `--api-version <v>` | | Override Graph API version (e.g. `v26.0`) |
+| `--api-version <v>` | | Override Graph API version (e.g. `v27.0`) |
 | `--dry-run` | | Print the request with sensitive fields redacted, without sending |
 | `--quiet` | `-q` | Only essential output (IDs, errors) — script-friendly |
 | `--verbose` | `-v` | Log each request to stderr; `-vv` adds redacted request/response bodies (`PALOMA_LOG` takes a full tracing filter) |

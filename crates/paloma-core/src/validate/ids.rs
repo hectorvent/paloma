@@ -107,7 +107,7 @@ pub fn group_id(value: &str) -> Result<()> {
     Ok(())
 }
 
-/// A Graph API version such as `v26.0`.
+/// A Graph API version such as `v27.0`.
 pub fn graph_version(value: &str) -> Result<()> {
     let valid = value
         .strip_prefix('v')
@@ -119,7 +119,7 @@ pub fn graph_version(value: &str) -> Result<()> {
         });
     if !valid {
         return Err(Error::validation(format!(
-            "Graph version '{value}' must look like v26.0"
+            "Graph version '{value}' must look like v27.0"
         )));
     }
     Ok(())

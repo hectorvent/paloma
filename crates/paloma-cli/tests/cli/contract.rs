@@ -29,7 +29,7 @@ fn dry_run_prints_exact_request_without_network() {
     insta::assert_json_snapshot!(v, @r#"
     {
       "method": "POST",
-      "url": "https://graph.facebook.com/v26.0/111/messages",
+      "url": "https://graph.facebook.com/v27.0/111/messages",
       "body": {
         "messaging_product": "whatsapp",
         "recipient_type": "individual",

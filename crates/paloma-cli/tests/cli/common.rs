@@ -74,7 +74,7 @@ pub(crate) async fn mock_three_template_pages(
     page_two: Value,
     page_three: Value,
 ) {
-    let p = format!("/v26.0/{WABA}/message_templates");
+    let p = format!("/{V}/{WABA}/message_templates");
     Mock::given(method("GET"))
         .and(path(&p))
         .and(query_param("after", "C2"))
@@ -210,7 +210,13 @@ pub(crate) fn dry_run_request(home: &TempDir, args: &[&str]) -> Value {
 /// The Graph API version every mocked path uses: the binary's default, so bumping it is one
 /// change in `paloma-graph`, not hundreds here.
 pub(crate) const V: &str = paloma_graph::DEFAULT_API_VERSION;
-pub(crate) const GRAPH: &str = "https://graph.facebook.com/v26.0";
+/// [`V`] spelled out, for asserting whole URLs; a test below keeps the two in step.
+pub(crate) const GRAPH: &str = "https://graph.facebook.com/v27.0";
+
+#[test]
+fn graph_url_uses_the_default_version() {
+    assert_eq!(GRAPH, format!("https://graph.facebook.com/{V}"));
+}
 
 pub(crate) const APP_SECRET: &str = "APP_SECRET_SENTINEL";
 

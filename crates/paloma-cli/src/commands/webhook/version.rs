@@ -21,7 +21,7 @@ pub struct Version {
 enum VersionCommand {
     /// Show the Graph version each WhatsApp webhook field is delivered in.
     Get,
-    /// Move the app's WhatsApp webhooks to a Graph version, such as v26.0.
+    /// Move the app's WhatsApp webhooks to a Graph version, such as v27.0.
     Set {
         /// The Graph version to move to.
         #[arg(value_name = "VERSION")]

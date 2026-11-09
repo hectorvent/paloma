@@ -58,7 +58,7 @@ kind: Webhook
 spec:
   callbackUrl: ${WEBHOOK_URL}
   verifyToken: ${keyring:acme-verify}
-  apiVersion: ${PALOMA_API_VERSION:-v26.0}
+  apiVersion: ${PALOMA_API_VERSION:-v27.0}
 ```
 
 ```bash

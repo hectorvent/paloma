@@ -146,9 +146,9 @@ subscriptions keep their version. It needs an app id and the app secret, like `f
 
 ```bash
 paloma webhook version get
-paloma webhook version get -q                    # just the version, such as v26.0
-paloma webhook version set v26.0             # confirms; --yes to skip
-paloma webhook version set v26.0 --dry-run -o json
+paloma webhook version get -q                    # just the version, such as v27.0
+paloma webhook version set v27.0             # confirms; --yes to skip
+paloma webhook version set v27.0 --dry-run -o json
 ```
 
 | Flag | Meaning |

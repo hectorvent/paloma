@@ -348,7 +348,11 @@ mod tests {
         assert_eq!(media_upload("video/mp4", 1).unwrap(), None);
         assert!(media_upload("video/mp4", 16 * 1024 * 1024 + 1).is_err());
         // A WebP of unknown use gets the image limit; Meta enforces the sticker one.
-        assert!(media_upload("image/webp", 5 * 1024 * 1024).unwrap().is_none());
+        assert!(
+            media_upload("image/webp", 5 * 1024 * 1024)
+                .unwrap()
+                .is_none()
+        );
         assert!(media_upload("image/webp", 5 * 1024 * 1024 + 1).is_err());
         for refused in ["image/gif", "video/quicktime", "audio/wav", " "] {
             let err = media_upload(refused, 1).unwrap_err();

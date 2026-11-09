@@ -13,7 +13,7 @@ default_profile = "acme"
 token_ref       = "keyring:paloma/acme"        # handle into the OS keyring
 waba_id         = "1029384756"
 phone_number_id = "1556677889900"
-api_version     = "v26.0"
+api_version     = "v27.0"
 app_secret_ref  = "keyring:paloma/acme-secret" # optional; for webhook field subscriptions and signatures
 ```
 
@@ -49,7 +49,7 @@ makes that profile the default) or `paloma config set` (individual keys). See [c
 | `token_ref` | Keyring handle (`keyring:paloma/<profile>`) or, discouraged, a literal token |
 | `waba_id` | WhatsApp Business Account ID |
 | `phone_number_id` | Sender phone number ID |
-| `api_version` | Graph API version, e.g. `v26.0` (defaults to `v26.0`) |
+| `api_version` | Graph API version, e.g. `v27.0` (defaults to `v27.0`) |
 | `app_secret_ref` | Keyring handle for the app secret (app-level webhook field subscriptions, and signing or checking webhooks in `webhook simulate` and `listen`) |
 | `messaging_account_id` | Messaging account to bill for `send` commands, if your token reaches more than one on the phone number |
 

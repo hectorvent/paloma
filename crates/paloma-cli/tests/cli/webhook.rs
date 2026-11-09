@@ -1191,15 +1191,7 @@ async fn webhook_version_set_dry_run_targets_the_new_version_without_writing() {
     let home = TempDir::new().unwrap();
     mock_subscriptions(&graph, "v21.0").await;
     let out = webhook_version_cmd(&graph, &home)
-        .args([
-            "webhook",
-            "version",
-            "set",
-            "v26.0",
-            "--dry-run",
-            "-o",
-            "json",
-        ])
+        .args(["webhook", "version", "set", V, "--dry-run", "-o", "json"])
         .output()
         .unwrap();
     assert!(out.status.success());
@@ -1230,13 +1222,13 @@ async fn webhook_version_set_resubmits_fields_through_the_target_version() {
         .expect(1)
         .mount(&graph)
         .await;
-    mock_subscriptions(&graph, "v26.0").await;
+    mock_subscriptions(&graph, V).await;
     let out = webhook_version_cmd(&graph, &home)
-        .args(["webhook", "version", "set", "v26.0", "--yes", "-o", "json"])
+        .args(["webhook", "version", "set", V, "--yes", "-o", "json"])
         .output()
         .unwrap();
     assert!(out.status.success(), "{out:?}");
-    assert_eq!(stdout_json(&out)["version"], "v26.0");
+    assert_eq!(stdout_json(&out)["version"], V);
     let writes = graph.received_requests().await.unwrap();
     let write = writes.iter().find(|r| r.method.as_str() == "POST").unwrap();
     assert!(!write.url.query().unwrap().contains("verify_token"));
@@ -1254,7 +1246,7 @@ async fn webhook_version_set_fails_when_meta_keeps_the_old_version() {
         .mount(&graph)
         .await;
     webhook_version_cmd(&graph, &home)
-        .args(["webhook", "version", "set", "v26.0", "--yes"])
+        .args(["webhook", "version", "set", V, "--yes"])
         .assert()
         .code(1)
         .stderr(predicate::str::contains("still reports v21.0"));
@@ -1278,10 +1270,10 @@ async fn webhook_version_set_reverify_resends_the_callback_with_a_token() {
         .expect(1)
         .mount(&graph)
         .await;
-    mock_subscriptions(&graph, "v26.0").await;
+    mock_subscriptions(&graph, V).await;
     webhook_version_cmd(&graph, &home)
         .env("PALOMA_VERIFY_TOKEN", "VERIFY_SENTINEL")
-        .args(["webhook", "version", "set", "v26.0", "--reverify", "--yes"])
+        .args(["webhook", "version", "set", V, "--reverify", "--yes"])
         .assert()
         .success()
         .stdout(predicate::str::contains("VERIFY_SENTINEL").not())

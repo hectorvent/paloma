@@ -107,7 +107,7 @@ pub struct GlobalArgs {
     #[arg(long, global = true, env = "PALOMA_APP_ID")]
     pub app_id: Option<String>,
 
-    /// Override the Graph API version, e.g. v26.0.
+    /// Override the Graph API version, e.g. v27.0.
     #[arg(long, global = true, env = "PALOMA_API_VERSION")]
     pub api_version: Option<String>,
 

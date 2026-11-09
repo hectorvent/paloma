@@ -62,7 +62,7 @@ confirmation and dry-run behavior.
 ## Run the migration through the Graph API
 
 Set these first. Reading the token keeps it out of your shell history. The examples use
-Graph API v26.0.
+Graph API v27.0.
 
 ```bash
 export WABA_ID=<current WABA ID>
@@ -73,7 +73,7 @@ read -rs WHATSAPP_TOKEN && export WHATSAPP_TOKEN
 new WABA will bill to a Line of Credit.
 
 ```bash
-curl -X POST "https://graph.facebook.com/v26.0/$WABA_ID/set_payment_method_migration_intent" \
+curl -X POST "https://graph.facebook.com/v27.0/$WABA_ID/set_payment_method_migration_intent" \
   -H "Authorization: Bearer $WHATSAPP_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"currency": "INR"}'
@@ -85,7 +85,7 @@ Keep the `migration_id` from the response.
 
 ```bash
 export MIGRATION_ID=<migration_id>
-curl "https://graph.facebook.com/v26.0/$MIGRATION_ID" \
+curl "https://graph.facebook.com/v27.0/$MIGRATION_ID" \
   -H "Authorization: Bearer $WHATSAPP_TOKEN"
 ```
 
@@ -106,7 +106,7 @@ it to the new WABA in Business Manager.
 **5. Complete it.** This is the switch: billing moves and the old WABA stops sending.
 
 ```bash
-curl -X POST "https://graph.facebook.com/v26.0/$MIGRATION_ID/resume_migration" \
+curl -X POST "https://graph.facebook.com/v27.0/$MIGRATION_ID/resume_migration" \
   -H "Authorization: Bearer $WHATSAPP_TOKEN"
 ```
 
