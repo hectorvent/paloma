@@ -491,7 +491,9 @@ fn send_file_checks_type_and_size_per_kind_before_context() {
     let cases = [
         ("image", "a.jpg", 5 * MIB, true),
         ("image", "a.png", 5 * MIB + 1, false),
-        ("image", "a.webp", 1, false),
+        ("image", "a.webp", 5 * MIB, true),
+        ("image", "a.webp", 5 * MIB + 1, false),
+        ("image", "a.gif", 1, false),
         ("image", "a.pdf", 1, false),
         ("video", "a.mp4", 16 * MIB, true),
         ("video", "a.3gp", 16 * MIB + 1, false),

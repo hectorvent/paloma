@@ -270,7 +270,7 @@ and doesn't check codecs. `--id` and `--link` aren't checked, because Paloma can
 
 | Send type | File types | Maximum size |
 |-----------|------------|--------------|
-| `image` | JPEG, PNG | 5 MB |
+| `image` | JPEG, PNG, static WebP | 5 MB |
 | `video` | MP4, 3GPP | 16 MB |
 | `audio` | AAC, AMR, MP3, M4A, OGG | 16 MB |
 | `sticker` | WebP | 500 KB |
@@ -280,6 +280,8 @@ and doesn't check codecs. `--id` and `--link` aren't checked, because Paloma can
   just under that limit can still be refused by Meta.
 - **Stickers:** Meta allows 500 KB for an animated sticker but only 100 KB for a static one.
   Paloma can't tell them apart, so it applies 500 KB and leaves the rest to Meta.
+- **WebP images:** Meta converts a static WebP to JPEG, and refuses an animated one or one over
+  4,096 pixels on an edge. Paloma checks only the size and leaves those to Meta.
 - **Documents:** Meta says other file types may be sent but aren't supported and may not
   display correctly. Paloma warns on stderr and sends them, up to the same size.
 - **A file with the wrong extension:** these commands have no `--type` flag, so run

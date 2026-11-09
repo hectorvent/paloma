@@ -167,9 +167,12 @@ pub const DOCUMENT_MEDIA: MediaLimit = MediaLimit {
     max_bytes: 100 * MB,
     allows_unlisted: true,
 };
+/// Static WebP is allowed too, and Meta transcodes it to JPEG. It refuses animated WebP and
+/// images over 4,096 pixels on an edge, which needs decoding the file, so Meta checks those.
+/// A WebP uploaded without a stated use gets this limit, the larger one, as stickers do.
 pub const IMAGE_MEDIA: MediaLimit = MediaLimit {
     kind: "image",
-    types: &["image/jpeg", "image/png"],
+    types: &["image/jpeg", "image/png", "image/webp"],
     max_bytes: 5 * MB,
     allows_unlisted: false,
 };

@@ -312,7 +312,8 @@ mod tests {
         let max = IMAGE_MEDIA.max_bytes;
         assert_eq!(media(&IMAGE_MEDIA, "image/png", max).unwrap(), None);
         assert!(media(&IMAGE_MEDIA, "image/png", max + 1).is_err());
-        assert!(media(&IMAGE_MEDIA, "image/webp", 1).is_err());
+        assert!(media(&IMAGE_MEDIA, "image/webp", max).is_ok());
+        assert!(media(&IMAGE_MEDIA, "image/gif", 1).is_err());
         // The animated limit, since a static sticker can't be told apart here.
         assert!(media(&STICKER_MEDIA, "image/webp", 500 * 1024).is_ok());
         assert!(media(&STICKER_MEDIA, "image/webp", 500 * 1024 + 1).is_err());
@@ -346,7 +347,9 @@ mod tests {
     fn media_upload_picks_the_limit_from_the_type() {
         assert_eq!(media_upload("video/mp4", 1).unwrap(), None);
         assert!(media_upload("video/mp4", 16 * 1024 * 1024 + 1).is_err());
-        assert!(media_upload("image/webp", 500 * 1024 + 1).is_err());
+        // A WebP of unknown use gets the image limit; Meta enforces the sticker one.
+        assert!(media_upload("image/webp", 5 * 1024 * 1024).unwrap().is_none());
+        assert!(media_upload("image/webp", 5 * 1024 * 1024 + 1).is_err());
         for refused in ["image/gif", "video/quicktime", "audio/wav", " "] {
             let err = media_upload(refused, 1).unwrap_err();
             assert_eq!(err.exit_code().code(), 5, "{refused}");

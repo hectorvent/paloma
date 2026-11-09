@@ -547,11 +547,13 @@ fn upload_handle_refuses_an_unreadable_file_before_any_call() {
 #[test]
 fn media_upload_checks_the_type_and_its_size_before_context() {
     let home = TempDir::new().unwrap();
-    let cases: [(&str, u64, Option<&str>, bool); 8] = [
+    let cases: [(&str, u64, Option<&str>, bool); 9] = [
         ("a.jpg", 5 * MIB, None, true),
         ("a.jpg", 5 * MIB + 1, None, false),
         ("a.mp4", 16 * MIB + 1, None, false),
-        ("a.webp", 500 * 1024 + 1, None, false),
+        // A WebP of unknown use gets the image limit; Meta enforces the sticker one.
+        ("a.webp", 5 * MIB, None, true),
+        ("a.webp", 5 * MIB + 1, None, false),
         ("a.gif", 1, None, false),
         // The flag wins over the extension, both ways.
         ("a.jpg", 5 * MIB + 1, Some("video/mp4"), true),

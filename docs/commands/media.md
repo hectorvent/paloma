@@ -36,10 +36,10 @@ The type decides the limit, and a file over it exits 5.
 
 | MIME types | Maximum size |
 |------------|--------------|
-| `image/jpeg`, `image/png` | 5 MB |
+| `image/jpeg`, `image/png`, `image/webp` | 5 MB |
 | `video/mp4`, `video/3gpp` | 16 MB |
 | `audio/aac`, `audio/amr`, `audio/mpeg`, `audio/mp4`, `audio/ogg` | 16 MB |
-| `image/webp` (stickers) | 500 KB |
+| `image/webp` sent as a sticker | 500 KB |
 | `text/plain`, `application/pdf`, and the Word, Excel and PowerPoint types | 100 MB |
 
 - **Other `image/`, `video/` or `audio/` types** exit 5, for example `image/gif`.
@@ -47,6 +47,9 @@ The type decides the limit, and a file over it exits 5.
   be sent but aren't supported. Paloma warns on stderr and uploads it, up to 100 MB.
 - **Parameters and case** are ignored in the check and sent as you wrote them, so
   `--type "audio/ogg; codecs=opus"` counts as `audio/ogg`.
+- **WebP** is checked against the 5 MB image limit when the upload doesn't say what it's for.
+  Meta sends a static WebP image as a JPEG, and refuses animated WebP images and images over
+  4,096 pixels on an edge.
 - **Sizes** count 1 MB as 1,048,576 bytes and allow 500 KB for any sticker. Meta can still
   refuse a file within these limits, such as a static sticker over 100 KB or an OGG file that
   isn't OPUS.
