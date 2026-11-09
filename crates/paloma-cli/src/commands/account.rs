@@ -44,7 +44,7 @@ pub enum AccountCommand {
     Set(SetArgs),
     /// Estimate marketing deliveries and costs at several max prices.
     Reach(administration::Reach),
-    /// List the people and system users with access to the WABA.
+    /// List the people assigned to the WABA, or its business's system users.
     #[command(subcommand)]
     Users(UsersCommand),
     /// Manage click-to-WhatsApp welcome message sequences.
@@ -69,7 +69,7 @@ pub enum AccountCommand {
 
 #[derive(Debug, Subcommand)]
 pub enum UsersCommand {
-    /// List assigned users, or the WABA's system users with --system.
+    /// List assigned users, or the business's system users with --system.
     List(administration::Users),
 }
 

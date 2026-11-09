@@ -161,25 +161,33 @@ pub fn reach_estimate(waba: &str, countries: &[String], interval: &str) -> Reque
         .query("date_interval", interval)
 }
 
-pub fn users(
-    waba: &str,
-    system: bool,
-    business: Option<&str>,
-    limit: Option<u32>,
-    after: Option<&str>,
-) -> Request {
-    Request::get(format!(
-        "{waba}/{}",
-        if system {
-            "system_users"
-        } else {
-            "assigned_users"
-        }
-    ))
-    .query_opt("business", business)
-    .query_opt("limit", limit)
-    .query_opt("after", after)
+/// People assigned to the WABA, as seen from `business`.
+pub fn users(waba: &str, business: &str, limit: Option<u32>, after: Option<&str>) -> Request {
+    Request::get(format!("{waba}/assigned_users"))
+        .query("business", business)
+        .query_opt("limit", limit)
+        .query_opt("after", after)
 }
+
+/// The business's system users. Meta's guide shows this edge on the WABA, but Graph answers
+/// "nonexisting field" there; it lives on the business, behind `business_management`.
+pub fn system_users(business: &str, limit: Option<u32>, after: Option<&str>) -> Request {
+    Request::get(format!("{business}/system_users"))
+        .query_opt("limit", limit)
+        .query_opt("after", after)
+}
+
+/// The business that owns the WABA, read to find its system users.
+pub fn owner_business(waba: &str) -> Request {
+    get(waba, "owner_business_info")
+}
+
+pub fn owner_business_id(waba: &Value) -> Option<String> {
+    waba.pointer("/owner_business_info/id")
+        .and_then(Value::as_str)
+        .map(str::to_owned)
+}
+
 fn welcome_sequences_node(waba: &str) -> String {
     format!("{waba}/welcome_message_sequences")
 }
@@ -220,6 +228,13 @@ pub fn delete_welcome_sequence(waba: &str, id: &str) -> Request {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_owner_business_id_comes_from_owner_business_info() {
+        let waba = json!({"id": "1", "owner_business_info": {"id": "9", "name": "B"}});
+        assert_eq!(owner_business_id(&waba).as_deref(), Some("9"));
+        assert_eq!(owner_business_id(&json!({"id": "1"})), None);
+    }
 
     #[test]
     fn settings_preserve_false_and_omit_unset_fields() {

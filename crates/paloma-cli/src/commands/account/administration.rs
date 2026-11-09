@@ -78,10 +78,11 @@ impl Reach {
 
 #[derive(Debug, Args)]
 pub struct Users {
-    /// Business that owns or has access to the WABA; Meta requires it for assigned users.
-    #[arg(long, required_unless_present = "system", conflicts_with = "system")]
+    /// Business whose view to read: Meta requires it for assigned users, and system users
+    /// belong to it (default with --system: the business that owns the WABA).
+    #[arg(long, required_unless_present = "system")]
     business_id: Option<String>,
-    /// List WABA system users instead of assigned users.
+    /// List the business's system users instead of the WABA's assigned users.
     #[arg(long)]
     system: bool,
     #[command(flatten)]
@@ -96,16 +97,12 @@ impl Users {
             self.page.limit,
             Some(paloma_core::limits::MAX_ASSIGNED_USERS_PAGE),
         )?;
+        if self.system {
+            return self.system_users(app).await;
+        }
         let waba = app.waba()?;
-        let page = |after: Option<&str>| {
-            account::users(
-                waba,
-                self.system,
-                self.business_id.as_deref(),
-                self.page.limit,
-                after,
-            )
-        };
+        let business = self.business_id.as_deref().unwrap_or_default();
+        let page = |after: Option<&str>| account::users(waba, business, self.page.limit, after);
         list(
             app,
             &self.page,
@@ -116,6 +113,38 @@ impl Users {
             },
         )
         .await
+    }
+
+    async fn system_users(&self, app: &App) -> Result<()> {
+        let business = match &self.business_id {
+            Some(id) => id.clone(),
+            None => {
+                let waba = app.waba()?;
+                let owner = app.fetch(&account::owner_business(waba)).await?.json()?;
+                account::owner_business_id(&owner).ok_or_else(|| {
+                    Error::validation(format!(
+                        "WABA {waba} reports no owner business; pass --business-id"
+                    ))
+                })?
+            }
+        };
+        let page = |after: Option<&str>| account::system_users(&business, self.page.limit, after);
+        list(
+            app,
+            &self.page,
+            page,
+            Rows {
+                columns: &["id", "name", "role"],
+                id: "id",
+            },
+        )
+        .await
+        .map_err(|e| match e {
+            Error::Auth(msg) => Error::Auth(format!(
+                "{msg}; listing system users needs a token with business_management"
+            )),
+            e => e,
+        })
     }
 }
 #[derive(Debug, Subcommand)]

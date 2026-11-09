@@ -1140,6 +1140,62 @@ async fn health_tables_show_entity_diagnostics_but_quiet_keeps_the_id() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
+async fn system_users_default_to_the_business_that_owns_the_waba() {
+    let graph = MockServer::start().await;
+    let home = TempDir::new().unwrap();
+    Mock::given(method("GET"))
+        .and(path(format!("/{V}/222")))
+        .and(query_param("fields", "owner_business_info"))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .set_body_json(json!({"id":"222","owner_business_info":{"id":"999","name":"B"}})),
+        )
+        .expect(1)
+        .mount(&graph)
+        .await;
+    Mock::given(method("GET"))
+        .and(path(format!("/{V}/999/system_users")))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .set_body_json(json!({"data":[{"id":"777","name":"Bot","role":"EMPLOYEE"}]})),
+        )
+        .expect(1)
+        .mount(&graph)
+        .await;
+    paloma(Some(&graph), &home)
+        .args(["account", "users", "list", "--system", "-q"])
+        .assert()
+        .success()
+        .stdout("777\n")
+        .stderr("");
+    // Without business_management, Meta refuses the business node; say what is missing.
+    graph.reset().await;
+    Mock::given(method("GET"))
+        .and(path(format!("/{V}/222")))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .set_body_json(json!({"id":"222","owner_business_info":{"id":"999"}})),
+        )
+        .mount(&graph)
+        .await;
+    Mock::given(method("GET"))
+        .and(path(format!("/{V}/999/system_users")))
+        .respond_with(ResponseTemplate::new(403).set_body_json(json!({"error":{
+            "message":"(#200) Requires business_management permission to manage the object",
+            "type":"OAuthException","code":200}})))
+        .mount(&graph)
+        .await;
+    paloma(Some(&graph), &home)
+        .args(["account", "users", "list", "--system"])
+        .assert()
+        .code(3)
+        .stdout("")
+        .stderr(predicate::str::contains(
+            "needs a token with business_management",
+        ));
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn account_users_and_automation_bot_use_the_documented_nodes() {
     let graph = MockServer::start().await;
     let home = TempDir::new().unwrap();
@@ -1157,8 +1213,15 @@ async fn account_users_and_automation_bot_use_the_documented_nodes() {
             "222/assigned_users",
         ),
         (
-            vec!["account", "users", "list", "--system"],
-            "222/system_users",
+            vec![
+                "account",
+                "users",
+                "list",
+                "--system",
+                "--business-id",
+                "999",
+            ],
+            "999/system_users",
         ),
     ] {
         let mut mock = Mock::given(method("GET")).and(path(format!("/{V}/{node}")));

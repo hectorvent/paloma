@@ -259,12 +259,15 @@ paloma account users list --system -q
 ```
 
 Assigned-user reads require `--business-id` to identify the business context.
-`--system` selects the WABA's system-users endpoint from Meta's guide instead and conflicts
-with that flag. A live call has answered `nonexisting field` for that endpoint, so it may not
-work for every token. Both accept `--limit` (1–100), `--after`, and `--all`. A single page warns when
-more results exist; `--all` follows cursors. Table output includes ID, name and tasks,
+`--system` lists the business's system users (ID, name and role). They live on the business,
+not the WABA: Meta's guide shows the WABA node, but Graph answers `nonexisting field` there.
+Without `--business-id`, Paloma first reads the business that owns the WABA. The token needs
+the `business_management` permission; without it Meta answers 403 and Paloma exits 3.
+Both accept `--limit` (1–100), `--after`, and `--all`. A single page warns when
+more results exist; `--all` follows cursors. Assigned-user tables show ID, name and tasks,
 `-q` prints IDs, and JSON/raw retain returned metadata. Dry-run prints the first
-request offline. These are read-only commands and do not grant or remove access.
+request; `--system` without `--business-id` still reads the owner business first. These
+are read-only commands and do not grant or remove access.
 
 ## Welcome message sequences
 
