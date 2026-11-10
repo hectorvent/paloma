@@ -15,6 +15,12 @@ pub(crate) const WABA: &str = "222";
 
 pub(crate) const TOKEN: &str = "EAAtest";
 
+/// What a cleared environment must keep: Windows can't open a socket without SystemRoot.
+/// Pass it to `.envs(..)` after every `env_clear()`.
+pub(crate) fn kept_env() -> Option<(&'static str, std::ffi::OsString)> {
+    std::env::var_os("SYSTEMROOT").map(|root| ("SYSTEMROOT", root))
+}
+
 /// A `paloma` command isolated from the developer's machine: temp config, env token,
 /// no colors, Graph API pointed at `graph`.
 pub(crate) fn paloma(graph: Option<&MockServer>, home: &TempDir) -> Command {
@@ -25,7 +31,8 @@ pub(crate) fn paloma(graph: Option<&MockServer>, home: &TempDir) -> Command {
         .env("PALOMA_PHONE_NUMBER_ID", PHONE)
         .env("PALOMA_WABA_ID", WABA)
         .env("NO_COLOR", "1")
-        .env("HOME", home.path());
+        .env("HOME", home.path())
+        .envs(kept_env());
     if let Some(g) = graph {
         cmd.env("PALOMA_GRAPH_URL", g.uri());
     }
