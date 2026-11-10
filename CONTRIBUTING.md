@@ -90,3 +90,16 @@ cargo deny check          # when dependencies changed
 - Keep PRs focused. Rebase on `main` rather than merging it in.
 - CI must be green: fmt, clippy (pedantic, zero warnings), tests on Linux, macOS and
   Windows, cargo-deny, MSRV, and the commit checks.
+
+## Releases
+
+release-plz keeps a release PR open on a `release-plz-*` branch with the next version and
+its `CHANGELOG.md` entries. Its own commit has no sign-off, so the commit check skips that
+PR. Squash-merge it with a signed-off message:
+
+```bash
+gh pr merge <N> --squash --subject "chore(release): vX.Y.Z" \
+  --body "Signed-off-by: Your Name <you@example.com>"
+```
+
+The merge tags `vX.Y.Z`, which builds the release binaries.

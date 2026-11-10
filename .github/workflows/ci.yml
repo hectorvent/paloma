@@ -44,7 +44,8 @@ jobs:
   # Conventional Commit subjects, DCO sign-off and no AI attribution on every PR commit.
   # Same rules as the local hook: .githooks/commit-msg runs once per commit.
   commits:
-    if: github.event_name == 'pull_request'
+    # release-plz's own commit carries no sign-off; a release PR is squash-merged with one.
+    if: github.event_name == 'pull_request' && !startsWith(github.head_ref, 'release-plz-')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
