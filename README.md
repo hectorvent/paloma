@@ -7,8 +7,17 @@
 
 **Carry your message.**
 
-The WhatsApp Cloud API from your terminal: send messages and templates, and manage
-your whole WhatsApp Business setup as code.
+### WhatsApp Cloud API CLI & Infrastructure as Code
+
+Send messages and templates, configure calling and webhooks, and manage your whole
+WhatsApp Business setup as version-controlled YAML, from your terminal.
+
+[![CI](https://github.com/hectorvent/paloma/actions/workflows/ci.yml/badge.svg)](https://github.com/hectorvent/paloma/actions/workflows/ci.yml)
+[![GitHub release](https://img.shields.io/github/v/release/hectorvent/paloma)](https://github.com/hectorvent/paloma/releases/latest)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![Built with Rust](https://img.shields.io/badge/built%20with-Rust-orange)](https://www.rust-lang.org/)
+
+[**Quick start**](#quick-start) · [**Setup as code**](#your-whatsapp-setup-as-code) · [**Use cases**](#what-can-you-build) · [**Commands**](#everything-it-covers) · [**AI agents**](#use-it-from-an-ai-agent) · [**Docs**](#documentation)
 
 *One 5 MB binary · tokens in your OS keyring · `apply` it twice, nothing changes*
 
@@ -27,8 +36,43 @@ through Meta's dashboard to set up calling or webhooks. Then doing it all again 
 staging. Paloma turns each of those jobs into one command, and your account settings
 into a file you can review in a pull request.
 
-It talks to the **real** WhatsApp Cloud API (`graph.facebook.com`). It's not an
-emulator, and it doesn't use the WhatsApp Web protocol.
+> Paloma talks to the **real** WhatsApp Cloud API (`graph.facebook.com`). It's not an
+> emulator, it doesn't use the WhatsApp Web protocol, and it isn't a SIP server. Meta's
+> permissions, policies and charges still apply.
+
+## Quick start
+
+**1. Install.** Download the archive for your platform from the
+[latest GitHub Release](https://github.com/hectorvent/paloma/releases/latest). Each one
+ships the binary, man pages and shell completions. Or build from source with a Rust
+toolchain:
+
+```bash
+git clone https://github.com/hectorvent/paloma.git && cd paloma
+cargo install --path crates/paloma-cli
+paloma completion zsh > "${fpath[1]}/_paloma"   # optional: tab completion
+```
+
+**2. Configure.** You need a Cloud API access token, your WhatsApp Business Account ID
+and a phone-number ID:
+
+```bash
+paloma configure            # prompts for the token (hidden) and your IDs
+```
+
+The token goes into your OS keyring; the config file keeps only IDs. In CI, skip this
+and set `PALOMA_TOKEN` plus the `PALOMA_*` IDs instead.
+
+**3. Send your first message.**
+
+```bash
+paloma send text 15551234567 "Hello from Paloma!"
+paloma send template 15551234567 order_ready --language en_US --body-var Alex --body-var "#4821"
+```
+
+Free-form messages only reach people inside the 24-hour customer-service window;
+outside it, send an approved template. Full walkthrough:
+[Getting started](docs/getting-started.md) · [Installation](docs/installation.md).
 
 ## A 30-second tour
 
@@ -48,9 +92,24 @@ paloma export calling > calling.yaml   # snapshot what's live
 paloma diff  -f calling.yaml           # what would change? (exit 1 on drift)
 paloma apply -f calling.yaml           # change only that
 
+# Webhooks, locally: listen, then fire a signed test event at it
+paloma webhook listen --port 9000
+paloma webhook simulate http://127.0.0.1:9000/webhook --event text-username
+
 # Look before you leap: every write can print its exact request instead of sending it
 paloma send text 15551234567 "test" --dry-run
 ```
+
+## What can you build?
+
+| Use case | What paloma gives you |
+|----------|-----------------------|
+| **WhatsApp DevOps** | Export live config, review YAML in pull requests, catch drift in CI, apply approved changes |
+| **Messaging automation** | Text, media, interactive messages and approved templates from scripts, cron jobs and pipelines |
+| **Template release workflows** | Create templates, `watch` for Meta's approval, keep them in sync as a managed set |
+| **Calling + SIP operations** | Calling status, SIP servers, codecs, SRTP, voicemail, business hours and call permissions |
+| **Webhook development** | Subscriptions and fields, a local listener, callback-URL verification, signed test events |
+| **Multiple environments** | Separate staging and production profiles, one manifest parameterized per environment |
 
 ## Why paloma
 
@@ -195,6 +254,21 @@ the dashboard? The build tells you:
 
 More in [Your WhatsApp setup, as code](docs/commands/manifests.md).
 
+## Paloma vs. manual Graph API calls
+
+| Job | By hand | With paloma |
+|-----|---------|-------------|
+| Send a message | Build, authenticate and `curl` a JSON request | `paloma send text` |
+| Send a template | Assemble nested components and parameters | `paloma send template --body-var …` |
+| Wait for template approval | Poll the API or watch the dashboard | `paloma template watch` (exit code tells you) |
+| Set up calling and SIP | Several API calls or dashboard clicks per number | `paloma calling …` or a `Calling` manifest |
+| Spot config drift | Write your own comparison scripts | `paloma diff` (exit `1` on drift) |
+| Apply the desired state | Maintain one-off scripts per environment | `paloma apply`, idempotent |
+| Test webhooks locally | Stand up a server and hand-sign payloads | `paloma webhook listen` / `simulate` |
+
+Paloma is a convenience and automation layer over Meta's API. It doesn't replace
+Meta's account setup, business verification or template review.
+
 ## Configuration
 
 Most people set it up once and never think about it again:
@@ -314,19 +388,23 @@ Develop receive-side integrations with `webhook listen`, check the verification
 handshake with `webhook verify-url`, and send signed test payloads with
 `webhook simulate`. See [webhook tools](docs/commands/webhook.md).
 
-## Install
+## Use it from an AI agent
 
-Download the archive for your platform from the latest GitHub Release. Each one ships
-the binary, man pages and shell completions. Or build from source with a Rust
-toolchain:
+Paloma ships an [agent skill](skills/paloma/SKILL.md) that teaches coding agents such as
+Claude Code how to drive it safely. The skill tells the agent to dry-run before every
+write, never touch the token, read exit codes, and prefer `export`/`diff`/`apply` for
+config changes. Install it for your user:
 
 ```bash
-cargo install --path crates/paloma-cli
-paloma completion zsh > "${fpath[1]}/_paloma"   # optional: tab completion
+mkdir -p ~/.claude/skills/paloma
+curl -fsSL https://raw.githubusercontent.com/hectorvent/paloma/main/skills/paloma/SKILL.md \
+  -o ~/.claude/skills/paloma/SKILL.md
 ```
 
-Then run `paloma configure` and you're ready. Full walkthrough:
-[Getting started](docs/getting-started.md).
+To share it with everyone working in one project, put it in that repo's
+`.claude/skills/paloma/` instead. Agents that read `.agents/skills/` (such as Codex)
+take the same file at `.agents/skills/paloma/SKILL.md`. Then ask something like
+*"send the order_ready template to 15551234567"* and the agent picks the skill up.
 
 ## Documentation
 
@@ -354,16 +432,13 @@ step-by-step for adding a command or a manifest kind. Commits follow
 [release-plz](https://release-plz.dev) turns them into versions, a changelog and
 GitHub Releases.
 
+Bug reports, docs fixes and real-world use cases are welcome. If paloma saves you time,
+[a star](https://github.com/hectorvent/paloma) helps others find it.
+
 ## License
 
 [MIT](LICENSE)
 
 ---
 
-<div align="center">
-<sub>
-
-Paloma is an independent open-source project and is **not affiliated with, endorsed by, or sponsored by** WhatsApp LLC or Meta Platforms, Inc. WhatsApp is a trademark of WhatsApp LLC.
-
-</sub>
-</div>
+<p align="center"><sub>Paloma is an independent open-source project and is <b>not affiliated with, endorsed by, or sponsored by</b> WhatsApp LLC or Meta Platforms, Inc. WhatsApp is a trademark of WhatsApp LLC.</sub></p>
