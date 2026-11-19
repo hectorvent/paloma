@@ -4,7 +4,7 @@ members = ["crates/*", "xtask"]
 default-members = ["crates/*"]
 
 [workspace.package]
-version = "0.1.0"
+version = "0.1.1"
 edition = "2024"
 rust-version = "1.88"
 license = "MIT"
@@ -16,10 +16,10 @@ authors = ["Hector Ventura <hectorvent@gmail.com>"]
 axum = { version = "0.8", default-features = false, features = ["http1", "query", "tokio"] }
 # Already transitive through rustls; directly used for webhook signatures.
 ring = { version = "0.17", default-features = false }
-paloma-core = { version = "0.1.0", path = "crates/paloma-core" }
-paloma-config = { version = "0.1.0", path = "crates/paloma-config" }
-paloma-graph = { version = "0.1.0", path = "crates/paloma-graph" }
-paloma-manifest = { version = "0.1.0", path = "crates/paloma-manifest" }
+paloma-core = { version = "0.1.1", path = "crates/paloma-core" }
+paloma-config = { version = "0.1.1", path = "crates/paloma-config" }
+paloma-graph = { version = "0.1.1", path = "crates/paloma-graph" }
+paloma-manifest = { version = "0.1.1", path = "crates/paloma-manifest" }
 
 anstyle = "1.0"
 clap = { version = "4.6", features = ["derive", "env", "wrap_help"] }

@@ -1524,7 +1524,7 @@ dependencies = [
 
 [[package]]
 name = "paloma-cli"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "anstyle",
  "assert_cmd",
@@ -1553,7 +1553,7 @@ dependencies = [
 
 [[package]]
 name = "paloma-config"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "apple-native-keyring-store",
  "etcetera",
@@ -1571,7 +1571,7 @@ dependencies = [
 
 [[package]]
 name = "paloma-core"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "secrecy",
  "thiserror",
@@ -1579,7 +1579,7 @@ dependencies = [
 
 [[package]]
 name = "paloma-graph"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "futures-util",
  "mime_guess",
@@ -1598,7 +1598,7 @@ dependencies = [
 
 [[package]]
 name = "paloma-manifest"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "paloma-core",
  "paloma-graph",
@@ -2896,7 +2896,7 @@ checksum = "3ad82d2a33cdc9674dc7465672f271e096168fcdbe0f799d9e6db8c5892679dc"
 
 [[package]]
 name = "xtask"
-version = "0.0.0"
+version = "0.0.1"
 dependencies = [
  "clap",
  "clap_complete",
